@@ -1,0 +1,193 @@
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+
+export interface ProjectMetadata {
+    id: string;
+    name: string;
+    createdAt: number;
+    updatedAt: number;
+    thumbnail?: string;
+}
+
+interface ProjectContextType {
+    projects: ProjectMetadata[];
+    activeProjectId: string | null;
+    loading: boolean;
+    createProject: (name: string) => Promise<string>;
+    openProject: (id: string) => void;
+    closeProject: () => void;
+    deleteProject: (id: string) => void;
+    renameProject: (id: string, newName: string) => void;
+    updateProjectThumbnail: (id: string, thumbnail: string) => void;
+}
+
+const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
+
+const ACTIVE_PROJECT_KEY = 'ctk-active-project';
+
+const DEFAULT_CANVAS = {
+    width: 800,
+    height: 600,
+    title: 'Mon Application',
+    titleFontWeight: 'normal' as const,
+    resizable: false,
+    layoutMode: 'absolute' as const,
+    scaling: 1,
+    backgroundColor: '',
+    headerBackgroundColor: '',
+    gridVisible: true,
+};
+
+type SupabaseProject = {
+    id: string;
+    name: string;
+    user_id: string;
+    canvas_settings: unknown;
+    file_tree: unknown[];
+    thumbnail?: string | null;
+    created_at: string;
+    updated_at: string;
+};
+
+function toMetadata(row: SupabaseProject): ProjectMetadata {
+    return {
+        id: row.id,
+        name: row.name,
+        createdAt: new Date(row.created_at).getTime(),
+        updatedAt: new Date(row.updated_at).getTime(),
+        thumbnail: row.thumbnail ?? undefined,
+    };
+}
+
+export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+    const { user } = useAuth();
+    const [projects, setProjects] = useState<ProjectMetadata[]>([]);
+    const [loading, setLoading] = useState(true);
+    const hasLoadedOnceRef = useRef(false);
+
+    const [activeProjectId, setActiveProjectId] = useState<string | null>(() => {
+        try { return localStorage.getItem(ACTIVE_PROJECT_KEY); } catch { return null; }
+    });
+
+    // Reset active project when user changes (logout/login)
+    const prevUserRef = useRef<string | null>(null);
+    useEffect(() => {
+        const currentUserId = user?.id ?? null;
+        if (prevUserRef.current !== null && prevUserRef.current !== currentUserId) {
+            setActiveProjectId(null);
+        }
+        prevUserRef.current = currentUserId;
+    }, [user]);
+
+    // Fetch projects on mount / user change
+    const fetchProjects = useCallback(async () => {
+        if (!user) { setProjects([]); setLoading(false); hasLoadedOnceRef.current = false; return; }
+        // Only show loading spinner on the very first fetch — never on refreshes
+        // (setting loading=true unmounts the entire WidgetProvider tree)
+        if (!hasLoadedOnceRef.current) setLoading(true);
+        const { data, error } = await supabase
+            .from('projects')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
+        if (!error && data) setProjects((data as SupabaseProject[]).map(toMetadata));
+        setLoading(false);
+        hasLoadedOnceRef.current = true;
+    }, [user]);
+
+    useEffect(() => { fetchProjects(); }, [fetchProjects]);
+
+    // Real-time subscription on projects table (debounced to avoid redundant re-fetches after optimistic updates)
+    const realtimeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => {
+        if (!user) return;
+        const channel = supabase
+            .channel('projects-changes')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'projects',
+                filter: `user_id=eq.${user.id}`,
+            }, () => {
+                if (realtimeTimerRef.current) clearTimeout(realtimeTimerRef.current);
+                realtimeTimerRef.current = setTimeout(() => { fetchProjects(); }, 1500);
+            })
+            .subscribe();
+        return () => {
+            if (realtimeTimerRef.current) clearTimeout(realtimeTimerRef.current);
+            supabase.removeChannel(channel);
+        };
+    }, [user, fetchProjects]);
+
+    // Persist active project id locally
+    useEffect(() => {
+        try {
+            if (activeProjectId) localStorage.setItem(ACTIVE_PROJECT_KEY, activeProjectId);
+            else localStorage.removeItem(ACTIVE_PROJECT_KEY);
+        } catch { /* ignore */ }
+    }, [activeProjectId]);
+
+    // Clear active project if it was deleted
+    useEffect(() => {
+        if (!loading && activeProjectId && projects.length > 0) {
+            if (!projects.some(p => p.id === activeProjectId)) setActiveProjectId(null);
+        }
+    }, [loading, activeProjectId, projects]);
+
+    const createProject = useCallback(async (name: string): Promise<string> => {
+        if (!user) throw new Error('Not authenticated');
+        const { data, error } = await supabase
+            .from('projects')
+            .insert({ name, user_id: user.id, canvas_settings: DEFAULT_CANVAS, file_tree: [] })
+            .select()
+            .single();
+        if (error || !data) throw new Error(error?.message ?? 'Failed to create project');
+        const row = data as SupabaseProject;
+        const meta = toMetadata(row);
+        setProjects(prev => [meta, ...prev]);
+        setActiveProjectId(row.id);
+        return row.id;
+    }, [user]);
+
+    const openProject = useCallback((id: string) => { setActiveProjectId(id); }, []);
+    const closeProject = useCallback(() => { setActiveProjectId(null); }, []);
+
+    const deleteProject = useCallback((id: string) => {
+        setProjects(prev => prev.filter(p => p.id !== id));
+        setActiveProjectId(prev => (prev === id ? null : prev));
+        supabase.from('projects').delete().eq('id', id).then(({ error }) => {
+            if (error) console.error('[ProjectContext] Failed to delete project:', error);
+        });
+    }, []);
+
+    const renameProject = useCallback((id: string, newName: string) => {
+        setProjects(prev => prev.map(p => p.id === id ? { ...p, name: newName, updatedAt: Date.now() } : p));
+        supabase.from('projects').update({ name: newName, updated_at: new Date().toISOString() }).eq('id', id).then(({ error }) => {
+            if (error) console.error('[ProjectContext] Failed to rename project:', error);
+        });
+    }, []);
+
+    const updateProjectThumbnail = useCallback((id: string, thumbnail: string) => {
+        setProjects(prev => prev.map(p => p.id === id ? { ...p, thumbnail, updatedAt: Date.now() } : p));
+        supabase.from('projects').update({ thumbnail, updated_at: new Date().toISOString() }).eq('id', id).then(({ error }) => {
+            if (error) console.error('[ProjectContext] Failed to update thumbnail:', error);
+        });
+    }, []);
+
+    return (
+        <ProjectContext.Provider value={{
+            projects, activeProjectId, loading,
+            createProject, openProject, closeProject,
+            deleteProject, renameProject, updateProjectThumbnail,
+        }}>
+            {children}
+        </ProjectContext.Provider>
+    );
+};
+
+export const useProjects = () => {
+    const context = useContext(ProjectContext);
+    if (!context) throw new Error('useProjects must be used within a ProjectProvider');
+    return context;
+};

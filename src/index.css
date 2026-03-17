@@ -1,0 +1,341 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 213 73% 22%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 240 5.9% 10%; /* Darker secondary for deep theme */
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 240 5.9% 10%; /* Match secondary */
+    --muted-foreground: 240 5% 64.9%;
+
+    --accent: 240 5.9% 10%; /* Match secondary */
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 3.7% 15.9%; /* Subtle lighter border */
+    --input: 240 3.7% 15.9%;
+    --ring: 213 73% 22%;
+
+    --radius: 0.5rem;
+
+    /* CustomTkinter Theme Colors (Dark) */
+    --ctk-bg-1: #242424; /* Darkest, Window BG */
+    --ctk-bg-2: #2B2B2B; /* Main BG */
+    --ctk-bg-3: #343638; /* Input BG */
+    --ctk-fg-1: #DCE4EE; /* Main Text */
+    --ctk-fg-2: #9A9A9A; /* Placeholder Text */
+    --ctk-border: #565B5E;
+    --ctk-blue: #0F3460;
+    --ctk-blue-hover: #1F5AA0;
+  }
+
+  .light {
+    --background: 220 13% 95%; /* Keep background light */
+    --foreground: 222 47% 10%; /* Darker foreground for text */
+
+    --card: 0 0% 100%; /* Pure white cards */
+    --card-foreground: 222 47% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 10%;
+
+    --primary: 213 73% 22%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 220 14% 90%; /* Slightly darker secondary for contrast */
+    --secondary-foreground: 222 47% 10%;
+
+    --muted: 220 14% 90%;
+    --muted-foreground: 215 25% 40%; /* Darker muted text for icons/labels */
+
+    --accent: 220 14% 90%;
+    --accent-foreground: 222 47% 10%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 220 13% 75%; /* Much darker borders (was 82-91%) for visibility */
+    --input: 220 13% 75%; /* Darker input borders */
+    --ring: 213 73% 22%;
+
+    /* CustomTkinter Theme Colors (Light) - Improved contrast */
+    --ctk-bg-1: #E3E6EA;
+    --ctk-bg-2: #E8EBF0;
+    --ctk-bg-3: #F5F6F8;
+    --ctk-fg-1: #0F1219; /* Darker text */
+    --ctk-fg-2: #4A5565; /* Darker secondary text */
+    --ctk-border: #94A3B8; /* Slate-400 equivalent for good border visibility */
+    --ctk-blue: #1F5AA0;
+    --ctk-blue-hover: #1F5AA0;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted) / 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--secondary-foreground) / 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--secondary-foreground) / 0.5);
+}
+
+/* ============================================
+   DRIVER.JS ONBOARDING CUSTOM STYLES
+   ============================================ */
+
+/* Dark Theme */
+.driver-theme-dark .driver-popover {
+  background: #2B2B2B;
+  color: #DCE4EE;
+  border: 1px solid #565B5E;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+
+.driver-theme-dark .driver-popover-title {
+  color: #DCE4EE;
+  font-weight: 600;
+  font-size: 18px;
+  margin-bottom: 12px;
+}
+
+.driver-theme-dark .driver-popover-description {
+  color: #B4B4B4;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.driver-theme-dark .driver-popover-footer {
+  border-top: 1px solid #565B5E;
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+.driver-theme-dark .driver-popover-btn {
+  background: #0F3460;
+  color: #FFFFFF;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.driver-theme-dark .driver-popover-btn:hover {
+  background: #1F5AA0;
+}
+
+.driver-theme-dark .driver-popover-btn-prev {
+  background: transparent;
+  color: #DCE4EE;
+  border: 1px solid #565B5E;
+}
+
+.driver-theme-dark .driver-popover-btn-prev:hover {
+  background: #343638;
+}
+
+.driver-theme-dark .driver-popover-close-btn {
+  color: #DCE4EE;
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.driver-theme-dark .driver-popover-close-btn:hover {
+  opacity: 1;
+}
+
+.driver-theme-dark .driver-popover-progress-text {
+  color: #9A9A9A;
+  font-size: 13px;
+}
+
+/* Light Theme */
+.driver-theme-light .driver-popover {
+  background: #FFFFFF;
+  color: #1A1F2E;
+  border: 1px solid #E3E6EA;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+}
+
+.driver-theme-light .driver-popover-title {
+  color: #1A1F2E;
+  font-weight: 600;
+  font-size: 18px;
+  margin-bottom: 12px;
+}
+
+.driver-theme-light .driver-popover-description {
+  color: #5A6A7A;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.driver-theme-light .driver-popover-footer {
+  border-top: 1px solid #E3E6EA;
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+.driver-theme-light .driver-popover-btn {
+  background: #0F3460;
+  color: #FFFFFF;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.driver-theme-light .driver-popover-btn:hover {
+  background: #1F5AA0;
+}
+
+.driver-theme-light .driver-popover-btn-prev {
+  background: transparent;
+  color: #1A1F2E;
+  border: 1px solid #B0B8C0;
+}
+
+.driver-theme-light .driver-popover-btn-prev:hover {
+  background: #F5F6F8;
+}
+
+.driver-theme-light .driver-popover-close-btn {
+  color: #1A1F2E;
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.driver-theme-light .driver-popover-close-btn:hover {
+  opacity: 1;
+}
+
+.driver-theme-light .driver-popover-progress-text {
+  color: #5A6A7A;
+  font-size: 13px;
+}
+
+/* Animation d'entrée */
+.driver-popover {
+  animation: driver-popover-fade-in 0.3s ease-out;
+}
+
+@keyframes driver-popover-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Overlay personnalisé */
+.driver-overlay {
+  background: rgba(0, 0, 0, 0.75);
+  animation: driver-overlay-fade-in 0.3s ease-out;
+}
+
+@keyframes driver-overlay-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Highlight element animation */
+.driver-highlighted-element {
+  box-shadow: 0 0 0 4px #0F3460, 0 0 0 8px rgba(15, 52, 96, 0.3);
+  transition: box-shadow 0.3s ease-out;
+  border-radius: 8px;
+}
+
+/* CTk-style scrollbar for ScrollableFrame in preview mode */
+.ctk-scrollable-content::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.ctk-scrollable-content::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+.ctk-scrollable-content::-webkit-scrollbar-thumb {
+  background: #4A4D50;
+  border-radius: 4px;
+  min-height: 20px;
+}
+.ctk-scrollable-content::-webkit-scrollbar-thumb:hover {
+  background: #636363;
+}
+.light .ctk-scrollable-content::-webkit-scrollbar-thumb {
+  background: #CCCCCC;
+}
+.light .ctk-scrollable-content::-webkit-scrollbar-thumb:hover {
+  background: #A5A5A5;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .driver-popover {
+    max-width: 90vw !important;
+  }
+  
+  .driver-theme-dark .driver-popover-title,
+  .driver-theme-light .driver-popover-title {
+    font-size: 16px;
+  }
+  
+  .driver-theme-dark .driver-popover-description,
+  .driver-theme-light .driver-popover-description {
+    font-size: 13px;
+  }
+}

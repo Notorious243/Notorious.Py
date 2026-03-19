@@ -200,9 +200,10 @@ export async function saveFileTree(projectId: string, fileTree: unknown[]): Prom
 
 function generateShareToken(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  const randomBytes = crypto.getRandomValues(new Uint8Array(12));
   let token = '';
   for (let i = 0; i < 12; i++) {
-    token += chars.charAt(Math.floor(Math.random() * chars.length));
+    token += chars.charAt(randomBytes[i] % chars.length);
   }
   return token;
 }

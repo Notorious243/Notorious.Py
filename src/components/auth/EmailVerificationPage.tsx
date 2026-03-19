@@ -49,6 +49,7 @@ export const EmailVerificationPage: React.FC<EmailVerificationPageProps> = ({ on
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email: user.email,
+      options: { emailRedirectTo: window.location.origin },
     });
     setResending(false);
     if (!error) {

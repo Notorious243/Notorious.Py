@@ -39,13 +39,13 @@ const FALLBACK_MODELS: Record<AIProvider, string[]> = {
     ],
     groq: [
         'llama-3.1-8b-instant',
-        'llama-3.3-70b-versatile',
+        'mixtral-8x7b-32768',
     ],
     google: ['gemini-2.0-flash', 'gemini-1.5-flash'],
     openai: ['gpt-4o-mini'],
     anthropic: ['claude-3-haiku-20240307'],
     deepseek: ['deepseek-chat'],
-    huggingface: ['mistralai/Mistral-7B-Instruct-v0.3', 'microsoft/Phi-3-mini-4k-instruct'],
+    huggingface: ['mistralai/Mistral-Nemo-Instruct-2407', 'meta-llama/Meta-Llama-3.1-8B-Instruct'],
 };
 
 export const useAIGeneration = (): UseAIGenerationReturn => {
@@ -278,6 +278,11 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
      * possible locations (content, reasoning, text, etc.)
      */
     const extractContent = (data: any): string | null => {
+        // HuggingFace legacy format: [{generated_text: "..."}]
+        if (Array.isArray(data) && data.length > 0 && data[0]?.generated_text) {
+            return data[0].generated_text;
+        }
+
         const choice = data?.choices?.[0];
         if (!choice) return null;
 
@@ -475,9 +480,11 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
 
             console.warn(`[AI] First attempt failed (${model}), trying fallbacks...`);
 
-            // Try each fallback model
+            // Try each fallback model with a small delay between retries
             for (const fallbackModel of fallbacks) {
                 try {
+                    // Wait 1.5s before retrying to avoid rate-limit cascading (especially OpenRouter 429)
+                    await new Promise(r => setTimeout(r, 1500));
                     console.log(`[AI] Retry with fallback: ${fallbackModel}`);
                     setRetryCount(prev => prev + 1);
                     return await callProvider(apiKey, fallbackModel, messages, signal);

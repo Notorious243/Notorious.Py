@@ -284,16 +284,16 @@ export const OPENROUTER_MODELS: AIModel[] = [
 export const GROQ_MODELS: AIModel[] = [
   { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', supportsVision: false, provider: 'groq', free: true },
   { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant', supportsVision: false, provider: 'groq', free: true },
-  { id: 'meta-llama/llama-4-scout-17b-16e-instruct', name: 'Llama 4 Scout 17B', supportsVision: true, provider: 'groq', free: true },
-  { id: 'qwen/qwen3-32b', name: 'Qwen 3 32B', supportsVision: false, provider: 'groq', free: true },
+  { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B', supportsVision: false, provider: 'groq', free: true },
+  { id: 'gemma2-9b-it', name: 'Gemma 2 9B', supportsVision: false, provider: 'groq', free: true },
 ];
 
 // ── GRATUIT : Hugging Face Inference ────────────────────────
 export const HUGGINGFACE_MODELS: AIModel[] = [
   { id: 'Qwen/Qwen2.5-Coder-32B-Instruct', name: 'Qwen 2.5 Coder 32B', supportsVision: false, provider: 'huggingface', free: true },
-  { id: 'meta-llama/Llama-3.1-70B-Instruct', name: 'Llama 3.1 70B', supportsVision: false, provider: 'huggingface', free: true },
-  { id: 'mistralai/Mistral-7B-Instruct-v0.3', name: 'Mistral 7B v0.3', supportsVision: false, provider: 'huggingface', free: true },
-  { id: 'microsoft/Phi-3-mini-4k-instruct', name: 'Phi-3 Mini', supportsVision: false, provider: 'huggingface', free: true },
+  { id: 'mistralai/Mistral-Nemo-Instruct-2407', name: 'Mistral Nemo 12B', supportsVision: false, provider: 'huggingface', free: true },
+  { id: 'meta-llama/Meta-Llama-3.1-8B-Instruct', name: 'Llama 3.1 8B', supportsVision: false, provider: 'huggingface', free: true },
+  { id: 'microsoft/Phi-3.5-mini-instruct', name: 'Phi-3.5 Mini', supportsVision: false, provider: 'huggingface', free: true },
 ];
 
 // ── PREMIUM : Google Gemini (API directe) ───────────────────
@@ -419,7 +419,7 @@ export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
     maxTokens: 8192,
   },
   huggingface: {
-    endpoint: 'https://api-inference.huggingface.co/v1/chat/completions',
+    endpoint: 'https://router.huggingface.co/hf-inference/v1/chat/completions',
     authHeader: (key: string) => ({ Authorization: `Bearer ${key}` }),
     label: 'Hugging Face',
     keyPrefix: 'hf_...',
@@ -427,7 +427,7 @@ export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
     color: 'amber',
     free: true,
     apiFormat: 'openai',
-    maxTokens: 4096,
+    maxTokens: 2048,
   },
 };
 

@@ -482,13 +482,19 @@ const SignUpForm: React.FC<{ onSwitch: () => void; onNewUser: () => void }> = ({
     }
     setError('');
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { first_name: firstName } },
+      options: {
+        data: { first_name: firstName },
+        emailRedirectTo: window.location.origin,
+      },
     });
     if (error) {
       setError(error.message || "Erreur lors de la création du compte.");
+    } else if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
+      // Supabase returns no error but empty identities when email already exists
+      setError('Un compte existe déjà avec cette adresse e-mail. Essayez de vous connecter.');
     } else {
       localStorage.setItem('gui_builder_new_user', 'true');
       onNewUser();

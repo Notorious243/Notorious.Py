@@ -52,26 +52,56 @@ interface AIGeneratorModalProps {
 const SESSION_PREFIX = 'ctk-ai-key-session';
 const PERSIST_PREFIX = 'ctk-ai-key-persist';
 
-function obfuscateKey(key: string): string {
-    try { return btoa(encodeURIComponent(key)); } catch { return ''; }
+// ── AES-GCM encryption helpers ─────────────────────────────────────────────
+const CRYPTO_SALT = 'notorious-py-key-v1';
+
+async function deriveKey(): Promise<CryptoKey> {
+    const enc = new TextEncoder();
+    const material = await crypto.subtle.importKey('raw', enc.encode(CRYPTO_SALT), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt: enc.encode('ntrs-salt'), iterations: 100_000, hash: 'SHA-256' },
+        material,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt'],
+    );
 }
-function deobfuscateKey(encoded: string): string {
+
+async function encryptKey(plaintext: string): Promise<string> {
+    try {
+        const key = await deriveKey();
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const encoded = new TextEncoder().encode(plaintext);
+        const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
+        const combined = new Uint8Array(iv.length + new Uint8Array(ciphertext).length);
+        combined.set(iv);
+        combined.set(new Uint8Array(ciphertext), iv.length);
+        return btoa(String.fromCharCode(...combined));
+    } catch { return ''; }
+}
+
+async function decryptKey(stored: string): Promise<string> {
+    try {
+        const key = await deriveKey();
+        const raw = Uint8Array.from(atob(stored), c => c.charCodeAt(0));
+        const iv = raw.slice(0, 12);
+        const ciphertext = raw.slice(12);
+        const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+        return new TextDecoder().decode(decrypted);
+    } catch { return ''; }
+}
+
+// Legacy decode for migration
+function deobfuscateLegacy(encoded: string): string {
     try { return decodeURIComponent(atob(encoded)); } catch { return ''; }
 }
 
 function loadApiKey(provider: AIProvider): string {
     const sessionKey = `${SESSION_PREFIX}-${provider}`;
-    const persistKey = `${PERSIST_PREFIX}-${provider}`;
     try {
         const session = sessionStorage.getItem(sessionKey);
         if (session) return session;
-        const persisted = localStorage.getItem(persistKey);
-        if (persisted) {
-            const key = deobfuscateKey(persisted);
-            sessionStorage.setItem(sessionKey, key);
-            return key;
-        }
-        // Migrate from old plain-text storage (openrouter only)
+        // Migrate from old plain-text / base64 storage
         if (provider === 'openrouter') {
             const legacySession = sessionStorage.getItem('ctk-ai-key-session');
             if (legacySession) {
@@ -81,9 +111,8 @@ function loadApiKey(provider: AIProvider): string {
             }
             const legacyPersist = localStorage.getItem('ctk-ai-key-persist');
             if (legacyPersist) {
-                const key = deobfuscateKey(legacyPersist);
-                sessionStorage.setItem(sessionKey, key);
-                localStorage.setItem(persistKey, legacyPersist);
+                const key = deobfuscateLegacy(legacyPersist);
+                if (key) sessionStorage.setItem(sessionKey, key);
                 localStorage.removeItem('ctk-ai-key-persist');
                 return key;
             }
@@ -93,6 +122,14 @@ function loadApiKey(provider: AIProvider): string {
                 localStorage.removeItem('ctk-ai-key-openrouter');
                 return legacyPlain;
             }
+        }
+        // Migrate old per-provider persist keys (base64)
+        const oldPersist = localStorage.getItem(`${PERSIST_PREFIX}-${provider}`);
+        if (oldPersist) {
+            const key = deobfuscateLegacy(oldPersist);
+            if (key) sessionStorage.setItem(sessionKey, key);
+            localStorage.removeItem(`${PERSIST_PREFIX}-${provider}`);
+            return key;
         }
     } catch { /* storage unavailable */ }
     return '';
@@ -105,7 +142,9 @@ function saveApiKey(provider: AIProvider, value: string, persist: boolean) {
         if (value) {
             sessionStorage.setItem(sessionKey, value);
             if (persist) {
-                localStorage.setItem(persistKey, obfuscateKey(value));
+                encryptKey(value).then(encrypted => {
+                    if (encrypted) localStorage.setItem(persistKey, encrypted);
+                });
             }
         } else {
             sessionStorage.removeItem(sessionKey);
@@ -178,6 +217,26 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({ isOpen, onOp
             localStorage.setItem('ctk-ai-history', JSON.stringify(generationHistory));
         } catch { /* storage unavailable */ }
     }, [generationHistory]);
+
+    // On mount: async-decrypt persisted AES keys into sessionStorage
+    useEffect(() => {
+        const providers: AIProvider[] = ['openrouter', 'groq', 'huggingface', 'google', 'openai', 'anthropic', 'deepseek'];
+        let cancelled = false;
+        (async () => {
+            for (const p of providers) {
+                const sessionKey = `${SESSION_PREFIX}-${p}`;
+                if (sessionStorage.getItem(sessionKey)) continue; // already loaded
+                const stored = localStorage.getItem(`${PERSIST_PREFIX}-${p}`);
+                if (!stored) continue;
+                const plain = await decryptKey(stored);
+                if (plain && !cancelled) {
+                    sessionStorage.setItem(sessionKey, plain);
+                    setApiKeys(prev => ({ ...prev, [p]: plain }));
+                }
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
     const preGenSnapshotRef = useRef<{ widgets: any[]; settings: any } | null>(null);
     const [elapsedSeconds, setElapsedSeconds] = useState(0);
 

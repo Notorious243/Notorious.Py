@@ -8,7 +8,7 @@ import { RightSidebar } from '@/components/builder/RightSidebar';
 import { WidgetProvider, useWidgets } from '@/contexts/WidgetContext';
 import { DragProvider } from '@/contexts/DragContext';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, PanelLeftClose, PanelRightClose, Lock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, PanelLeftClose, PanelRightClose, Lock, Monitor } from 'lucide-react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { FileSystemProvider } from '@/hooks/useFileSystem';
 import { ProjectProvider, useProjects } from '@/contexts/ProjectContext';
@@ -25,6 +25,8 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
   const [isFirstTime, setIsFirstTime] = useState(false);
   const [showWelcomeOverlay, setShowWelcomeOverlay] = useState(false);
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
+  const [mobileBannerDismissed, setMobileBannerDismissed] = useState(false);
   const { projects } = useProjects();
   const projectsRef = useRef(projects);
   projectsRef.current = projects;
@@ -50,14 +52,14 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
       }
     } catch { /* localStorage unavailable */ }
 
-    // Responsive : fermer les panels sur petit écran
+    // Responsive : fermer les panels sur petit écran réel (screen.width = taille physique)
     const checkResponsive = () => {
-      if (window.innerWidth < 1024 && !shouldStartOnboarding) {
+      const realWidth = window.screen.width;
+      const isSmall = realWidth < 1024;
+      setIsMobileDevice(isSmall);
+      if (isSmall && !shouldStartOnboarding) {
         setIsLeftPanelOpen(false);
         setIsRightPanelOpen(false);
-      } else {
-        setIsLeftPanelOpen(true);
-        setIsRightPanelOpen(true);
       }
     };
 
@@ -187,6 +189,32 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
               </Suspense>
             )}
           </ErrorBoundary>
+
+          {/* Mobile device warning — shown on the canvas */}
+          {isMobileDevice && !mobileBannerDismissed && (
+            <div className="absolute inset-x-0 bottom-0 z-40 p-4 flex justify-center pointer-events-none">
+              <div className="pointer-events-auto w-full max-w-md rounded-2xl border border-indigo-500/20 bg-slate-900/95 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.5)] p-5">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/15 flex items-center justify-center shrink-0">
+                    <Monitor className="w-5 h-5 text-indigo-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-slate-100 mb-1">Optimisé pour les grands écrans</p>
+                    <p className="text-[11px] leading-relaxed text-slate-400">
+                      <strong className="text-slate-300">Notorious.PY</strong> est un outil de bureau.
+                      Pour une meilleure expérience, utilisez un ordinateur.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setMobileBannerDismissed(true)}
+                  className="mt-3 w-full h-9 rounded-xl border border-indigo-500/25 bg-indigo-500/10 text-indigo-300 text-xs font-semibold hover:bg-indigo-500/20 transition-colors"
+                >
+                  J'ai compris
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Toggle Button Right Panel */}

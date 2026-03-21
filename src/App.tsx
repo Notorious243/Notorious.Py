@@ -5,7 +5,6 @@ import { Toaster } from '@/components/ui/sonner';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { MobileBlocker } from '@/components/MobileBlocker';
 const AuthPage = lazy(() => import('@/components/auth/AuthPage').then(m => ({ default: m.AuthPage })));
 const WelcomePage = lazy(() => import('@/components/auth/WelcomePage').then(m => ({ default: m.WelcomePage })));
 const EmailVerificationPage = lazy(() => import('@/components/auth/EmailVerificationPage').then(m => ({ default: m.EmailVerificationPage })));
@@ -108,7 +107,6 @@ function AppInner() {
 function App() {
   return (
     <AuthProvider>
-      <MobileBlocker />
       <AppInner />
     </AuthProvider>
   );

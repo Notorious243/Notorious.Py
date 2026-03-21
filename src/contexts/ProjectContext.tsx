@@ -67,7 +67,15 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     const hasLoadedOnceRef = useRef(false);
 
     const [activeProjectId, setActiveProjectId] = useState<string | null>(() => {
-        try { return localStorage.getItem(ACTIVE_PROJECT_KEY); } catch { return null; }
+        try {
+            const stored = localStorage.getItem(ACTIVE_PROJECT_KEY);
+            // Never restore temp (guest) project IDs — guest data resets on refresh
+            if (stored && stored.startsWith('temp-')) {
+                localStorage.removeItem(ACTIVE_PROJECT_KEY);
+                return null;
+            }
+            return stored;
+        } catch { return null; }
     });
 
     // Reset active project when user changes (logout/login)
@@ -82,7 +90,14 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     // Fetch projects on mount / user change
     const fetchProjects = useCallback(async () => {
-        if (!user) { setProjects([]); setLoading(false); hasLoadedOnceRef.current = false; return; }
+        if (!user) {
+            // Guest mode: start with empty projects — user creates their own
+            setProjects([]);
+            setActiveProjectId(null);
+            setLoading(false);
+            hasLoadedOnceRef.current = false;
+            return;
+        }
         // Only show loading spinner on the very first fetch — never on refreshes
         // (setting loading=true unmounts the entire WidgetProvider tree)
         if (!hasLoadedOnceRef.current) setLoading(true);
@@ -120,11 +135,14 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         };
     }, [user, fetchProjects]);
 
-    // Persist active project id locally
+    // Persist active project id locally (skip temp/guest project IDs)
     useEffect(() => {
         try {
-            if (activeProjectId) localStorage.setItem(ACTIVE_PROJECT_KEY, activeProjectId);
-            else localStorage.removeItem(ACTIVE_PROJECT_KEY);
+            if (activeProjectId && !activeProjectId.startsWith('temp-')) {
+                localStorage.setItem(ACTIVE_PROJECT_KEY, activeProjectId);
+            } else {
+                localStorage.removeItem(ACTIVE_PROJECT_KEY);
+            }
         } catch { /* ignore */ }
     }, [activeProjectId]);
 
@@ -136,7 +154,14 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     }, [loading, activeProjectId, projects]);
 
     const createProject = useCallback(async (name: string): Promise<string> => {
-        if (!user) throw new Error('Not authenticated');
+        if (!user) {
+            // Guest mode: create a local-only project
+            const id = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            const meta: ProjectMetadata = { id, name, createdAt: Date.now(), updatedAt: Date.now() };
+            setProjects(prev => [meta, ...prev]);
+            setActiveProjectId(id);
+            return id;
+        }
         const { data, error } = await supabase
             .from('projects')
             .insert({ name, user_id: user.id, canvas_settings: DEFAULT_CANVAS, file_tree: [] })

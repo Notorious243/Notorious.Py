@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle, Lock, AtSign, User, Zap, MousePointerClick, Code2, ArrowLeft, ShieldCheck, KeyRound } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle, Lock, AtSign, User, Zap, MousePointerClick, Code2, ArrowLeft, ShieldCheck, KeyRound, TriangleAlert, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 // ── Logo component ──────────────────────────────────────────────────────────
 const AppLogo = ({ size = 'md' }: { size?: 'md' | 'lg' }) => (
@@ -65,18 +66,36 @@ const staggerItem = {
   show: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] } },
 };
 
-// ── Alert banner ──────────────────────────────────────────────────────────────
+// ── Supabase error → French translation ─────────────────────────────────────
+const supabaseErrorFR: Record<string, string> = {
+  'Invalid login credentials': 'Adresse e-mail ou mot de passe incorrect.',
+  'Email not confirmed': 'Veuillez confirmer votre adresse e-mail avant de vous connecter.',
+  'User not found': 'Aucun compte trouvé avec cette adresse e-mail.',
+  'Email rate limit exceeded': 'Trop de tentatives. Veuillez réessayer plus tard.',
+  'For security purposes, you can only request this after': 'Pour des raisons de sécurité, veuillez patienter avant de réessayer.',
+  'User already registered': 'Un compte existe déjà avec cette adresse e-mail.',
+  'Password should be at least 6 characters': 'Le mot de passe doit contenir au moins 6 caractères.',
+  'Signups not allowed for this instance': 'Les inscriptions sont temporairement désactivées.',
+  'Unable to validate email address: invalid format': 'Format d\'adresse e-mail invalide.',
+  'New password should be different from the old password': 'Le nouveau mot de passe doit être différent de l\'ancien.',
+};
+const translateError = (msg: string, fallback: string): string => {
+  for (const [en, fr] of Object.entries(supabaseErrorFR)) {
+    if (msg.toLowerCase().includes(en.toLowerCase())) return fr;
+  }
+  return fallback;
+};
+
+// ── Alert banner (shadcn) ───────────────────────────────────────────────────────────────────
+const variantMap = { error: 'destructive', warning: 'warning', info: 'info' } as const;
+const iconMap = { error: TriangleAlert, warning: AlertCircle, info: Info };
 const AlertBanner: React.FC<{ variant: 'error' | 'warning' | 'info'; children: React.ReactNode }> = ({ variant, children }) => {
-  const styles = {
-    error:   'bg-red-50 border-red-200 text-red-800',
-    warning: 'bg-amber-50 border-amber-200 text-amber-800',
-    info:    'bg-blue-50 border-blue-200 text-blue-800',
-  };
+  const Icon = iconMap[variant];
   return (
-    <div className={`flex items-start gap-2.5 px-3.5 py-3 rounded-xl border text-sm leading-snug ${styles[variant]}`}>
-      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-      <span>{children}</span>
-    </div>
+    <Alert variant={variantMap[variant]}>
+      <Icon className="h-4 w-4" />
+      <AlertDescription>{children}</AlertDescription>
+    </Alert>
   );
 };
 
@@ -137,7 +156,7 @@ const ForgotPasswordForm: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       redirectTo: window.location.origin,
     });
     if (error) {
-      setError(error.message || 'Impossible d\'envoyer l\'e-mail de réinitialisation.');
+      setError(translateError(error.message, 'Impossible d\'envoyer l\'e-mail de réinitialisation.'));
     } else {
       setSent(true);
     }
@@ -248,7 +267,7 @@ const ResetPasswordForm: React.FC<{ onDone: () => void }> = ({ onDone }) => {
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password });
     if (error) {
-      setError(error.message || 'Impossible de mettre à jour le mot de passe.');
+      setError(translateError(error.message, 'Impossible de mettre à jour le mot de passe.'));
     } else {
       setDone(true);
     }
@@ -398,7 +417,7 @@ const SignInForm: React.FC<{ onSwitch: () => void; onForgotPassword: () => void 
     setError('');
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setError(error.message || 'Email ou mot de passe incorrect.');
+    if (error) setError(translateError(error.message, 'Adresse e-mail ou mot de passe incorrect.'));
     setLoading(false);
   };
 
@@ -491,7 +510,7 @@ const SignUpForm: React.FC<{ onSwitch: () => void; onNewUser: () => void }> = ({
       },
     });
     if (error) {
-      setError(error.message || "Erreur lors de la création du compte.");
+      setError(translateError(error.message, 'Erreur lors de la création du compte.'));
     } else if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
       // Supabase returns no error but empty identities when email already exists
       setError('Un compte existe déjà avec cette adresse e-mail. Essayez de vous connecter.');

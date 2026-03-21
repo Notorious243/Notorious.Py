@@ -1,9 +1,10 @@
 import React, { useState, lazy, Suspense } from 'react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from 'next-themes';
-import { Sun, Moon, Code, Brush, Download, Undo2, Redo2, Eye, Edit, Keyboard, HelpCircle, Sparkles, History } from 'lucide-react';
+import { Sun, Moon, Code, Brush, Download, Undo2, Redo2, Eye, Edit, Keyboard, HelpCircle, Sparkles, History, LogIn } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { LogOut, ChevronDown } from 'lucide-react';
+import { AuthPromptDialog } from '@/components/AuthPromptDialog';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useWidgets } from '@/contexts/WidgetContext';
 const ExportModal = lazy(() => import('./ExportModal').then(m => ({ default: m.ExportModal })));
@@ -115,6 +116,8 @@ const UserMenu: React.FC = () => {
 
 export const TopBar: React.FC<{ minimal?: boolean }> = ({ minimal }) => {
   const { theme, setTheme } = useTheme();
+  const { user } = useAuth();
+  const isGuest = !user;
   const { viewMode, setViewMode, previewMode, setPreviewMode, undo, redo, canUndo, canRedo, widgets, canvasSettings, loadWorkspaceState, activeFileId } = useWidgets();
   const { activeProjectId } = useProjects();
   const { getNode } = useFileSystem();
@@ -123,6 +126,7 @@ export const TopBar: React.FC<{ minimal?: boolean }> = ({ minimal }) => {
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [isVersionModalOpen, setIsVersionModalOpen] = useState(false);
+  const [authPromptFeature, setAuthPromptFeature] = useState<string | null>(null);
 
   // F1 to open keyboard shortcuts
   React.useEffect(() => {
@@ -199,14 +203,18 @@ export const TopBar: React.FC<{ minimal?: boolean }> = ({ minimal }) => {
 
               {/* AI Generation Button */}
               <Button
-                onClick={() => setIsAIModalOpen(true)}
-                className="gap-2 bg-[#0F3460] hover:bg-[#1F5AA0] text-white border-0 shadow-sm dark:shadow-[0_8px_24px_rgba(15,52,96,0.4)] transition-all"
+                onClick={() => isGuest ? setAuthPromptFeature('L\'assistant IA') : setIsAIModalOpen(true)}
+                className={`gap-2 bg-[#0F3460] hover:bg-[#1F5AA0] text-white border-0 shadow-sm dark:shadow-[0_8px_24px_rgba(15,52,96,0.4)] transition-all ${isGuest ? 'opacity-75' : ''}`}
               >
                 <Sparkles className="h-4 w-4 text-white" />
                 <span className="font-medium">Générer UI</span>
               </Button>
 
-              <Button onClick={() => setIsExportModalOpen(true)} data-export-button className="dark:bg-[#0F3460] dark:hover:bg-[#1F5AA0] dark:text-white dark:border-0 dark:shadow-[0_8px_22px_rgba(15,52,96,0.4)]">
+              <Button
+                onClick={() => isGuest ? setAuthPromptFeature('L\'exportation du code') : setIsExportModalOpen(true)}
+                data-export-button
+                className={`dark:bg-[#0F3460] dark:hover:bg-[#1F5AA0] dark:text-white dark:border-0 dark:shadow-[0_8px_22px_rgba(15,52,96,0.4)] ${isGuest ? 'opacity-75' : ''}`}
+              >
                 <Download className="h-4 w-4 mr-2" />
                 Exporter le Code
               </Button>
@@ -215,11 +223,11 @@ export const TopBar: React.FC<{ minimal?: boolean }> = ({ minimal }) => {
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => setIsVersionModalOpen(true)}
+                onClick={() => isGuest ? setAuthPromptFeature('L\'historique des versions') : setIsVersionModalOpen(true)}
                 disabled={!activeProjectId}
                 aria-label="Historique des versions"
                 title="Historique des versions"
-                className="h-9 w-9"
+                className={`h-9 w-9 ${isGuest ? 'opacity-60' : ''}`}
               >
                 <History className="h-4 w-4" />
               </Button>
@@ -275,12 +283,18 @@ export const TopBar: React.FC<{ minimal?: boolean }> = ({ minimal }) => {
                 type="single"
                 variant="outline"
                 value={viewMode}
-                onValueChange={(value) => { if (value) setViewMode(value as 'design' | 'code') }}
+                onValueChange={(value) => {
+                  if (value === 'code' && isGuest) {
+                    setAuthPromptFeature('La vue code');
+                    return;
+                  }
+                  if (value) setViewMode(value as 'design' | 'code');
+                }}
               >
                 <ToggleGroupItem value="design" aria-label="Vue Design">
                   <Brush className="h-4 w-4" />
                 </ToggleGroupItem>
-                <ToggleGroupItem value="code" aria-label="Vue Code">
+                <ToggleGroupItem value="code" aria-label="Vue Code" className={isGuest ? 'opacity-60' : ''}>
                   <Code className="h-4 w-4" />
                 </ToggleGroupItem>
               </ToggleGroup>
@@ -306,7 +320,17 @@ export const TopBar: React.FC<{ minimal?: boolean }> = ({ minimal }) => {
           )}
           */}
 
-          <UserMenu />
+          {isGuest ? (
+            <Button
+              onClick={() => window.dispatchEvent(new CustomEvent('open-auth-page'))}
+              className="flex items-center gap-2 h-9 px-4 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-semibold shadow-md transition-all ring-2 ring-indigo-500/20 hover:ring-indigo-500/50"
+            >
+              <LogIn className="w-4 h-4" />
+              Se connecter
+            </Button>
+          ) : (
+            <UserMenu />
+          )}
         </div>
       </div>
       <Suspense fallback={null}>
@@ -326,6 +350,12 @@ export const TopBar: React.FC<{ minimal?: boolean }> = ({ minimal }) => {
           />
         )}
       </Suspense>
+      {/* Auth prompt dialog for locked features */}
+      <AuthPromptDialog
+        open={!!authPromptFeature}
+        onOpenChange={(open) => { if (!open) setAuthPromptFeature(null); }}
+        feature={authPromptFeature ?? ''}
+      />
     </>
   );
 };

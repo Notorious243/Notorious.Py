@@ -94,9 +94,6 @@ export const InteractiveWidget: React.FC<InteractiveWidgetProps> = React.memo(({
   const fontStyle = style.fontStyle || 'normal';
   const textDecoration = style.textDecoration || 'none';
 
-  const widgetOpacity = style.opacity !== undefined ? style.opacity : 1;
-  const widgetBoxShadow = style.boxShadow || 'none';
-
   const baseStyle: React.CSSProperties = {
     width: '100%',
     height: '100%',
@@ -109,8 +106,6 @@ export const InteractiveWidget: React.FC<InteractiveWidgetProps> = React.memo(({
     pointerEvents: isPreviewMode ? 'auto' : 'none',
     userSelect: isPreviewMode ? 'auto' : 'none',
     boxSizing: 'border-box',
-    opacity: widgetOpacity,
-    boxShadow: widgetBoxShadow,
   };
 
   const renderCtx: WidgetRenderContext = {

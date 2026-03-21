@@ -10,7 +10,7 @@ import { isCtkStyleSupported } from '@/constants/customtkinter-validation';
 import { FONT_FAMILIES } from '@/constants/widgets';
 import { WidgetData, WidgetStyle } from '@/types/widget';
 import { getParentContentBounds } from '@/lib/widgetLayout';
-import { Bold, Italic, Underline, Settings, Plus, Trash2, Upload, Link, FolderOpen, Image as ImageIcon, Ruler, PenSquare, Palette, Settings2, Sparkles } from 'lucide-react';
+import { Bold, Italic, Underline, Settings, Plus, Trash2, Upload, Link, FolderOpen, Image as ImageIcon, Ruler, PenSquare, Palette, Settings2 } from 'lucide-react';
 import { ColorPicker } from './ColorPicker';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -1412,67 +1412,6 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
             </div>
           </div>
 
-          {/* Opacité & Effets d'Ombre */}
-          <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Effets</Label>
-              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 font-medium">canvas uniquement</span>
-            </div>
-
-            {/* Opacité */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs">Opacité</Label>
-                <span className="text-[11px] font-mono text-muted-foreground">{Math.round((style.opacity !== undefined ? style.opacity : 1) * 100)}%</span>
-              </div>
-              <Slider
-                min={0}
-                max={100}
-                step={1}
-                value={[Math.round((style.opacity !== undefined ? style.opacity : 1) * 100)]}
-                onValueChange={([val]) => handleStyleChange('opacity', val / 100)}
-                className="w-full"
-              />
-            </div>
-
-            {/* Ombre */}
-            <div className="space-y-1.5">
-              <Label className="text-xs">Ombre</Label>
-              <Select
-                value={style.boxShadow || 'none'}
-                onValueChange={v => handleStyleChange('boxShadow', v)}
-              >
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">
-                    <span className="text-xs">Aucune</span>
-                  </SelectItem>
-                  <SelectItem value="0 1px 3px rgba(0,0,0,0.12)">
-                    <span className="text-xs">Légère</span>
-                  </SelectItem>
-                  <SelectItem value="0 4px 12px rgba(0,0,0,0.15)">
-                    <span className="text-xs">Moyenne</span>
-                  </SelectItem>
-                  <SelectItem value="0 8px 24px rgba(0,0,0,0.2)">
-                    <span className="text-xs">Forte</span>
-                  </SelectItem>
-                  <SelectItem value="0 12px 40px rgba(0,0,0,0.3)">
-                    <span className="text-xs">Très forte</span>
-                  </SelectItem>
-                  <SelectItem value="0 0 0 3px rgba(59,130,246,0.5)">
-                    <span className="text-xs">Halo bleu</span>
-                  </SelectItem>
-                  <SelectItem value="0 0 0 3px rgba(15,52,96,0.5)">
-                    <span className="text-xs">Halo navy</span>
-                  </SelectItem>
-                  <SelectItem value="inset 0 2px 6px rgba(0,0,0,0.15)">
-                    <span className="text-xs">Intérieure</span>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
         </div>
 
         {/* ========== SECTION 4: CONFIGURATION SPÉCIFIQUE ========== */}

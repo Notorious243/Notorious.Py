@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useProjects } from '@/contexts/ProjectContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Plus, Sparkles, Trash2, Search, Calendar, Rocket, ArrowLeft, Upload, Pencil, ImagePlus } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
@@ -7,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
+import { AuthPromptDialog } from '@/components/AuthPromptDialog';
 import JSZip from 'jszip';
 
 // Simple custom SVG for Python logo since it's not standard in lucide-react
@@ -25,6 +27,9 @@ const PythonIcon = ({ className }: { className?: string }) => (
 // ─── Main WelcomeScreen: project listing only (shown when projects exist) ───
 export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const { projects, createProject, openProject, deleteProject, renameProject, updateProjectThumbnail } = useProjects();
+  const { user } = useAuth();
+  const isGuest = !user;
+  const [authPromptFeature, setAuthPromptFeature] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
@@ -322,9 +327,9 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
             </Button>
 
             <Button
-              onClick={handleCreateWithAI}
+              onClick={() => isGuest ? setAuthPromptFeature('La génération IA') : handleCreateWithAI()}
               variant="outline"
-              className="flex-1 h-11 text-sm font-semibold border-slate-300/80 bg-white/80 backdrop-blur-sm hover:bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:bg-slate-800 dark:text-slate-100 rounded-xl transition-all duration-300 hover:scale-[1.02]"
+              className={`flex-1 h-11 text-sm font-semibold border-slate-300/80 bg-white/80 backdrop-blur-sm hover:bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:bg-slate-800 dark:text-slate-100 rounded-xl transition-all duration-300 hover:scale-[1.02] ${isGuest ? 'opacity-60' : ''}`}
               size="lg"
             >
               <Sparkles className="mr-2 h-4 w-4 text-violet-400" />
@@ -332,9 +337,9 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
             </Button>
 
             <Button
-              onClick={() => setShowImportDialog(true)}
+              onClick={() => isGuest ? setAuthPromptFeature('L\'importation de projet') : setShowImportDialog(true)}
               variant="outline"
-              className="flex-1 h-11 text-sm font-semibold border-slate-300/80 bg-white/80 backdrop-blur-sm hover:bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:bg-slate-800 dark:text-slate-100 rounded-xl transition-all duration-300 hover:scale-[1.02]"
+              className={`flex-1 h-11 text-sm font-semibold border-slate-300/80 bg-white/80 backdrop-blur-sm hover:bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:bg-slate-800 dark:text-slate-100 rounded-xl transition-all duration-300 hover:scale-[1.02] ${isGuest ? 'opacity-60' : ''}`}
               size="lg"
             >
               <Upload className="mr-2 h-4 w-4" />
@@ -554,6 +559,12 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+      {/* Auth prompt for locked guest features */}
+      <AuthPromptDialog
+        open={!!authPromptFeature}
+        onOpenChange={(open) => { if (!open) setAuthPromptFeature(null); }}
+        feature={authPromptFeature ?? ''}
+      />
     </div>
   );
 };

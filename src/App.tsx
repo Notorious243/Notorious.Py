@@ -24,6 +24,7 @@ function AppInner() {
     localStorage.getItem('gui_builder_new_user') === 'true'
   );
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  const [showAuthPage, setShowAuthPage] = useState(false);
 
   // Detect PASSWORD_RECOVERY event from Supabase (user clicked reset link in email)
   useEffect(() => {
@@ -34,6 +35,18 @@ function AppInner() {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  // Listen for open-auth-page event from any component (TopBar, AuthPromptDialog, etc.)
+  useEffect(() => {
+    const handler = () => setShowAuthPage(true);
+    window.addEventListener('open-auth-page', handler);
+    return () => window.removeEventListener('open-auth-page', handler);
+  }, []);
+
+  // When user logs in, close the auth page overlay
+  useEffect(() => {
+    if (user) setShowAuthPage(false);
+  }, [user]);
 
   const handleContinue = () => {
     localStorage.removeItem('gui_builder_new_user');
@@ -72,8 +85,18 @@ function AppInner() {
             ) : (
               <Index />
             )
+          ) : showAuthPage ? (
+            <div className="relative">
+              <button
+                onClick={() => setShowAuthPage(false)}
+                className="absolute top-5 left-5 z-50 flex items-center gap-2 h-10 px-5 rounded-full bg-white/95 dark:bg-slate-800/95 border border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 dark:hover:bg-indigo-500/10 dark:hover:border-indigo-500/40 dark:hover:text-indigo-300 shadow-md backdrop-blur-md transition-all duration-200 text-sm font-semibold"
+              >
+                ← Retour au canvas
+              </button>
+              <AuthPage onNewUser={() => setShowWelcome(true)} />
+            </div>
           ) : (
-            <AuthPage onNewUser={() => setShowWelcome(true)} />
+            <Index />
           )}
         </Suspense>
         <Toaster richColors />

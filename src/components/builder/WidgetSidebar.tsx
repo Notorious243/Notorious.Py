@@ -17,6 +17,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import { AuthPromptDialog } from '@/components/AuthPromptDialog';
+import { Lock as LockIcon } from 'lucide-react';
 
 const FolderFilledIcon = ({ className, color = '#0F3460' }: { className?: string; color?: string }) => (
   <svg viewBox="0 0 24 24" fill={color} className={className} xmlns="http://www.w3.org/2000/svg">
@@ -85,7 +88,10 @@ const DraggableWidget: React.FC<DraggableWidgetProps> = ({ type, name, descripti
 };
 
 export const WidgetSidebar: React.FC = () => {
+  const { user } = useAuth();
+  const isGuest = !user;
   const [searchQuery, setSearchQuery] = useState('');
+  const [authPromptOpen, setAuthPromptOpen] = useState(false);
   const { data, dataRef, addNode, deleteNode, renameNode, hasFiles, updateNode, getNode, saveNow } = useFileSystem();
 
   // Widget Context used for synchronization
@@ -582,14 +588,28 @@ export const WidgetSidebar: React.FC = () => {
           <ScrollArea className="flex-1 overflow-auto">
             <div className="p-4 pt-0">
               <div className="space-y-6">
-                {filteredCategories.map((category) => (
+                {filteredCategories.map((category) => {
+                  const isLockedCategory = isGuest && category.name === 'Composites';
+                  return (
                   <div key={category.name} className="space-y-3">
                     <div className="flex items-center justify-between sticky top-0 bg-white/95 dark:bg-[#0c1728]/95 backdrop-blur-sm py-2 z-10 border-b border-transparent">
                       <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
                         {category.name}
                       </h3>
+                      {isLockedCategory && (
+                        <LockIcon className="w-3 h-3 text-slate-400 dark:text-slate-500" />
+                      )}
                     </div>
-                    <div className="grid gap-3">
+                    <div className={`grid gap-3 relative ${isLockedCategory ? 'pointer-events-none' : ''}`}>
+                      {isLockedCategory && (
+                        <div
+                          className="absolute inset-0 z-20 bg-white/60 dark:bg-slate-950/60 backdrop-blur-[2px] rounded-xl flex flex-col items-center justify-center cursor-pointer pointer-events-auto"
+                          onClick={() => setAuthPromptOpen(true)}
+                        >
+                          <LockIcon className="w-5 h-5 text-indigo-500 dark:text-indigo-400 mb-1" />
+                          <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">Compte requis</span>
+                        </div>
+                      )}
                       <AnimatePresence>
                         {category.widgets.map((widget, index) => (
                           <motion.div
@@ -611,7 +631,8 @@ export const WidgetSidebar: React.FC = () => {
                       </AnimatePresence>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </ScrollArea>
@@ -772,6 +793,12 @@ export const WidgetSidebar: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Auth prompt for locked widgets */}
+      <AuthPromptDialog
+        open={authPromptOpen}
+        onOpenChange={setAuthPromptOpen}
+        feature="Les widgets composites"
+      />
     </div >
   );
 };

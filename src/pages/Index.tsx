@@ -29,23 +29,14 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
   const projectsRef = useRef(projects);
   projectsRef.current = projects;
 
-  // Listen for Home button click from TopBar — only open when projects exist (otherwise stay on Canvas)
+  // Listen for Home button click from TopBar — always open (allows project creation even with 0 projects)
   useEffect(() => {
     const handler = () => {
-      if (projectsRef.current.length > 0) {
-        setShowWelcomeOverlay(true);
-      }
+      setShowWelcomeOverlay(true);
     };
     window.addEventListener('open-projects-modal', handler);
     return () => window.removeEventListener('open-projects-modal', handler);
   }, []);
-
-  // Auto-close the WelcomeScreen overlay when all projects are deleted
-  useEffect(() => {
-    if (showWelcomeOverlay && projects.length === 0) {
-      setShowWelcomeOverlay(false);
-    }
-  }, [showWelcomeOverlay, projects.length]);
 
   // Ne lancer le tour qu'après création/ouverture d'un projet
   const shouldStartOnboarding = isFirstTime && !isNoProject;
@@ -152,7 +143,10 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
         >
           <WidgetSidebar />
           {isNoProject && (
-            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/80 dark:bg-slate-950/85 backdrop-blur-[1px]">
+            <div
+              className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/80 dark:bg-slate-950/85 backdrop-blur-[1px] cursor-pointer hover:bg-white/90 dark:hover:bg-slate-950/90 transition-colors"
+              onClick={() => setShowWelcomeOverlay(true)}
+            >
               <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3 shadow-inner">
                 <Lock className="w-8 h-8 text-slate-400 dark:text-slate-500" />
               </div>
@@ -227,7 +221,10 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
         >
           <RightSidebar />
           {(!hasFiles || isNoProject) && (
-            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/80 dark:bg-slate-950/85 backdrop-blur-[1px]">
+            <div
+              className={`absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/80 dark:bg-slate-950/85 backdrop-blur-[1px] ${isNoProject ? 'cursor-pointer hover:bg-white/90 dark:hover:bg-slate-950/90 transition-colors' : ''}`}
+              onClick={isNoProject ? () => setShowWelcomeOverlay(true) : undefined}
+            >
               <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3 shadow-inner">
                 <Lock className="w-8 h-8 text-slate-400 dark:text-slate-500" />
               </div>

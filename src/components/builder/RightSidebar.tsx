@@ -8,28 +8,43 @@ import { WidgetProperties } from './properties/WidgetProperties';
 import { WidgetList } from './properties/WidgetList';
 import { CanvasProperties } from './properties/CanvasProperties';
 import { AIAssistantPanel } from './AIAssistantPanel';
+import {
+  OPEN_AI_SIDEBAR_EVENT,
+  consumeFocusAIPromptOnLoadFlag,
+  consumeOpenAIOnLoadFlag,
+  emitFocusAIPrompt,
+} from '@/lib/aiSidebar';
 
 export const RightSidebar: React.FC = () => {
   const { selectedWidget } = useWidgets();
   const [activeTab, setActiveTab] = React.useState<'properties' | 'ai'>('properties');
 
   React.useEffect(() => {
-    try {
-      const shouldOpenAI = localStorage.getItem('ctk_open_ai_on_load');
-      if (shouldOpenAI === 'true') {
-        setActiveTab('ai');
-        localStorage.removeItem('ctk_open_ai_on_load');
-      }
-    } catch {
-      // localStorage unavailable
+    if (consumeOpenAIOnLoadFlag()) {
+      setActiveTab('ai');
     }
   }, []);
 
   React.useEffect(() => {
     const openAiSidebar = () => setActiveTab('ai');
-    window.addEventListener('open-ai-sidebar', openAiSidebar);
-    return () => window.removeEventListener('open-ai-sidebar', openAiSidebar);
+    window.addEventListener(OPEN_AI_SIDEBAR_EVENT, openAiSidebar);
+    return () => window.removeEventListener(OPEN_AI_SIDEBAR_EVENT, openAiSidebar);
   }, []);
+
+  React.useEffect(() => {
+    if (activeTab !== 'ai') return;
+
+    const shouldForceFocus = consumeFocusAIPromptOnLoadFlag();
+    if (shouldForceFocus) {
+      emitFocusAIPrompt();
+      const timer = window.setTimeout(() => emitFocusAIPrompt(), 140);
+      return () => window.clearTimeout(timer);
+    }
+
+    emitFocusAIPrompt();
+    const timer = window.setTimeout(() => emitFocusAIPrompt(), 120);
+    return () => window.clearTimeout(timer);
+  }, [activeTab]);
 
   React.useEffect(() => {
     window.dispatchEvent(

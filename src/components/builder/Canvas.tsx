@@ -14,14 +14,16 @@ import { CanvasHeader } from './CanvasHeader';
 import { Plus, Copy, Scissors, Clipboard, Trash2, Lock, Unlock, Sparkles, Folder, LayoutGrid, X, Clock, Upload } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import JSZip from 'jszip';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { openAIAssistantForPrompt } from '@/lib/aiSidebar';
+import { useFileSystem } from '@/hooks/useFileSystem';
 
 export const Canvas: React.FC = () => {
   const { widgets, canvasSettings, addWidget, selectWidget, selectedWidgetId, copyWidget, cutWidget, pasteWidget, deleteWidget, toggleWidgetLock, clipboard, undo, redo, updateWidget, moveWidget, previewMode, updateCanvasSettings } = useWidgets();
+  const { getPyFiles } = useFileSystem();
   const { activeProjectId, createProject, projects, openProject } = useProjects();
   const canvasRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; widgetId: string | null } | null>(null);
@@ -31,8 +33,6 @@ export const Canvas: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createModalMode, setCreateModalMode] = useState<'manual' | 'ai'>('manual');
   const [newProjectName, setNewProjectName] = useState('');
-  const [showImportDialog, setShowImportDialog] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
   const importZipRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState<{ width: number; height: number } | null>(null);
@@ -74,10 +74,11 @@ export const Canvas: React.FC = () => {
   const [zoomInputValue, setZoomInputValue] = useState('');
   const zoomInputRef = useRef<HTMLInputElement>(null);
   const zoomIndicatorTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasPyFiles = useMemo(() => getPyFiles().length > 0, [getPyFiles]);
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || previewMode === 'preview') return;
+    if (!container || previewMode === 'preview' || !hasPyFiles) return;
 
     const handleWheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
@@ -99,7 +100,7 @@ export const Canvas: React.FC = () => {
 
     container.addEventListener('wheel', handleWheel, { passive: false });
     return () => container.removeEventListener('wheel', handleWheel);
-  }, [previewMode, canvasSettings.scaling, updateCanvasSettings]);
+  }, [previewMode, canvasSettings.scaling, updateCanvasSettings, hasPyFiles]);
 
   // Zoom controls
   const handleZoomIn = useCallback(() => {
@@ -156,7 +157,6 @@ export const Canvas: React.FC = () => {
         : file.name.replace(/\.zip$/i, '');
       const newId = await createProject(projectName);
       await supabase.from('projects').update({ file_tree: tree, updated_at: new Date().toISOString() }).eq('id', newId);
-      setShowImportDialog(false);
     } catch (err) {
       console.error('Import ZIP error:', err);
     }
@@ -169,27 +169,17 @@ export const Canvas: React.FC = () => {
     e.target.value = '';
   };
 
-  const handleImportDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file && file.name.toLowerCase().endsWith('.zip')) {
-      await processZipFile(file);
-    }
-  };
-
-  const handleCanvasCreateProject = () => {
+  const handleCanvasCreateProject = async () => {
     const name = newProjectName.trim();
     if (!name) return;
-    createProject(name);
-    if (createModalMode === 'ai') {
-      try {
-        localStorage.setItem('ctk_open_ai_on_load', 'true');
-        window.dispatchEvent(new CustomEvent('open-ai-sidebar'));
-      } catch { /* ignore */ }
+    try {
+      await createProject(name);
+      if (createModalMode === 'ai') openAIAssistantForPrompt();
+      setShowCreateModal(false);
+      setNewProjectName('');
+    } catch (error) {
+      console.error('Erreur creation projet:', error);
     }
-    setShowCreateModal(false);
-    setNewProjectName('');
   };
   // Drag updates go directly to SmartGuides via ref callback — NO Canvas re-render
   const smartGuidesSetterRef = useRef<(w: WidgetData | null) => void>(() => { });
@@ -735,7 +725,7 @@ export const Canvas: React.FC = () => {
     <div className="relative flex flex-1 flex-col overflow-hidden">
     <div
       ref={containerRef}
-      className="relative flex flex-1 items-center justify-center overflow-auto pb-14 pt-6 scrollbar-thin scrollbar-thumb-border/40 scrollbar-track-transparent"
+      className="relative flex flex-1 items-center justify-center overflow-auto pb-24 pt-6 scrollbar-thin scrollbar-thumb-border/40 scrollbar-track-transparent"
     >
       <motion.div
         className={`relative z-10 border border-border bg-card shadow-[0_30px_72px_rgba(15,52,96,0.12)] ring-1 ring-black/[0.03] ${previewMode === 'preview' ? 'rounded-xl' : 'rounded-2xl'}`}
@@ -852,7 +842,7 @@ export const Canvas: React.FC = () => {
                     </div>
                     <Button
                       variant="ghost"
-                      onClick={(e) => { e.stopPropagation(); setShowImportDialog(true); }}
+                      onClick={(e) => { e.stopPropagation(); importZipRef.current?.click(); }}
                       onMouseDown={(e) => e.stopPropagation()}
                       className="mx-auto mt-8 h-10 rounded-full px-5 text-[14px] font-semibold text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
                     >
@@ -876,7 +866,7 @@ export const Canvas: React.FC = () => {
                       </Button>
                       <Button
                         variant="outline"
-                        onClick={(e) => { e.stopPropagation(); setShowImportDialog(true); }}
+                        onClick={(e) => { e.stopPropagation(); importZipRef.current?.click(); }}
                         onMouseDown={(e) => e.stopPropagation()}
                         className="h-11 rounded-xl border border-border bg-secondary px-8 text-[14px] font-semibold text-foreground transition-all hover:-translate-y-0.5 hover:border-primary/45 hover:bg-primary/10"
                       >
@@ -1024,8 +1014,13 @@ export const Canvas: React.FC = () => {
     </div>
 
       {/* Zoom Controls Bar — centered bottom, outside scrollable area */}
-      {previewMode !== 'preview' && (
-        <div className="absolute bottom-4 left-1/2 z-[100] flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-border bg-card/95 px-1.5 py-1 shadow-lg backdrop-blur-md" onClick={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }} onMouseDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }} onPointerDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}>
+      {previewMode !== 'preview' && hasPyFiles && (
+        <div
+          className="absolute bottom-2 left-1/2 z-[100] flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-border bg-card/95 px-1.5 py-1 shadow-lg backdrop-blur-md"
+          onClick={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
+          onMouseDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
+          onPointerDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
+        >
           <button
             onClick={handleZoomOut}
             className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-bold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
@@ -1110,7 +1105,7 @@ export const Canvas: React.FC = () => {
       )}
 
       {/* Zoom Indicator (floating, on zoom change) */}
-      {showZoomIndicator && (
+      {showZoomIndicator && hasPyFiles && (
         <div className="pointer-events-none absolute left-1/2 top-6 z-40 -translate-x-1/2 animate-in fade-in zoom-in-95 duration-200">
           <div className="rounded-lg bg-foreground/80 px-3 py-1.5 text-xs font-semibold text-background shadow-lg backdrop-blur-sm">
             {Math.round((canvasSettings.scaling || 1) * 100)}%
@@ -1118,38 +1113,7 @@ export const Canvas: React.FC = () => {
         </div>
       )}
 
-      {/* Import Project Dialog */}
-      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
-        <DialogContent className="z-[70] rounded-2xl border border-border bg-card text-foreground sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-xl text-foreground">Importer un projet</DialogTitle>
-          </DialogHeader>
-          <div
-            className={`mt-2 flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-all cursor-pointer ${
-              isDragOver
-                ? 'border-primary bg-primary/10'
-                : 'border-border hover:border-primary/55 hover:bg-secondary'
-            }`}
-            onClick={() => importZipRef.current?.click()}
-            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-            onDragLeave={() => setIsDragOver(false)}
-            onDrop={handleImportDrop}
-          >
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 transition-colors ${
-              isDragOver
-                ? 'bg-primary/20 text-primary'
-                : 'bg-secondary text-muted-foreground'
-            }`}>
-              <Upload className="w-7 h-7" />
-            </div>
-            <p className="text-sm font-semibold text-foreground">
-              Glissez-d\u00e9posez votre fichier .zip ici
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">ou cliquez pour parcourir</p>
-          </div>
-          <input ref={importZipRef} type="file" accept=".zip" className="hidden" onChange={handleImportZip} />
-        </DialogContent>
-      </Dialog>
+      <input ref={importZipRef} type="file" accept=".zip" className="hidden" onChange={handleImportZip} />
 
       {/* Create Project Name Modal - outside canvas content to avoid mouse handler interference */}
       {showCreateModal && (
@@ -1185,7 +1149,7 @@ export const Canvas: React.FC = () => {
                 disabled={!newProjectName.trim()}
                 className="h-11 flex-1 rounded-xl bg-gradient-to-r from-[#0F3460] to-[#1F5AA0] font-semibold text-white shadow-[0_10px_24px_rgba(15,52,96,0.22)] transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {createModalMode === 'ai' ? 'Créer & Générer' : 'Créer'}
+                Créer
               </Button>
             </div>
           </div>

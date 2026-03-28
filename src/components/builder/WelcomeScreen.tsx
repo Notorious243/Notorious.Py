@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useProjects } from '@/contexts/ProjectContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Plus, Sparkles, Trash2, Search, Calendar, Rocket, ArrowLeft, Upload, Pencil, ImagePlus } from 'lucide-react';
+import { Plus, Sparkles, Trash2, Search, Calendar, Rocket, ArrowLeft, Upload, Pencil } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
@@ -10,6 +10,8 @@ import { fr } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
 import { AuthPromptDialog } from '@/components/AuthPromptDialog';
 import JSZip from 'jszip';
+import { openAIAssistantForPrompt } from '@/lib/aiSidebar';
+import { BackgroundPathsLayer } from '@/components/ui/background-paths';
 
 // Simple custom SVG for Python logo since it's not standard in lucide-react
 const PythonIcon = ({ className }: { className?: string }) => (
@@ -26,20 +28,17 @@ const PythonIcon = ({ className }: { className?: string }) => (
 
 // ─── Main WelcomeScreen: project listing only (shown when projects exist) ───
 export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
-  const { projects, createProject, openProject, deleteProject, renameProject, updateProjectThumbnail } = useProjects();
+  const { projects, createProject, openProject, deleteProject, renameProject } = useProjects();
   const { user } = useAuth();
   const isGuest = !user;
   const [authPromptFeature, setAuthPromptFeature] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createModalMode, setCreateModalMode] = useState<'manual' | 'ai'>('manual');
   const [newProjectName, setNewProjectName] = useState('');
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [renameTarget, setRenameTarget] = useState<{ id: string; name: string } | null>(null);
   const [renameValue, setRenameValue] = useState('');
-  const thumbnailInputRef = useRef<HTMLInputElement>(null);
-  const [thumbnailTargetId, setThumbnailTargetId] = useState<string | null>(null);
-  const [showImportDialog, setShowImportDialog] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
   const importZipRef = useRef<HTMLInputElement>(null);
 
   const fileToNode = async (name: string, content: string) => ({
@@ -69,7 +68,6 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
         : file.name.replace(/\.zip$/i, '');
       const newId = await createProject(projectName);
       await supabase.from('projects').update({ file_tree: tree, updated_at: new Date().toISOString() }).eq('id', newId);
-      setShowImportDialog(false);
       onClose?.();
     } catch (err) {
       console.error('Import ZIP error:', err);
@@ -83,30 +81,23 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
     e.target.value = '';
   };
 
-  const handleImportDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file && file.name.toLowerCase().endsWith('.zip')) {
-      await processZipFile(file);
+  const handleCreateProject = async () => {
+    if (!newProjectName.trim()) return;
+    try {
+      await createProject(newProjectName.trim());
+      if (createModalMode === 'ai') openAIAssistantForPrompt();
+      setIsCreateModalOpen(false);
+      setNewProjectName('');
+      setCreateModalMode('manual');
+      onClose?.();
+    } catch (error) {
+      console.error('Erreur creation projet:', error);
     }
   };
 
-  const handleCreateProject = async () => {
-    if (!newProjectName.trim()) return;
-    await createProject(newProjectName);
-    setIsCreateModalOpen(false);
-    setNewProjectName('');
-    onClose?.();
-  };
-
-  const handleCreateWithAI = async () => {
-    await createProject('Projet IA ' + new Date().toLocaleTimeString());
-    try {
-      localStorage.setItem('ctk_open_ai_on_load', 'true');
-      window.dispatchEvent(new CustomEvent('open-ai-sidebar'));
-    } catch { /* ignore */ }
-    onClose?.();
+  const handleCreateWithAI = () => {
+    setCreateModalMode('ai');
+    setIsCreateModalOpen(true);
   };
 
   const handleOpenProject = (id: string) => {
@@ -132,25 +123,6 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
     }
   };
 
-  const handleChangeThumbnail = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    setThumbnailTargetId(id);
-    thumbnailInputRef.current?.click();
-  };
-
-  const handleThumbnailFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !thumbnailTargetId) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      updateProjectThumbnail(thumbnailTargetId, dataUrl);
-      setThumbnailTargetId(null);
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
-  };
-
   const confirmDelete = () => {
     if (deleteTargetId) {
         deleteProject(deleteTargetId);
@@ -163,114 +135,140 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
   const filteredProjects = recentProjects.filter((project) =>
     project.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  // Floating code snippets for background decoration
-  const codeSnippets = [
-    'import customtkinter as ctk',
-    'class App(ctk.CTk):',
-    'def __init__(self):',
-    'self.title("App")',
-    'ctk.CTkButton()',
-    'ctk.CTkLabel()',
-    'self.mainloop()',
-    'frame.pack()',
-    'root = ctk.CTk()',
-    'widget.grid(row=0)',
-    'def callback():',
-    'ctk.set_appearance_mode("dark")',
-  ];
+  const pythonMotifs = [
+    { top: '8%', left: '7%', size: 62, rotate: -14, opacity: 0.12, duration: '20s', delay: '0s' },
+    { top: '18%', right: '9%', size: 74, rotate: 12, opacity: 0.11, duration: '23s', delay: '1.5s' },
+    { bottom: '16%', left: '10%', size: 82, rotate: -8, opacity: 0.09, duration: '25s', delay: '0.8s' },
+    { bottom: '10%', right: '11%', size: 68, rotate: 16, opacity: 0.1, duration: '21s', delay: '2.2s' },
+    { top: '44%', left: '2.8%', size: 54, rotate: -20, opacity: 0.08, duration: '19s', delay: '1.1s' },
+    { top: '48%', right: '2.5%', size: 54, rotate: 18, opacity: 0.08, duration: '19s', delay: '2.6s' },
+  ] as const;
+  const flowRightPaths = Array.from({ length: 12 }, (_, i) => ({
+    d: `M 22 ${324 - i * 17} C 176 ${286 - i * 21}, 336 ${198 - i * 16}, 560 ${36 - i * 14}`,
+    opacity: Math.max(0.08, 0.26 - i * 0.014),
+    width: 1 + i * 0.06,
+    delay: `${i * 0.18}s`,
+  }));
+  const flowLeftPaths = Array.from({ length: 7 }, (_, i) => ({
+    d: `M 14 ${216 - i * 10} C 88 ${194 - i * 15}, 168 ${136 - i * 12}, 292 ${72 - i * 10}`,
+    opacity: Math.max(0.08, 0.22 - i * 0.02),
+    width: 0.9 + i * 0.05,
+    delay: `${i * 0.22}s`,
+  }));
 
   return (
-    <div className="h-full w-full overflow-y-auto animate-in fade-in duration-500 relative text-foreground bg-background">
-      <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-secondary" />
-
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div
-          className="absolute w-[500px] h-[500px] rounded-full opacity-[0.07]"
-          style={{
-            background: 'radial-gradient(circle, #1F5AA0, transparent 70%)',
-            top: '-10%', right: '-8%',
-            animation: 'float-orb-1 20s ease-in-out infinite',
-          }}
-        />
-        <div
-          className="absolute w-[400px] h-[400px] rounded-full opacity-[0.06]"
-          style={{
-            background: 'radial-gradient(circle, #0F3460, transparent 70%)',
-            bottom: '-5%', left: '-5%',
-            animation: 'float-orb-2 25s ease-in-out infinite',
-          }}
-        />
-        <div
-          className="absolute w-[300px] h-[300px] rounded-full opacity-[0.05]"
-          style={{
-            background: 'radial-gradient(circle, #153E6E, transparent 70%)',
-            top: '40%', left: '50%',
-            animation: 'float-orb-3 18s ease-in-out infinite',
-          }}
-        />
-      </div>
-
-      {/* Subtle dot grid pattern */}
+    <div className="relative h-full w-full overflow-hidden bg-background text-foreground animate-in fade-in duration-500">
+      <div className="absolute inset-0 bg-[linear-gradient(145deg,#f9fbff_0%,#f4f7fc_44%,#eef3fa_100%)]" />
+      <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_20%_12%,rgba(15,52,96,0.12),transparent_36%),radial-gradient(circle_at_82%_78%,rgba(31,90,160,0.11),transparent_44%)]" />
+      <BackgroundPathsLayer className="text-[#0F3460] opacity-[0.3]" />
       <div
-        className="absolute inset-0 pointer-events-none opacity-[0.25]"
+        className="absolute inset-0 pointer-events-none opacity-[0.18]"
         style={{
-          backgroundImage: 'radial-gradient(circle, #94a3b8 0.7px, transparent 0.7px)',
-          backgroundSize: '28px 28px',
+          backgroundImage: 'radial-gradient(circle, rgba(15,52,96,0.25) 0.7px, transparent 0.7px)',
+          backgroundSize: '22px 22px',
         }}
       />
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <svg
+          className="flow-path-layer absolute -right-[6%] top-[6%] h-[86%] w-[48%]"
+          viewBox="0 0 600 380"
+          fill="none"
+          aria-hidden="true"
+        >
+          {flowRightPaths.map((path, index) => (
+            <path
+              key={`right-${index}`}
+              d={path.d}
+              className="flow-path flow-path-forward"
+              style={{
+                stroke: '#0F3460',
+                strokeWidth: path.width + 0.24,
+                opacity: Math.min(path.opacity + 0.12, 0.62),
+                animationDelay: path.delay,
+              }}
+            />
+          ))}
+        </svg>
+        <svg
+          className="flow-path-layer absolute -left-[4%] bottom-[1%] h-[31%] w-[30%]"
+          viewBox="0 0 320 240"
+          fill="none"
+          aria-hidden="true"
+        >
+          {flowLeftPaths.map((path, index) => (
+            <path
+              key={`left-${index}`}
+              d={path.d}
+              className="flow-path flow-path-backward"
+              style={{
+                stroke: '#0F3460',
+                strokeWidth: path.width + 0.2,
+                opacity: Math.min(path.opacity + 0.1, 0.55),
+                animationDelay: path.delay,
+              }}
+            />
+          ))}
+        </svg>
+      </div>
+      <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.93)_0%,rgba(255,255,255,0.88)_38%,rgba(255,255,255,0.45)_72%,rgba(255,255,255,0)_100%)]" />
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {pythonMotifs.map(({ size, rotate, opacity, duration, delay, ...position }, index) => {
+          const motifStyle: React.CSSProperties & Record<'--start-rot', string> = {
+            ...position,
+            width: size,
+            height: size,
+            color: '#0F3460',
+            opacity,
+            animation: `python-motif-float ${duration} ease-in-out infinite`,
+            animationDelay: delay,
+            '--start-rot': `${rotate}deg`,
+          };
 
-      {/* Floating code snippets */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {codeSnippets.map((snippet, i) => (
-          <div
-            key={i}
-            className="absolute font-mono text-[11px] whitespace-nowrap select-none"
-            style={{
-              color: i % 3 === 0 ? 'rgba(15,52,96,0.10)' : i % 3 === 1 ? 'rgba(31,90,160,0.08)' : 'rgba(15,52,96,0.09)',
-              top: `${8 + (i * 7.5) % 85}%`,
-              left: i % 2 === 0 ? `${-2 + (i * 13) % 30}%` : `${68 + (i * 7) % 28}%`,
-              animation: `float-code-${(i % 4) + 1} ${18 + (i * 3) % 12}s ease-in-out infinite`,
-              animationDelay: `${(i * 1.5) % 8}s`,
-              transform: `rotate(${-3 + (i * 2) % 6}deg)`,
-            }}
-          >
-            {snippet}
-          </div>
-        ))}
+          return (
+            <div key={index} className="absolute" style={motifStyle}>
+              <PythonIcon className="h-full w-full" />
+            </div>
+          );
+        })}
       </div>
 
       {/* CSS Animations */}
       <style>{`
-        @keyframes float-orb-1 {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          33% { transform: translate(-30px, 20px) scale(1.05); }
-          66% { transform: translate(20px, -15px) scale(0.95); }
+        .flow-path-layer {
+          overflow: visible;
+          filter: drop-shadow(0 0 1px rgba(15, 52, 96, 0.15));
         }
-        @keyframes float-orb-2 {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          33% { transform: translate(25px, -20px) scale(1.08); }
-          66% { transform: translate(-15px, 25px) scale(0.92); }
+        .flow-path {
+          fill: none;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+          stroke-dasharray: 15 9;
         }
-        @keyframes float-orb-3 {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          50% { transform: translate(-20px, -20px) scale(1.1); }
+        .flow-path-forward {
+          animation: flow-forward 7.4s linear infinite;
         }
-        @keyframes float-code-1 {
-          0%, 100% { transform: translateY(0px) rotate(-2deg); opacity: 1; }
-          50% { transform: translateY(-12px) rotate(1deg); opacity: 0.7; }
+        .flow-path-backward {
+          animation: flow-backward 6.8s linear infinite;
         }
-        @keyframes float-code-2 {
-          0%, 100% { transform: translateY(0px) rotate(1deg); opacity: 0.8; }
-          50% { transform: translateY(10px) rotate(-1deg); opacity: 1; }
+        @keyframes flow-forward {
+          0% { stroke-dashoffset: 0; }
+          100% { stroke-dashoffset: -180; }
         }
-        @keyframes float-code-3 {
-          0%, 100% { transform: translateX(0px) rotate(-1deg); opacity: 0.9; }
-          50% { transform: translateX(8px) rotate(2deg); opacity: 0.6; }
+        @keyframes flow-backward {
+          0% { stroke-dashoffset: 0; }
+          100% { stroke-dashoffset: 180; }
         }
-        @keyframes float-code-4 {
-          0%, 100% { transform: translate(0px, 0px) rotate(0deg); opacity: 0.7; }
-          50% { transform: translate(-6px, -8px) rotate(-2deg); opacity: 1; }
+        @keyframes python-motif-float {
+          0%, 100% { transform: translate3d(0, 0, 0) rotate(var(--start-rot, 0deg)); }
+          35% { transform: translate3d(8px, -10px, 0) rotate(calc(var(--start-rot, 0deg) + 3deg)); }
+          70% { transform: translate3d(-6px, 8px, 0) rotate(calc(var(--start-rot, 0deg) - 2deg)); }
+        }
+        .back-home-btn {
+          animation: back-btn-glow 2.8s ease-in-out infinite;
+        }
+        @keyframes back-btn-glow {
+          0%, 100% { box-shadow: 0 12px 26px rgba(15, 52, 96, 0.28); }
+          50% { box-shadow: 0 16px 34px rgba(15, 52, 96, 0.42); }
         }
         @keyframes shimmer-line {
           0% { background-position: -200% 0; }
@@ -282,15 +280,18 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
       {onClose && (
         <button
           onClick={onClose}
-          className="absolute top-5 left-5 z-50 flex items-center gap-2 h-10 px-5 rounded-full bg-secondary border border-border text-foreground hover:bg-primary/10 hover:border-primary/40 hover:text-primary shadow-md transition-all duration-200 text-sm font-semibold"
+          className="back-home-btn group absolute left-5 top-5 z-50 h-11 overflow-hidden rounded-xl border border-[#1F5AA0]/55 bg-gradient-to-r from-[#0F3460] to-[#1F5AA0] px-5 text-sm font-semibold text-white transition-all duration-300 hover:scale-[1.03] hover:brightness-110"
         >
-          <ArrowLeft className="w-4 h-4" />
-          Retour au projet
+          <span className="absolute inset-0 -translate-x-[130%] bg-[linear-gradient(120deg,transparent,rgba(255,255,255,0.35),transparent)] transition-transform duration-700 group-hover:translate-x-[130%]" />
+          <span className="relative flex items-center gap-2">
+            <ArrowLeft className="w-4 h-4" />
+            Retour au projet
+          </span>
         </button>
       )}
 
       {/* Main content */}
-      <div className="relative z-10 mx-auto w-full max-w-4xl px-6 py-10 lg:py-12">
+      <div className="relative z-10 mx-auto flex h-full w-full max-w-4xl flex-col px-6 pb-5 pt-8 lg:pb-6 lg:pt-9">
         <div className="flex flex-col items-center text-center">
           {/* Animated logo with glow */}
           <div className="relative mb-5">
@@ -317,10 +318,14 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
             />
           </div>
 
-          <div className="mt-5 w-full max-w-lg flex flex-col sm:flex-row gap-3">
+          <div className="mt-5 w-full flex justify-center">
+            <div className="w-full max-w-[760px] grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="flex-1 h-11 text-sm font-semibold bg-gradient-to-r from-[#0F3460] to-[#1F5AA0] hover:brightness-110 text-white border-0 shadow-[0_10px_26px_rgba(15,52,96,0.25)] hover:shadow-[0_14px_34px_rgba(15,52,96,0.35)] transition-all duration-300 hover:scale-[1.02] rounded-xl"
+              onClick={() => {
+                setCreateModalMode('manual');
+                setIsCreateModalOpen(true);
+              }}
+              className="h-11 text-sm font-semibold bg-gradient-to-r from-[#0F3460] to-[#1F5AA0] hover:brightness-110 text-white border-0 shadow-[0_10px_26px_rgba(15,52,96,0.25)] hover:shadow-[0_14px_34px_rgba(15,52,96,0.35)] transition-all duration-300 hover:scale-[1.02] rounded-xl"
               size="lg"
             >
               <Plus className="mr-2 h-4 w-4" />
@@ -330,7 +335,7 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
             <Button
               onClick={() => isGuest ? setAuthPromptFeature('La génération IA') : handleCreateWithAI()}
               variant="outline"
-              className={`flex-1 h-11 text-sm font-semibold border-border bg-secondary hover:bg-accent text-foreground rounded-xl transition-all duration-300 hover:scale-[1.02] ${isGuest ? 'opacity-60' : ''}`}
+              className={`h-11 text-sm font-semibold border-border bg-secondary hover:bg-accent text-foreground rounded-xl transition-all duration-300 hover:scale-[1.02] ${isGuest ? 'opacity-60' : ''}`}
               size="lg"
             >
               <Sparkles className="mr-2 h-4 w-4 text-primary" />
@@ -338,19 +343,20 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
             </Button>
 
             <Button
-              onClick={() => isGuest ? setAuthPromptFeature('L\'importation de projet') : setShowImportDialog(true)}
+              onClick={() => isGuest ? setAuthPromptFeature('L\'importation de projet') : importZipRef.current?.click()}
               variant="outline"
-              className={`flex-1 h-11 text-sm font-semibold border-border bg-secondary hover:bg-accent text-foreground rounded-xl transition-all duration-300 hover:scale-[1.02] ${isGuest ? 'opacity-60' : ''}`}
+              className={`h-11 text-sm font-semibold border-border bg-secondary hover:bg-accent text-foreground rounded-xl transition-all duration-300 hover:scale-[1.02] ${isGuest ? 'opacity-60' : ''}`}
               size="lg"
             >
               <Upload className="mr-2 h-4 w-4" />
               Importer un projet
             </Button>
+            </div>
           </div>
         </div>
 
         {/* ESPACE DE TRAVAIL section — Image 3 list design */}
-        <section className="mt-10 rounded-2xl border border-border bg-card shadow-[0_20px_48px_rgba(15,52,96,0.08)] overflow-hidden">
+        <section className="mt-6 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[0_20px_48px_rgba(15,52,96,0.08)]">
           <div className="sticky top-0 z-10 p-4 border-b border-border bg-card">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Espace de travail</h2>
@@ -370,7 +376,7 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
             </div>
           </div>
 
-          <div className="max-h-[52vh] overflow-y-auto p-3">
+          <div className={`min-h-0 flex-1 p-3 ${hasProjects && filteredProjects.length > 0 ? 'overflow-y-auto' : 'overflow-y-hidden'}`}>
             {!hasProjects ? (
               <div className="h-[34vh] flex flex-col items-center justify-center text-center p-8 border border-dashed border-border rounded-xl bg-secondary/50">
                 <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
@@ -412,15 +418,6 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10 rounded-lg h-8 w-8"
-                        onClick={(e) => handleChangeThumbnail(e, project.id)}
-                        title="Changer l'image"
-                      >
-                        <ImagePlus className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
                         className="text-muted-foreground hover:text-red-400 hover:bg-red-500/10 rounded-lg h-8 w-8"
                         onClick={(e) => handleDeleteProject(e, project.id)}
                         title="Supprimer"
@@ -441,7 +438,7 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
         </section>
 
         {/* Footer badges */}
-        <div className="mt-6 flex items-center justify-center gap-6 text-xs text-muted-foreground">
+        <div className="mt-4 shrink-0 flex items-center justify-center gap-6 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <Rocket className="w-3.5 h-3.5" /> Rapide
           </span>
@@ -454,46 +451,28 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
         </div>
       </div>
 
-      {/* Import Project Dialog */}
-      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
-        <DialogContent className="sm:max-w-md rounded-2xl bg-card border-border text-foreground z-[70]">
-          <DialogHeader>
-            <DialogTitle className="text-xl text-foreground">Importer un projet</DialogTitle>
-          </DialogHeader>
-          <div
-            className={`mt-2 flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-all cursor-pointer ${
-              isDragOver
-                ? 'border-primary bg-primary/10'
-                : 'border-border hover:border-primary/40 hover:bg-secondary'
-            }`}
-            onClick={() => importZipRef.current?.click()}
-            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-            onDragLeave={() => setIsDragOver(false)}
-            onDrop={handleImportDrop}
-          >
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 transition-colors ${
-              isDragOver
-                ? 'bg-primary/20 text-primary'
-                : 'bg-secondary text-muted-foreground'
-            }`}>
-              <Upload className="w-7 h-7" />
-            </div>
-            <p className="text-sm font-semibold text-foreground">Glissez-d\u00e9posez votre fichier .zip ici</p>
-            <p className="text-xs text-muted-foreground mt-1">ou cliquez pour parcourir</p>
-          </div>
-          <input ref={importZipRef} type="file" accept=".zip" className="hidden" onChange={handleImportZip} />
-        </DialogContent>
-      </Dialog>
+      <input ref={importZipRef} type="file" accept=".zip" className="hidden" onChange={handleImportZip} />
 
       {/* Create Modal */}
-       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+       <Dialog
+            open={isCreateModalOpen}
+            onOpenChange={(open) => {
+              setIsCreateModalOpen(open);
+              if (!open) {
+                setNewProjectName('');
+                setCreateModalMode('manual');
+              }
+            }}
+       >
             <DialogContent className="sm:max-w-md rounded-2xl bg-card border-border text-foreground z-[70]">
                 <DialogHeader>
-                    <DialogTitle className="text-xl text-foreground">Nouveau projet</DialogTitle>
+                    <DialogTitle className="text-xl text-foreground">
+                      {createModalMode === 'ai' ? 'Nouveau projet IA' : 'Nouveau projet'}
+                    </DialogTitle>
                 </DialogHeader>
                 <div className="py-6">
                     <Input
-                        placeholder="Nom du projet"
+                        placeholder={createModalMode === 'ai' ? 'Nom du projet IA' : 'Nom du projet'}
                         value={newProjectName}
                         onChange={(e) => setNewProjectName(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleCreateProject()}
@@ -503,19 +482,12 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
                 </div>
                 <DialogFooter>
                     <Button variant="ghost" onClick={() => setIsCreateModalOpen(false)} className="rounded-xl h-11 text-muted-foreground hover:text-foreground hover:bg-accent">Annuler</Button>
-                    <Button onClick={handleCreateProject} className="rounded-xl h-11 px-6 bg-gradient-to-r from-[#0F3460] to-[#1F5AA0] hover:brightness-110 text-white">Créer</Button>
+                    <Button onClick={handleCreateProject} className="rounded-xl h-11 px-6 bg-gradient-to-r from-[#0F3460] to-[#1F5AA0] hover:brightness-110 text-white">
+                      Créer
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
-
-        {/* Hidden file input for thumbnail */}
-        <input
-          ref={thumbnailInputRef}
-          type="file"
-          accept=".png,.jpg,.jpeg,.ico"
-          className="hidden"
-          onChange={handleThumbnailFileChange}
-        />
 
         {/* Rename Project Modal */}
         <Dialog open={renameTarget !== null} onOpenChange={(open) => { if (!open) setRenameTarget(null); }}>

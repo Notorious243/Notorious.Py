@@ -22,6 +22,7 @@ import type { Message } from "./types";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { nanoid } from "nanoid";
+import { FOCUS_AI_PROMPT_EVENT } from "@/lib/aiSidebar";
 import {
   Context,
   ContextTrigger,
@@ -330,6 +331,19 @@ export function InputArea({ onSendMessage, disabled, status = 'ready', restoreCo
       setTimeout(() => textareaRef.current?.focus(), 0);
     }
   }, [restoreContent, onClearRestoreContent]);
+
+  useEffect(() => {
+    const handleFocusPrompt = () => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      const cursor = textarea.value.length;
+      textarea.setSelectionRange(cursor, cursor);
+    };
+
+    window.addEventListener(FOCUS_AI_PROMPT_EVENT, handleFocusPrompt);
+    return () => window.removeEventListener(FOCUS_AI_PROMPT_EVENT, handleFocusPrompt);
+  }, []);
 
   return (
     <div className="bg-background p-2">

@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Search, Folder, Layers, Monitor, FilePlus, Trash2, PenLine, Image as ImageFileIcon } from 'lucide-react';
+import { Search, Folder as FolderTabIcon, Layers, Monitor, FilePlus2, Trash, SquarePen, ImageIcon, ChevronRightIcon, FileText, FolderClosed as FolderClosedIcon, FolderOpen as FolderOpenIcon, Lock as LockIcon } from 'lucide-react';
 import { ALL_WIDGET_DEFINITIONS, WIDGET_CATEGORIES } from '@/constants/widgets';
 import { DRAG_TYPES } from '@/hooks/useDragDrop';
 import { useDrag } from 'react-dnd';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Tree, Folder as TreeFolder, File as TreeFile, TreeInput } from '@/components/ui/file-tree';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useFileSystem, FileSystemItem } from '@/hooks/useFileSystem';
 import { useWidgets } from '@/contexts/WidgetContext';
 import { useProjects } from '@/contexts/ProjectContext';
@@ -19,21 +19,6 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { AuthPromptDialog } from '@/components/AuthPromptDialog';
-import { Lock as LockIcon } from 'lucide-react';
-
-const FolderFilledIcon = ({ className, color = '#0F3460' }: { className?: string; color?: string }) => (
-  <svg viewBox="0 0 24 24" fill={color} className={className} xmlns="http://www.w3.org/2000/svg">
-    <path d="M2 6a2 2 0 0 1 2-4h5l2 2h7a2 2 0 0 1 2 2v2H2V6Z" />
-    <path d="M2 8h20v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8Z" />
-  </svg>
-);
-
-const FolderOpenFilledIcon = ({ className, color = '#0F3460' }: { className?: string; color?: string }) => (
-  <svg viewBox="0 0 24 24" fill={color} className={className} xmlns="http://www.w3.org/2000/svg">
-    <path d="M2 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v2H2V6Z" />
-    <path d="M2 10h20l-2.5 10H4.5L2 10Z" opacity="0.85" />
-  </svg>
-);
 
 const PythonIcon = ({ className }: { className?: string }) => (
   <svg
@@ -119,6 +104,7 @@ export const WidgetSidebar: React.FC = () => {
 
   const [creatingNode, setCreatingNode] = useState<{ parentId: string | null, type: 'file' | 'folder' } | null>(null);
   const [creationInputValue, setCreationInputValue] = useState('');
+  const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({ '__project-root__': true });
 
   // Track active tab: auto-switch to 'components' when first file is created
   const [currentTab, setCurrentTab] = useState<string>(!hasFiles ? 'explorer' : 'components');
@@ -135,6 +121,41 @@ export const WidgetSidebar: React.FC = () => {
     }
     prevHasFilesRef.current = hasFiles;
   }, [hasFiles]);
+
+  useEffect(() => {
+    setOpenFolders((prev) => {
+      const next = { ...prev };
+      let changed = false;
+
+      if (!Object.prototype.hasOwnProperty.call(next, '__project-root__')) {
+        next['__project-root__'] = true;
+        changed = true;
+      }
+
+      const ensureFolders = (nodes: FileSystemItem[]) => {
+        nodes.forEach((node) => {
+          if (node.type === 'folder') {
+            if (!Object.prototype.hasOwnProperty.call(next, node.id)) {
+              next[node.id] = node.isOpen ?? true;
+              changed = true;
+            }
+            if (node.children?.length) {
+              ensureFolders(node.children);
+            }
+          }
+        });
+      };
+
+      ensureFolders(data);
+      return changed ? next : prev;
+    });
+  }, [data]);
+
+  useEffect(() => {
+    if (creatingNode?.parentId) {
+      setOpenFolders((prev) => ({ ...prev, [creatingNode.parentId as string]: true }));
+    }
+  }, [creatingNode]);
 
   // Auto-load first file when project file tree arrives from Supabase
   const hasAutoLoadedRef = useRef(false);
@@ -405,86 +426,154 @@ export const WidgetSidebar: React.FC = () => {
     return null;
   };
 
-  // Recursively render the file tree
-  const renderTree = (nodes: FileSystemItem[], isInsideImagesFolder = false) => {
+  const renderInlineInput = ({
+    value,
+    onChange,
+    onKeyDown,
+    onBlur,
+    level,
+    icon,
+    placeholder,
+    autoFocus = false,
+  }: {
+    value: string;
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+    onBlur: () => void;
+    level: number;
+    icon: React.ReactNode;
+    placeholder?: string;
+    autoFocus?: boolean;
+  }) => (
+    <div
+      className="mb-1"
+      style={{ paddingLeft: `${Math.max(0, level) * 16 + 6}px` }}
+    >
+      <div className="flex h-8 items-center gap-2 rounded-md border border-primary/25 bg-primary/5 px-2">
+        <span className="shrink-0 text-muted-foreground">{icon}</span>
+        <Input
+          value={value}
+          onChange={onChange}
+          onKeyDown={onKeyDown}
+          onBlur={onBlur}
+          placeholder={placeholder}
+          autoFocus={autoFocus}
+          className="h-6 border-0 bg-transparent px-0 text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
+          data-tour-first-py-file-input={creatingNode ? 'true' : undefined}
+        />
+      </div>
+    </div>
+  );
+
+  const renderExplorerTree = (nodes: FileSystemItem[], level = 0, isInsideImagesFolder = false) => {
     return nodes.map((node) => {
+      const isSelected = selectedNodeId === node.id;
       const isCreatingHere = creatingNode && creatingNode.parentId === node.id;
       const isImagesFolder = node.id === '__fs_images__';
 
       if (node.type === 'folder') {
+        const isOpen = openFolders[node.id] ?? true;
+        const isImagesFolderNode = isImagesFolder;
+        const closedFolderClass = isImagesFolderNode
+          ? 'size-4 shrink-0 fill-violet-500/25 text-violet-700'
+          : 'size-4 shrink-0 fill-sky-500/20 text-sky-700';
+        const openFolderClass = isImagesFolderNode
+          ? 'size-4 shrink-0 text-violet-700'
+          : 'size-4 shrink-0 text-sky-700';
+
         return (
-          <TreeFolder
-            key={node.id}
-            value={node.id}
-            element={node.name}
-            folderIcon={<FolderFilledIcon className="size-4 shrink-0" color="#0ea5e9" />}
-            folderOpenIcon={<FolderOpenFilledIcon className="size-4 shrink-0" color="#0ea5e9" />}
-          >
-            {isCreatingHere && (
-              <TreeInput
-                value={creationInputValue}
-                onChange={(e) => setCreationInputValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleCreateConfirm();
-                  if (e.key === 'Escape') handleCreateCancel();
-                }}
-                onBlur={handleCreateConfirm}
-                isFolder={creatingNode.type === 'folder'}
-                fileIcon={creatingNode.type === 'file' ? <PythonIcon className="size-4 text-violet-500" /> : undefined}
-                autoFocus
-              />
-            )}
+          <div key={node.id} className="space-y-1">
             {renamingNodeId === node.id ? (
-              <TreeInput
-                value={renameInputValue}
-                onChange={(e) => setRenameInputValue(e.target.value)}
-                onKeyDown={(e) => {
+              renderInlineInput({
+                value: renameInputValue,
+                onChange: (e) => setRenameInputValue(e.target.value),
+                onKeyDown: (e) => {
                   if (e.key === 'Enter') handleRenameConfirm();
                   if (e.key === 'Escape') handleRenameCancel();
-                }}
-                onBlur={handleRenameConfirm}
-                isFolder={true}
-                autoFocus
-              />
+                },
+                onBlur: handleRenameConfirm,
+                level,
+                icon: isOpen ? <FolderOpenIcon className={openFolderClass} /> : <FolderClosedIcon className={closedFolderClass} />,
+                autoFocus: true,
+              })
             ) : (
-              node.children && renderTree(node.children, isImagesFolder)
+              <Collapsible
+                open={isOpen}
+                onOpenChange={(open) => setOpenFolders((prev) => ({ ...prev, [node.id]: open }))}
+                className="space-y-1"
+              >
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    className={`group flex h-8 w-full items-center gap-2 rounded-md pr-2 text-left transition-colors ${isSelected ? 'bg-primary/10 text-primary' : isImagesFolderNode ? 'text-violet-700 hover:bg-violet-50/70 hover:text-violet-800' : 'hover:bg-accent/60 text-foreground'
+                      }`}
+                    style={{ paddingLeft: `${Math.max(0, level) * 16 + 6}px` }}
+                    onClick={() => setSelectedNodeId(node.id)}
+                  >
+                    <ChevronRightIcon className={`size-4 shrink-0 text-muted-foreground transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                    {isOpen ? <FolderOpenIcon className={openFolderClass} /> : <FolderClosedIcon className={closedFolderClass} />}
+                    <span className="truncate text-[13px] font-medium">{node.name}</span>
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-1">
+                  {isCreatingHere &&
+                    renderInlineInput({
+                      value: creationInputValue,
+                      onChange: (e) => setCreationInputValue(e.target.value),
+                      onKeyDown: (e) => {
+                        if (e.key === 'Enter') handleCreateConfirm();
+                        if (e.key === 'Escape') handleCreateCancel();
+                      },
+                      onBlur: handleCreateConfirm,
+                      level: level + 1,
+                      icon: creatingNode?.type === 'folder' ? <FolderClosedIcon className={closedFolderClass} /> : <PythonIcon className="size-4 text-[#2463EB]" />,
+                      placeholder: creatingNode?.type === 'folder' ? 'Nouveau dossier' : 'Nouveau fichier',
+                      autoFocus: true,
+                    })}
+                  {node.children && renderExplorerTree(node.children, level + 1, isImagesFolder)}
+                </CollapsibleContent>
+              </Collapsible>
             )}
-          </TreeFolder>
+          </div>
         );
       }
-      // Files inside Images folder always show image icon, regardless of extension
+
       const isImageNode = isInsideImagesFolder || /\.(png|jpg|jpeg|ico)$/i.test(node.name);
       const fileIconForNode = isImageNode
-        ? <ImageFileIcon className="size-4 text-violet-400" />
+        ? <ImageIcon className="size-4 text-violet-500" />
         : node.name.toLowerCase().endsWith('.py')
-          ? <PythonIcon className="size-4 text-violet-500" />
-          : undefined;
+          ? <PythonIcon className="size-4 text-[#2463EB]" />
+          : <FileText className="size-4 text-muted-foreground" />;
 
-      return renamingNodeId === node.id ? (
-        <TreeInput
-          key={`rename-${node.id}`}
-          value={renameInputValue}
-          onChange={(e) => setRenameInputValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleRenameConfirm();
-            if (e.key === 'Escape') handleRenameCancel();
-          }}
-          onBlur={handleRenameConfirm}
-          isFolder={false}
-          fileIcon={fileIconForNode}
-          autoFocus
-        />
-      ) : (
-        <TreeFile
-          key={node.id}
-          value={node.id}
-          fileIcon={fileIconForNode}
-          onDoubleClick={() => {
-            startRenaming(node.id, node.name);
-          }}
-        >
-          <span className="text-[13px] ml-1">{node.name}</span>
-        </TreeFile>
+      return (
+        <div key={node.id} className="space-y-1">
+          {renamingNodeId === node.id ? (
+            renderInlineInput({
+              value: renameInputValue,
+              onChange: (e) => setRenameInputValue(e.target.value),
+              onKeyDown: (e) => {
+                if (e.key === 'Enter') handleRenameConfirm();
+                if (e.key === 'Escape') handleRenameCancel();
+              },
+              onBlur: handleRenameConfirm,
+              level,
+              icon: fileIconForNode,
+              autoFocus: true,
+            })
+          ) : (
+            <button
+              type="button"
+              className={`group flex h-8 w-full items-center gap-2 rounded-md pr-2 text-left transition-colors ${isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-accent/60 text-foreground'
+                }`}
+              style={{ paddingLeft: `${Math.max(0, level) * 16 + 26}px` }}
+              onClick={() => handleNodeSelect(node.id)}
+              onDoubleClick={() => startRenaming(node.id, node.name)}
+            >
+              <span className="shrink-0">{fileIconForNode}</span>
+              <span className="truncate text-[13px]">{node.name}</span>
+            </button>
+          )}
+        </div>
       );
     });
   };
@@ -559,7 +648,7 @@ export const WidgetSidebar: React.FC = () => {
               Composants
             </TabsTrigger>
             <TabsTrigger value="explorer" className="gap-2 rounded-lg text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <Folder className="h-3.5 w-3.5" />
+              <FolderTabIcon className="h-3.5 w-3.5" />
               Explorateur
             </TabsTrigger>
           </TabsList>
@@ -650,7 +739,7 @@ export const WidgetSidebar: React.FC = () => {
                 data-tour-first-py-file-button
                 title="Nouveau Fichier"
               >
-                <FilePlus className="h-4 w-4" />
+                <FilePlus2 className="h-4 w-4" />
               </Button>
               <Button
                 variant="ghost"
@@ -665,7 +754,7 @@ export const WidgetSidebar: React.FC = () => {
                 disabled={!selectedNodeId}
                 title="Renommer"
               >
-                <PenLine className="h-4 w-4" />
+                <SquarePen className="h-4 w-4" />
               </Button>
               <Button
                 variant="ghost"
@@ -679,52 +768,63 @@ export const WidgetSidebar: React.FC = () => {
                 disabled={!selectedNodeId}
                 title="Supprimer"
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash className="h-4 w-4" />
               </Button>
             </div>
           </div>
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <div className="flex-1 px-1 py-1.5 overflow-hidden flex flex-col">
-                <div className="relative h-full flex-1 rounded-xl border border-border bg-background p-1">
-                <Tree
-                  className="bg-transparent"
-                  initialSelectedId={data[0]?.id}
-                  initialExpandedItems={['__project-root__', data[0]?.id]}
-                  elements={[]}
-                  onSelectChange={(id) => {
-                    if (id !== '__project-root__') handleNodeSelect(id);
-                  }}
-                >
-                  <TreeFolder
-                    value="__project-root__"
-                    element={projectName}
-                    folderIcon={<FolderFilledIcon className="size-4 shrink-0" color="#0F3460" />}
-                    folderOpenIcon={<FolderOpenFilledIcon className="size-4 shrink-0" color="#0F3460" />}
+              <div className="relative h-full flex-1 rounded-xl border border-border bg-background p-1.5">
+                <ScrollArea className="h-full pr-1">
+                  <Collapsible
+                    open={openFolders['__project-root__'] ?? true}
+                    onOpenChange={(open) => setOpenFolders((prev) => ({ ...prev, '__project-root__': open }))}
+                    className="space-y-1"
                   >
-                    {/* Render root level input if creating at root */}
-                    {creatingNode && creatingNode.parentId === null && (
-                      <TreeInput
-                        value={creationInputValue}
-                        onChange={(e) => setCreationInputValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleCreateConfirm();
-                          if (e.key === 'Escape') handleCreateCancel();
-                        }}
-                        onBlur={handleCreateConfirm}
-                        isFolder={creatingNode.type === 'folder'}
-                        fileIcon={creatingNode.type === 'file' ? <PythonIcon className="size-4 text-violet-500" /> : undefined}
-                        data-tour-first-py-file-input
-                      />
-                    )}
-                    {renderTree(data)}
-                  </TreeFolder>
-                </Tree>
+                    <CollapsibleTrigger asChild>
+                      <button
+                        type="button"
+                        className={`group flex h-8 w-full items-center gap-2 rounded-md pr-2 text-left transition-colors ${selectedNodeId === '__project-root__' ? 'bg-primary/10 text-primary' : 'hover:bg-accent/60 text-foreground'
+                          }`}
+                        onClick={() => setSelectedNodeId('__project-root__')}
+                      >
+                        <ChevronRightIcon className={`size-4 shrink-0 text-muted-foreground transition-transform ${(openFolders['__project-root__'] ?? true) ? 'rotate-90' : ''}`} />
+                        {(openFolders['__project-root__'] ?? true)
+                          ? <FolderOpenIcon className="size-4 shrink-0 text-sky-700" />
+                          : <FolderClosedIcon className="size-4 shrink-0 fill-sky-500/20 text-sky-700" />}
+                        <span className="truncate text-[13px] font-semibold">{projectName}</span>
+                      </button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-1">
+                      {creatingNode && creatingNode.parentId === null && (
+                        <div className="mb-1 pl-4">
+                          <div className="flex h-8 items-center gap-2 rounded-md border border-primary/25 bg-primary/5 px-2">
+                            <PythonIcon className="size-4 shrink-0 text-[#2463EB]" />
+                            <Input
+                              value={creationInputValue}
+                              onChange={(e) => setCreationInputValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleCreateConfirm();
+                                if (e.key === 'Escape') handleCreateCancel();
+                              }}
+                              onBlur={handleCreateConfirm}
+                              className="h-6 border-0 bg-transparent px-0 text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
+                              data-tour-first-py-file-input
+                              autoFocus
+                            />
+                          </div>
+                        </div>
+                      )}
+                      {renderExplorerTree(data, 1)}
+                    </CollapsibleContent>
+                  </Collapsible>
+                </ScrollArea>
 
                 {/* Empty State with Button */}
                 {data.length === 0 && !creatingNode && (
                   <div className="absolute inset-0 top-0 flex flex-col items-center justify-center space-y-4 p-6 text-center">
                     <div className="animate-in zoom-in rounded-full bg-muted p-4 shadow-inner fade-in duration-300">
-                      <FilePlus className="h-8 w-8 text-muted-foreground" />
+                      <FilePlus2 className="h-8 w-8 text-muted-foreground" />
                     </div>
                     <div className="space-y-2">
                       <h3 className="text-sm font-semibold">Aucun fichier</h3>
@@ -733,7 +833,7 @@ export const WidgetSidebar: React.FC = () => {
                       </p>
                     </div>
                     <Button size="sm" onClick={() => startCreating()} data-tour-first-py-file-button>
-                      <FilePlus className="mr-2 h-4 w-4" />
+                      <FilePlus2 className="mr-2 h-4 w-4" />
                       Nouveau Fichier
                     </Button>
                   </div>

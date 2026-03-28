@@ -9,6 +9,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ShareProjectModal } from './ShareProjectModal';
 import { PublishToGalleryModal } from './PublishToGalleryModal';
 import { GalleryPage } from './GalleryPage';
+import { openAIAssistantForPrompt } from '@/lib/aiSidebar';
 
 
 export const ProjectDashboard: React.FC = () => {
@@ -16,6 +17,7 @@ export const ProjectDashboard: React.FC = () => {
     const { resolvedTheme } = useTheme();
     const [searchTerm, setSearchTerm] = useState('');
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [createModalMode, setCreateModalMode] = useState<'manual' | 'ai'>('manual');
     const [newProjectName, setNewProjectName] = useState('');
     const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
     const [shareTarget, setShareTarget] = useState<{ id: string; name: string } | null>(null);
@@ -31,19 +33,22 @@ export const ProjectDashboard: React.FC = () => {
         p.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const handleCreateProject = () => {
+    const handleCreateProject = async () => {
         if (!newProjectName.trim()) return;
-        createProject(newProjectName);
-        setIsCreateModalOpen(false);
-        setNewProjectName('');
+        try {
+            await createProject(newProjectName.trim());
+            if (createModalMode === 'ai') openAIAssistantForPrompt();
+            setIsCreateModalOpen(false);
+            setNewProjectName('');
+            setCreateModalMode('manual');
+        } catch (error) {
+            console.error('Erreur creation projet:', error);
+        }
     };
 
     const handleCreateWithAI = () => {
-        createProject('Projet IA ' + new Date().toLocaleTimeString());
-        try {
-            localStorage.setItem('ctk_open_ai_on_load', 'true');
-            window.dispatchEvent(new CustomEvent('open-ai-sidebar'));
-        } catch { /* ignore */ }
+        setCreateModalMode('ai');
+        setIsCreateModalOpen(true);
     };
 
     const handleDeleteProject = (e: React.MouseEvent, id: string) => {
@@ -143,7 +148,7 @@ export const ProjectDashboard: React.FC = () => {
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
-                    <Button onClick={() => setIsCreateModalOpen(true)}>
+                    <Button onClick={() => { setCreateModalMode('manual'); setIsCreateModalOpen(true); }}>
                         <Plus className="mr-2 h-4 w-4" /> Nouveau Projet
                     </Button>
                 </div>
@@ -160,7 +165,7 @@ export const ProjectDashboard: React.FC = () => {
                         <p className="text-muted-foreground">Commencez par créer votre premier projet ou laissez l'IA le faire pour vous.</p>
                     </div>
                     <div className="flex gap-4">
-                        <Button size="lg" onClick={() => setIsCreateModalOpen(true)} className="h-12 px-8">
+                        <Button size="lg" onClick={() => { setCreateModalMode('manual'); setIsCreateModalOpen(true); }} className="h-12 px-8">
                             <Plus className="mr-2 h-5 w-5" /> Créer un projet vide
                         </Button>
                         <Button size="lg" variant="outline" onClick={handleCreateWithAI} className="h-12 px-8 border-purple-500/50 hover:bg-purple-500/10 hover:text-purple-500 hover:border-purple-500 transition-all">
@@ -173,7 +178,7 @@ export const ProjectDashboard: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {/* Create New Card (Always first) */}
                     <button
-                        onClick={() => setIsCreateModalOpen(true)}
+                        onClick={() => { setCreateModalMode('manual'); setIsCreateModalOpen(true); }}
                         className="group relative flex flex-col items-center justify-center p-8 rounded-xl border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 hover:bg-primary/5 transition-all duration-300 min-h-[200px]"
                     >
                         <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
@@ -281,17 +286,28 @@ export const ProjectDashboard: React.FC = () => {
             )}
 
             {/* Create Project Modal */}
-            <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+            <Dialog
+                open={isCreateModalOpen}
+                onOpenChange={(open) => {
+                    setIsCreateModalOpen(open);
+                    if (!open) {
+                        setNewProjectName('');
+                        setCreateModalMode('manual');
+                    }
+                }}
+            >
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Créer un nouveau projet</DialogTitle>
+                        <DialogTitle>{createModalMode === 'ai' ? 'Créer un projet IA' : 'Créer un nouveau projet'}</DialogTitle>
                         <DialogDescription>
-                            Donnez un nom à votre projet pour commencer.
+                            {createModalMode === 'ai'
+                                ? 'Donnez un nom à votre projet puis ouvrez Dayanna pour commencer le prompt.'
+                                : 'Donnez un nom à votre projet pour commencer.'}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="py-4">
                         <Input
-                            placeholder="Nom du projet (ex: Mon Application)"
+                            placeholder={createModalMode === 'ai' ? 'Nom du projet IA (ex: Dashboard RH)' : 'Nom du projet (ex: Mon Application)'}
                             value={newProjectName}
                             onChange={(e) => setNewProjectName(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleCreateProject()}

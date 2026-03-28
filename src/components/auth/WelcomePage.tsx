@@ -155,8 +155,8 @@ const BuilderIllustration: React.FC<{ isDark: boolean }> = ({ isDark }) => (
 
 // ── Feature pill ──────────────────────────────────────────────────────────────
 const FeaturePill: React.FC<{ icon: React.ReactNode; label: string }> = ({ icon, label }) => (
-  <div className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white/70 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/80 shadow-sm text-slate-700 dark:text-slate-300 text-sm font-medium backdrop-blur-sm">
-    <span className="text-indigo-500 dark:text-indigo-400">{icon}</span>
+  <div className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white border border-white shadow-sm text-slate-700 text-sm font-medium backdrop-blur-sm">
+    <span className="text-[#5E7FD8]">{icon}</span>
     {label}
   </div>
 );
@@ -178,22 +178,33 @@ export const WelcomePage: React.FC<{ onContinue: () => void }> = ({ onContinue }
     <div
       className="h-screen w-screen flex items-center justify-center overflow-hidden relative"
       style={{
-        background: isDark
-          ? 'radial-gradient(circle at 20% 20%, rgba(15,52,96,0.15), transparent 40%), radial-gradient(circle at 80% 80%, rgba(15,52,96,0.12), transparent 38%), linear-gradient(145deg,#060b14 0%,#0a1020 50%,#0d1327 100%)'
-          : 'radial-gradient(circle at 18% 18%, rgba(15,52,96,0.12), transparent 38%), radial-gradient(circle at 80% 78%, rgba(15,52,96,0.10), transparent 36%), linear-gradient(135deg,#EBF0F7 0%,#D5E1EE 46%,#e8f0fa 100%)',
+        background: '#0B1020',
       }}
     >
       {/* Dot grid */}
       <div
         className="absolute inset-0 pointer-events-none opacity-[0.18] dark:opacity-[0.07]"
-        style={{ backgroundImage: 'radial-gradient(circle, #94a3b8 0.7px, transparent 0.7px)', backgroundSize: '28px 28px' }}
+        style={{
+          backgroundImage: 'radial-gradient(circle, #94a3b8 0.7px, transparent 0.7px)',
+          backgroundSize: '28px 28px',
+          animation: 'welcomeDotsDrift 22s linear infinite',
+        }}
       />
 
       {/* Orbs */}
       <div className="absolute top-[-10%] right-[-8%] w-[500px] h-[500px] rounded-full pointer-events-none"
-        style={{ background: 'radial-gradient(circle, #0F3460, transparent 70%)', opacity: isDark ? 0.05 : 0.06 }} />
+        style={{
+          background: 'radial-gradient(circle, #0F3460, transparent 70%)',
+          opacity: isDark ? 0.05 : 0.06,
+          animation: 'welcomeOrbPulse 8s ease-in-out infinite',
+        }} />
       <div className="absolute bottom-[-8%] left-[-6%] w-[400px] h-[400px] rounded-full pointer-events-none"
-        style={{ background: 'radial-gradient(circle, #1F5AA0, transparent 70%)', opacity: isDark ? 0.04 : 0.05 }} />
+        style={{
+          background: 'radial-gradient(circle, #1F5AA0, transparent 70%)',
+          opacity: isDark ? 0.04 : 0.05,
+          animation: 'welcomeOrbPulse 10s ease-in-out infinite',
+          animationDelay: '0.9s',
+        }} />
 
       {/* Content */}
       <div
@@ -204,14 +215,17 @@ export const WelcomePage: React.FC<{ onContinue: () => void }> = ({ onContinue }
         {/* Left — Text */}
         <div className="flex-1 flex flex-col items-center lg:items-start text-center lg:text-left max-w-lg">
           {/* Badge */}
-          <div className="flex items-center gap-2 px-4 py-1.5 mb-6 rounded-full bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-700/60 text-indigo-700 dark:text-indigo-300 text-sm font-medium">
+          <div
+            className="flex items-center gap-2 px-4 py-1.5 mb-6 rounded-full bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-700/60 text-indigo-700 dark:text-indigo-300 text-sm font-medium"
+            style={{ animation: 'welcomeSoftPulse 3.6s ease-in-out infinite' }}
+          >
             <Sparkles className="w-4 h-4" />
             Compte créé avec succès
           </div>
 
           {/* Heading */}
           <h1 className="text-4xl lg:text-5xl font-bold tracking-tight text-slate-900 dark:text-white leading-tight">
-            Bienvenu,{' '}
+            <span style={{ color: '#787C99', animation: 'welcomeTitleGlow 2.8s ease-in-out infinite', display: 'inline-block' }}>Bienvenu,</span>{' '}
             <span className="bg-gradient-to-r from-indigo-500 via-indigo-400 to-purple-500 bg-clip-text text-transparent">
               {firstName}
             </span>{' '}
@@ -248,10 +262,34 @@ export const WelcomePage: React.FC<{ onContinue: () => void }> = ({ onContinue }
           className={`flex-1 flex items-center justify-center transition-all duration-1000 delay-200 ${
             visible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-8'
           }`}
+          style={{ animation: 'welcomeFloat 6.5s ease-in-out infinite' }}
         >
           <BuilderIllustration isDark={isDark} />
         </div>
       </div>
+
+      <style>{`
+        @keyframes welcomeDotsDrift {
+          0% { background-position: 0 0; }
+          100% { background-position: 120px 84px; }
+        }
+        @keyframes welcomeOrbPulse {
+          0%, 100% { transform: scale(1); opacity: 0.06; }
+          50% { transform: scale(1.06); opacity: 0.1; }
+        }
+        @keyframes welcomeSoftPulse {
+          0%, 100% { transform: translateY(0); box-shadow: 0 0 0 rgba(143,174,255,0); }
+          50% { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(143,174,255,0.16); }
+        }
+        @keyframes welcomeTitleGlow {
+          0%, 100% { filter: drop-shadow(0 0 0 rgba(120,124,153,0)); }
+          50% { filter: drop-shadow(0 0 14px rgba(120,124,153,0.42)); }
+        }
+        @keyframes welcomeFloat {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-8px); }
+        }
+      `}</style>
     </div>
   );
 };

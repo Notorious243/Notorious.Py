@@ -46,7 +46,7 @@ export const ChartProperties: React.FC<WidgetPropertySectionProps> = ({
     <div className="space-y-6">
       <Accordion type="multiple" defaultValue={['chartType', 'chartData', 'chartStyle', 'chartColors']} className="space-y-4">
         {/* Type de graphique */}
-        <AccordionItem value="chartType" className="rounded-xl border border-border/80 bg-card/50 px-4 shadow-sm">
+        <AccordionItem value="chartType" className="rounded-lg border border-border/30 bg-muted/20 px-3 shadow-sm">
           <AccordionTrigger className="flex items-center gap-2 py-3.5 text-sm font-semibold">
             <BarChart3 className="h-5 w-5 text-primary" />
             <span className="text-foreground">Type de Graphique</span>
@@ -72,7 +72,7 @@ export const ChartProperties: React.FC<WidgetPropertySectionProps> = ({
         </AccordionItem>
 
         {/* Données du graphique */}
-        <AccordionItem value="chartData" className="rounded-xl border border-border/80 bg-card/50 px-4 shadow-sm">
+        <AccordionItem value="chartData" className="rounded-lg border border-border/30 bg-muted/20 px-3 shadow-sm">
           <AccordionTrigger className="flex items-center gap-2 py-3.5 text-sm font-semibold">
             <Database className="h-5 w-5 text-primary" />
             <span className="text-foreground">Données ({chartData.length} points)</span>
@@ -118,7 +118,7 @@ export const ChartProperties: React.FC<WidgetPropertySectionProps> = ({
         </AccordionItem>
 
         {/* Style du graphique */}
-        <AccordionItem value="chartStyle" className="rounded-xl border border-border/80 bg-card/50 px-4 shadow-sm">
+        <AccordionItem value="chartStyle" className="rounded-lg border border-border/30 bg-muted/20 px-3 shadow-sm">
           <AccordionTrigger className="flex items-center gap-2 py-3.5 text-sm font-semibold">
             <Settings2 className="h-5 w-5 text-primary" />
             <span className="text-foreground">Style</span>
@@ -186,7 +186,7 @@ export const ChartProperties: React.FC<WidgetPropertySectionProps> = ({
         </AccordionItem>
 
         {/* Couleurs */}
-        <AccordionItem value="chartColors" className="rounded-xl border border-border/80 bg-card/50 px-4 shadow-sm">
+        <AccordionItem value="chartColors" className="rounded-lg border border-border/30 bg-muted/20 px-3 shadow-sm">
           <AccordionTrigger className="flex items-center gap-2 py-3.5 text-sm font-semibold">
             <Palette className="h-5 w-5 text-primary" />
             <span className="text-foreground">Couleurs</span>

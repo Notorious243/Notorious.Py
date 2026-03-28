@@ -1,6 +1,5 @@
 import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { useTheme } from 'next-themes';
 import { WidgetData } from '@/types/widget';
 import { useWidgets } from '@/contexts/WidgetContext';
 import { useCanvasDrop } from '@/hooks/useDragDrop';
@@ -16,14 +15,15 @@ import { Plus, Copy, Scissors, Clipboard, Trash2, Lock, Unlock, Sparkles, Folder
 import { supabase } from '@/lib/supabase';
 import JSZip from 'jszip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 export const Canvas: React.FC = () => {
-  const { widgets, canvasSettings, addWidget, selectWidget, selectedWidgetId, copyWidget, cutWidget, pasteWidget, deleteWidget, toggleWidgetLock, clipboard, undo, redo, updateWidget, moveWidget, previewMode } = useWidgets();
+  const { widgets, canvasSettings, addWidget, selectWidget, selectedWidgetId, copyWidget, cutWidget, pasteWidget, deleteWidget, toggleWidgetLock, clipboard, undo, redo, updateWidget, moveWidget, previewMode, updateCanvasSettings } = useWidgets();
   const { activeProjectId, createProject, projects, openProject } = useProjects();
   const canvasRef = useRef<HTMLDivElement>(null);
-  const { resolvedTheme } = useTheme();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; widgetId: string | null } | null>(null);
   const [selectionBox, setSelectionBox] = useState<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
@@ -67,6 +67,64 @@ export const Canvas: React.FC = () => {
     // Si le canvas tient déjà dans l'espace, ne pas zoomer au-delà de 1
     return Math.min(fitScale, 1);
   }, [previewMode, containerSize, canvasSettings.width, canvasSettings.height]);
+
+  // Figma-like zoom: Ctrl/Cmd + wheel to zoom in/out
+  const [showZoomIndicator, setShowZoomIndicator] = useState(false);
+  const [isEditingZoom, setIsEditingZoom] = useState(false);
+  const [zoomInputValue, setZoomInputValue] = useState('');
+  const zoomInputRef = useRef<HTMLInputElement>(null);
+  const zoomIndicatorTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || previewMode === 'preview') return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const currentScale = canvasSettings.scaling || 1;
+        const zoomFactor = e.deltaY < 0 ? 1.01 : 0.99;
+        const newScale = Math.min(3, Math.max(0.1, currentScale * zoomFactor));
+        const rounded = Math.round(newScale * 100) / 100;
+
+        updateCanvasSettings({ scaling: rounded });
+
+        setShowZoomIndicator(true);
+        if (zoomIndicatorTimeout.current) clearTimeout(zoomIndicatorTimeout.current);
+        zoomIndicatorTimeout.current = setTimeout(() => setShowZoomIndicator(false), 1200);
+      }
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, [previewMode, canvasSettings.scaling, updateCanvasSettings]);
+
+  // Zoom controls
+  const handleZoomIn = useCallback(() => {
+    const current = canvasSettings.scaling || 1;
+    const newScale = Math.min(3, Math.round((current + 0.01) * 100) / 100);
+    updateCanvasSettings({ scaling: newScale });
+  }, [canvasSettings.scaling, updateCanvasSettings]);
+
+  const handleZoomOut = useCallback(() => {
+    const current = canvasSettings.scaling || 1;
+    const newScale = Math.max(0.1, Math.round((current - 0.01) * 100) / 100);
+    updateCanvasSettings({ scaling: newScale });
+  }, [canvasSettings.scaling, updateCanvasSettings]);
+
+  const handleZoomFit = useCallback(() => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const padding = 80;
+    const availW = rect.width - padding;
+    const availH = rect.height - padding;
+    const scaleX = availW / canvasSettings.width;
+    const scaleY = availH / canvasSettings.height;
+    const fitScale = Math.min(scaleX, scaleY, 1);
+    updateCanvasSettings({ scaling: Math.round(fitScale * 100) / 100 });
+  }, [canvasSettings.width, canvasSettings.height, updateCanvasSettings]);
 
   // Get recent 4 projects sorted by most recently worked
   const recentProjects = [...projects].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 4);
@@ -125,7 +183,10 @@ export const Canvas: React.FC = () => {
     if (!name) return;
     createProject(name);
     if (createModalMode === 'ai') {
-      try { localStorage.setItem('ctk_open_ai_on_load', 'true'); } catch { /* ignore */ }
+      try {
+        localStorage.setItem('ctk_open_ai_on_load', 'true');
+        window.dispatchEvent(new CustomEvent('open-ai-sidebar'));
+      } catch { /* ignore */ }
     }
     setShowCreateModal(false);
     setNewProjectName('');
@@ -667,14 +728,17 @@ export const Canvas: React.FC = () => {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [selectedWidgetId, selectedWidgets, widgets, canvasSettings, copyWidget, cutWidget, pasteWidget, deleteWidget, updateWidget, moveWidget, undo, redo]);
 
-  const defaultBg = resolvedTheme === 'dark' ? '#242424' : '#ffffff';
+  const defaultBg = '#ffffff';
   const bgColor = canvasSettings.backgroundColor || defaultBg;
   const backgroundImageSource = canvasSettings.background_image_data || canvasSettings.background_image;
-
   return (
-    <div ref={containerRef} className="flex-1 relative p-8 flex items-center justify-center overflow-auto bg-slate-50/50 dark:bg-zinc-950/30">
+    <div className="relative flex flex-1 flex-col overflow-hidden">
+    <div
+      ref={containerRef}
+      className="relative flex flex-1 items-center justify-center overflow-auto pb-14 pt-6 scrollbar-thin scrollbar-thumb-border/40 scrollbar-track-transparent"
+    >
       <motion.div
-        className={`relative shadow-2xl shadow-slate-200/50 dark:shadow-[0_24px_60px_rgba(0,0,0,0.5)] border border-slate-200 dark:border-zinc-800 ${previewMode === 'preview' ? 'rounded-lg' : 'rounded-xl'}`}
+        className={`relative z-10 border border-border bg-card shadow-[0_30px_72px_rgba(15,52,96,0.12)] ring-1 ring-black/[0.03] ${previewMode === 'preview' ? 'rounded-xl' : 'rounded-2xl'}`}
         style={{
           width: canvasSettings.width,
           height: canvasSettings.height,
@@ -685,7 +749,7 @@ export const Canvas: React.FC = () => {
         <CanvasHeader />
         <div
           ref={attachCanvasRef}
-          className={`relative h-[calc(100%-2.5rem)] w-full overflow-hidden text-slate-800 dark:text-slate-200 ${previewMode === 'preview' ? 'rounded-b-lg' : 'rounded-b-xl'}`}
+          className={`relative h-[calc(100%-2.5rem)] w-full overflow-hidden text-foreground ${previewMode === 'preview' ? 'rounded-b-xl' : 'rounded-b-2xl'}`}
           style={{
             backgroundColor: bgColor,
             backgroundImage: backgroundImageSource
@@ -718,7 +782,7 @@ export const Canvas: React.FC = () => {
           {/* Selection Box */}
           {selectionBox && (
             <div
-              className="absolute pointer-events-none border-2 border-primary bg-primary/10 dark:bg-primary/25 z-50 rounded-sm"
+              className="absolute z-50 rounded-sm border-2 border-primary bg-primary/15 pointer-events-none"
               style={{
                 left: Math.min(selectionBox.startX, selectionBox.endX),
                 top: Math.min(selectionBox.startY, selectionBox.endY),
@@ -747,17 +811,17 @@ export const Canvas: React.FC = () => {
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center space-y-6 max-w-2xl px-6 w-full animate-in fade-in duration-500">
                 <div className="relative mx-auto w-20 h-20 mb-2">
-                  <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-indigo-500 to-purple-600 blur-2xl opacity-40 animate-pulse" />
-                  <div className="relative w-full h-full rounded-3xl shadow-[0_16px_40px_rgba(15,52,96,0.4)] flex items-center justify-center overflow-hidden">
+                  <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-[#1F5AA0] to-[#0F3460] opacity-30 blur-2xl" />
+                  <div className="relative w-full h-full rounded-3xl shadow-[0_16px_40px_rgba(15,52,96,0.25)] flex items-center justify-center overflow-hidden">
                     <img src="/logo-128x128.png" alt="Logo" className="w-20 h-20 rounded-3xl" />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <h3 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                  <h3 className="text-2xl font-bold tracking-tight text-foreground">
                     Bienvenue dans Notorious.PY
                   </h3>
-                  <p className="text-slate-600 dark:text-slate-400 text-[15px]">
+                  <p className="text-[15px] text-muted-foreground">
                     {projects.length === 0
                       ? "Créez un projet pour commencer à construire votre interface."
                       : "Reprenez un projet ou explorez votre espace de travail."}
@@ -768,31 +832,33 @@ export const Canvas: React.FC = () => {
                 {projects.length === 0 && (
                   <>
                     <div className="flex flex-row items-center justify-center gap-4 pt-4">
-                      <button
+                      <Button
                         onClick={(e) => { e.stopPropagation(); setCreateModalMode('manual'); setNewProjectName(''); setShowCreateModal(true); }}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className="flex items-center h-12 px-6 text-[15px] font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-[0_8px_24px_rgba(15,52,96,0.3)] hover:shadow-[0_12px_32px_rgba(15,52,96,0.4)] transition-all duration-300 hover:-translate-y-0.5 rounded-xl"
+                        className="h-11 rounded-xl bg-gradient-to-r from-[#0F3460] to-[#1F5AA0] px-6 text-[14px] font-semibold text-white shadow-[0_10px_28px_rgba(15,52,96,0.22)] transition-all hover:-translate-y-0.5 hover:brightness-110"
                       >
                         <Plus className="mr-2 h-5 w-5" />
                         Créer un projet
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="outline"
                         onClick={(e) => { e.stopPropagation(); setCreateModalMode('ai'); setNewProjectName(''); setShowCreateModal(true); }}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className="flex items-center h-12 px-6 text-[15px] font-semibold border border-slate-200/80 bg-white/80 backdrop-blur-md hover:bg-slate-50 hover:border-slate-300 text-slate-700 dark:border-slate-700/80 dark:bg-slate-900/60 dark:hover:bg-slate-800 dark:hover:border-slate-600 dark:text-slate-200 transition-all duration-300 hover:-translate-y-0.5 rounded-xl shadow-sm"
+                        className="h-11 rounded-xl border border-border bg-secondary px-6 text-[14px] font-semibold text-foreground transition-all hover:-translate-y-0.5 hover:border-primary/45 hover:bg-primary/10"
                       >
-                        <Sparkles className="mr-2 h-5 w-5 text-indigo-500" />
+                        <Sparkles className="mr-2 h-5 w-5 text-primary" />
                         Générer avec l'IA
-                      </button>
+                      </Button>
                     </div>
-                    <button
+                    <Button
+                      variant="ghost"
                       onClick={(e) => { e.stopPropagation(); setShowImportDialog(true); }}
                       onMouseDown={(e) => e.stopPropagation()}
-                      className="mt-8 text-[15px] font-bold text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer flex items-center gap-2 mx-auto"
+                      className="mx-auto mt-8 h-10 rounded-full px-5 text-[14px] font-semibold text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
                     >
                       <Upload className="w-4 h-4" />
                       Importer un projet
-                    </button>
+                    </Button>
                   </>
                 )}
 
@@ -800,31 +866,32 @@ export const Canvas: React.FC = () => {
                 {projects.length > 0 && (
                   <>
                     <div className="flex items-center justify-center gap-3 pt-4">
-                      <button
+                      <Button
                         onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('open-projects-modal')); }}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className="flex items-center h-12 px-8 text-[15px] font-semibold bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-600 hover:from-indigo-400 hover:via-indigo-500 hover:to-purple-500 text-white shadow-[0_8px_24px_rgba(15,52,96,0.35)] hover:shadow-[0_12px_32px_rgba(15,52,96,0.45)] transition-all duration-300 hover:-translate-y-0.5 rounded-xl"
+                        className="h-11 rounded-xl bg-gradient-to-r from-[#0F3460] to-[#1F5AA0] px-8 text-[14px] font-semibold text-white shadow-[0_10px_28px_rgba(15,52,96,0.22)] transition-all hover:-translate-y-0.5 hover:brightness-110"
                       >
                         <LayoutGrid className="mr-2 h-5 w-5" />
                         Voir tous les projets
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="outline"
                         onClick={(e) => { e.stopPropagation(); setShowImportDialog(true); }}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className="flex items-center h-12 px-8 text-[15px] font-semibold border border-slate-200/80 bg-white/80 backdrop-blur-md hover:bg-slate-50 hover:border-slate-300 text-slate-700 dark:border-slate-700/80 dark:bg-slate-900/60 dark:hover:bg-slate-800 dark:hover:border-slate-600 dark:text-slate-200 transition-all duration-300 hover:-translate-y-0.5 rounded-xl shadow-sm"
+                        className="h-11 rounded-xl border border-border bg-secondary px-8 text-[14px] font-semibold text-foreground transition-all hover:-translate-y-0.5 hover:border-primary/45 hover:bg-primary/10"
                       >
                         <Upload className="mr-2 h-5 w-5" />
                         Importer un projet
-                      </button>
+                      </Button>
                     </div>
 
                     <div className="mt-16 w-full max-w-2xl mx-auto">
                       <div className="flex items-center justify-between mb-4 px-1">
-                        <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                        <h4 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-muted-foreground">
                           <Clock className="w-3.5 h-3.5" />
                           Projets récents
                         </h4>
-                        <span className="text-xs font-medium text-slate-400 dark:text-slate-500">
+                        <span className="text-xs font-medium text-muted-foreground">
                           {Math.min(recentProjects.length, 4)}/{projects.length}
                         </span>
                       </div>
@@ -832,19 +899,19 @@ export const Canvas: React.FC = () => {
                         {recentProjects.slice(0, 4).map((project) => (
                           <button
                             key={project.id}
-                            className="group flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-slate-200/80 bg-white/70 backdrop-blur-sm hover:border-indigo-400/60 hover:bg-indigo-50/60 hover:shadow-[0_6px_18px_rgba(15,52,96,0.12)] dark:border-slate-700/70 dark:bg-slate-800/50 dark:hover:border-indigo-500/50 dark:hover:bg-indigo-500/10 transition-all duration-300 cursor-pointer text-left"
+                            className="group flex cursor-pointer items-center gap-2.5 rounded-xl border border-border bg-secondary px-3 py-2.5 text-left transition-all duration-300 hover:border-primary/45 hover:bg-primary/10 hover:shadow-[0_6px_18px_rgba(15,52,96,0.20)]"
                             onClick={(e) => { e.stopPropagation(); openProject(project.id); }}
                             onMouseDown={(e) => e.stopPropagation()}
                           >
-                            <div className="relative w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700/80 flex items-center justify-center text-slate-400 dark:text-slate-500 group-hover:bg-indigo-100 group-hover:text-indigo-500 dark:group-hover:bg-indigo-500/20 dark:group-hover:text-indigo-400 transition-all duration-300 shrink-0">
+                            <div className="relative h-8 w-8 shrink-0 rounded-lg bg-accent text-muted-foreground transition-all duration-300 group-hover:bg-primary/20 group-hover:text-primary flex items-center justify-center">
                               <Folder className="w-4 h-4 absolute transition-all duration-300 opacity-100 group-hover:opacity-0 group-hover:scale-75" strokeWidth={1.5} />
                               <Folder className="w-4 h-4 transition-all duration-300 opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100" strokeWidth={1.5} fill="currentColor" />
                             </div>
                             <div className="shrink-0">
-                              <span className="block text-[13px] font-semibold text-slate-700 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors whitespace-nowrap">
+                              <span className="block whitespace-nowrap text-[13px] font-semibold text-foreground transition-colors group-hover:text-primary">
                                 {project.name}
                               </span>
-                              <span className="block text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 whitespace-nowrap">
+                              <span className="mt-0.5 block whitespace-nowrap text-[10px] text-muted-foreground">
                                 {format(new Date(project.updatedAt), "d MMM 'à' HH:mm", { locale: fr })}
                               </span>
                             </div>
@@ -852,7 +919,7 @@ export const Canvas: React.FC = () => {
                         ))}
                       </div>
                       {projects.length > 4 && (
-                        <p className="text-center text-xs text-slate-400 dark:text-slate-500 mt-3">
+                        <p className="mt-3 text-center text-xs text-muted-foreground">
                           +{projects.length - 4} autres projets sur la page Home
                         </p>
                       )}
@@ -866,12 +933,12 @@ export const Canvas: React.FC = () => {
           {widgets.length === 0 && activeProjectId && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
               <div className="text-center space-y-4">
-                <Plus className="w-16 h-16 text-slate-300 dark:text-slate-500 mx-auto" strokeWidth={1.5} />
+                <Plus className="mx-auto h-16 w-16 text-muted-foreground/40" strokeWidth={1.5} />
                 <div className="space-y-2">
-                  <h3 className="text-xl font-semibold text-slate-700 dark:text-slate-100">
+                  <h3 className="text-xl font-semibold text-foreground">
                     Déposez des widgets ici ou utilisez l'IA
                   </h3>
-                  <p className="text-slate-500 dark:text-slate-300/90 text-sm">
+                  <p className="text-sm text-muted-foreground">
                     Commencez à construire votre interface CustomTkinter
                   </p>
                 </div>
@@ -882,16 +949,16 @@ export const Canvas: React.FC = () => {
           {/* Context Menu */}
           {contextMenu && (
             <div
-              className="absolute z-[100] bg-background border-2 border-border rounded-lg shadow-2xl py-1 min-w-[180px]"
+              className="absolute z-[100] min-w-[190px] rounded-xl border border-border bg-card py-1.5 shadow-2xl"
               style={{
                 left: `${contextMenu.x}px`,
                 top: `${contextMenu.y}px`,
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05)',
+                boxShadow: '0 18px 42px rgba(15, 52, 96, 0.15)',
               }}
               onClick={(e) => e.stopPropagation()}
             >
               {selectedWidgets.length > 0 && (
-                <div className="px-4 py-2 text-xs text-muted-foreground border-b border-border">
+                <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
                   {selectedWidgets.length} widget{selectedWidgets.length > 1 ? 's' : ''} sélectionné{selectedWidgets.length > 1 ? 's' : ''}
                 </div>
               )}
@@ -923,7 +990,7 @@ export const Canvas: React.FC = () => {
               </button>
               {(contextMenu.widgetId || selectedWidgets.length > 0) && (
                 <>
-                  <div className="h-px bg-border my-1" />
+                  <div className="my-1 h-px bg-border" />
                   <button
                     className="w-full px-4 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-accent-foreground flex items-center gap-2 transition-colors"
                     onClick={() => handleMenuAction('lock')}
@@ -940,7 +1007,7 @@ export const Canvas: React.FC = () => {
                       </>
                     )}
                   </button>
-                  <div className="h-px bg-border my-1" />
+                  <div className="my-1 h-px bg-border" />
                   <button
                     className="w-full px-4 py-2 text-left text-sm text-destructive hover:bg-destructive hover:text-destructive-foreground flex items-center gap-2 transition-colors font-medium"
                     onClick={() => handleMenuAction('delete')}
@@ -954,18 +1021,114 @@ export const Canvas: React.FC = () => {
           )}
         </div>
       </motion.div>
+    </div>
+
+      {/* Zoom Controls Bar — centered bottom, outside scrollable area */}
+      {previewMode !== 'preview' && (
+        <div className="absolute bottom-4 left-1/2 z-[100] flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-border bg-card/95 px-1.5 py-1 shadow-lg backdrop-blur-md" onClick={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }} onMouseDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }} onPointerDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}>
+          <button
+            onClick={handleZoomOut}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-bold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            title="Zoom arrière (Ctrl -)"
+          >
+            −
+          </button>
+          {isEditingZoom ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const val = parseInt(zoomInputValue, 10);
+                if (!isNaN(val) && val >= 10 && val <= 300) {
+                  updateCanvasSettings({ scaling: val / 100 });
+                }
+                setIsEditingZoom(false);
+              }}
+              className="flex items-center"
+            >
+              <input
+                ref={zoomInputRef}
+                type="text"
+                value={zoomInputValue}
+                onClick={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
+                onMouseDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
+                onPointerDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
+                onChange={(e) => setZoomInputValue(e.target.value.replace(/[^0-9]/g, ''))}
+                onBlur={() => {
+                  // Delay to let form submit fire first if user pressed Enter
+                  setTimeout(() => {
+                    setIsEditingZoom((prev) => {
+                      if (!prev) return false;
+                      const val = parseInt(zoomInputValue, 10);
+                      if (!isNaN(val) && val >= 10 && val <= 300) {
+                        updateCanvasSettings({ scaling: val / 100 });
+                      }
+                      return false;
+                    });
+                  }, 150);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') { setIsEditingZoom(false); }
+                  if (e.key === 'Enter') { e.preventDefault(); const val = parseInt(zoomInputValue, 10); if (!isNaN(val) && val >= 10 && val <= 300) { updateCanvasSettings({ scaling: val / 100 }); } setIsEditingZoom(false); }
+                }}
+                className="h-7 w-14 rounded-lg border border-primary/30 bg-background px-1 text-center text-[11px] font-semibold text-foreground outline-none focus:border-primary/60"
+                autoFocus
+                maxLength={3}
+              />
+            </form>
+          ) : (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                e.nativeEvent.stopImmediatePropagation();
+                setZoomInputValue(String(Math.round((canvasSettings.scaling || 1) * 100)));
+                setIsEditingZoom(true);
+                setTimeout(() => zoomInputRef.current?.select(), 10);
+              }}
+              onMouseDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
+              className="flex h-7 min-w-[3rem] items-center justify-center rounded-lg px-1.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-accent"
+              title="Cliquer pour saisir un pourcentage"
+            >
+              {Math.round((canvasSettings.scaling || 1) * 100)}%
+            </button>
+          )}
+          <button
+            onClick={handleZoomIn}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-bold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            title="Zoom avant (Ctrl +)"
+          >
+            +
+          </button>
+          <div className="mx-0.5 h-4 w-px bg-border/50" />
+          <button
+            onClick={handleZoomFit}
+            className="flex h-7 items-center justify-center rounded-lg px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            title="Ajuster à l'écran"
+          >
+            Fit
+          </button>
+        </div>
+      )}
+
+      {/* Zoom Indicator (floating, on zoom change) */}
+      {showZoomIndicator && (
+        <div className="pointer-events-none absolute left-1/2 top-6 z-40 -translate-x-1/2 animate-in fade-in zoom-in-95 duration-200">
+          <div className="rounded-lg bg-foreground/80 px-3 py-1.5 text-xs font-semibold text-background shadow-lg backdrop-blur-sm">
+            {Math.round((canvasSettings.scaling || 1) * 100)}%
+          </div>
+        </div>
+      )}
 
       {/* Import Project Dialog */}
       <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
-        <DialogContent className="sm:max-w-md rounded-2xl bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-800 text-slate-900 dark:text-slate-100 z-[70]">
+        <DialogContent className="z-[70] rounded-2xl border border-border bg-card text-foreground sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-xl text-slate-900 dark:text-white">Importer un projet</DialogTitle>
+            <DialogTitle className="text-xl text-foreground">Importer un projet</DialogTitle>
           </DialogHeader>
           <div
             className={`mt-2 flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-all cursor-pointer ${
               isDragOver
-                ? 'border-indigo-500 bg-indigo-50/60 dark:bg-indigo-500/10'
-                : 'border-slate-300 dark:border-slate-700 hover:border-indigo-400 hover:bg-slate-50/50 dark:hover:bg-slate-800/30'
+                ? 'border-primary bg-primary/10'
+                : 'border-border hover:border-primary/55 hover:bg-secondary'
             }`}
             onClick={() => importZipRef.current?.click()}
             onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
@@ -974,15 +1137,15 @@ export const Canvas: React.FC = () => {
           >
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 transition-colors ${
               isDragOver
-                ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500'
+                ? 'bg-primary/20 text-primary'
+                : 'bg-secondary text-muted-foreground'
             }`}>
               <Upload className="w-7 h-7" />
             </div>
-            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <p className="text-sm font-semibold text-foreground">
               Glissez-d\u00e9posez votre fichier .zip ici
             </p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">ou cliquez pour parcourir</p>
+            <p className="mt-1 text-xs text-muted-foreground">ou cliquez pour parcourir</p>
           </div>
           <input ref={importZipRef} type="file" accept=".zip" className="hidden" onChange={handleImportZip} />
         </DialogContent>
@@ -990,39 +1153,40 @@ export const Canvas: React.FC = () => {
 
       {/* Create Project Name Modal - outside canvas content to avoid mouse handler interference */}
       {showCreateModal && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowCreateModal(false)}>
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-8 max-w-md w-full mx-4 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/25 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowCreateModal(false)}>
+          <div className="mx-4 w-full max-w-md animate-in zoom-in-95 rounded-2xl border border-border bg-card p-8 shadow-2xl duration-200" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+              <h3 className="text-xl font-bold text-foreground">
                 {createModalMode === 'ai' ? 'Nouveau projet IA' : 'Nouveau projet'}
               </h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+              <button onClick={() => setShowCreateModal(false)} className="text-muted-foreground transition-colors hover:text-foreground">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <input
+            <Input
               type="text"
               placeholder="Nom du projet..."
               value={newProjectName}
               onChange={(e) => setNewProjectName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleCanvasCreateProject()}
               autoFocus
-              className="w-full h-12 px-4 text-lg rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+              className="h-12 rounded-xl border-border bg-background px-4 text-lg text-foreground"
             />
             <div className="flex gap-3 mt-6">
-              <button
+              <Button
+                variant="outline"
                 onClick={() => setShowCreateModal(false)}
-                className="flex-1 h-11 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+                className="h-11 flex-1 rounded-xl border-border bg-secondary font-semibold text-foreground hover:bg-accent"
               >
                 Annuler
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleCanvasCreateProject}
                 disabled={!newProjectName.trim()}
-                className="flex-1 h-11 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold shadow-[0_8px_24px_rgba(15,52,96,0.35)] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-11 flex-1 rounded-xl bg-gradient-to-r from-[#0F3460] to-[#1F5AA0] font-semibold text-white shadow-[0_10px_24px_rgba(15,52,96,0.22)] transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {createModalMode === 'ai' ? 'Créer & Générer' : 'Créer'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

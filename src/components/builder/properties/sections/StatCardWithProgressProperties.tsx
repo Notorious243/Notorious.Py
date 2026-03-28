@@ -14,8 +14,8 @@ export const StatCardWithProgressProperties: React.FC<WidgetPropertySectionProps
   handleNumericPropertyBlur,
 }) => {
   return (
-    <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-4">
-      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Carte Stat + Barre</Label>
+    <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-3">
+      <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Carte Stat + Barre</Label>
 
       {/* Contenu */}
       <div className="space-y-3">

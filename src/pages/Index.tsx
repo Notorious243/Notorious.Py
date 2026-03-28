@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useFileSystem } from '@/hooks/useFileSystem';
-import { useTheme } from 'next-themes';
 import { TopBar } from '@/components/builder/TopBar';
 import { WidgetSidebar } from '@/components/builder/WidgetSidebar';
 import { Canvas } from '@/components/builder/Canvas';
@@ -11,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, PanelLeftClose, PanelRightClose, Lock, Monitor } from 'lucide-react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { FileSystemProvider } from '@/hooks/useFileSystem';
+import { GridAnimation } from '@/components/ui/grid-animation';
 import { ProjectProvider, useProjects } from '@/contexts/ProjectContext';
 const WelcomeScreen = lazy(() => import('@/components/builder/WelcomeScreen').then(m => ({ default: m.WelcomeScreen })));
 
@@ -19,14 +19,19 @@ const CodeView = lazy(() => import('@/components/builder/CodeView'));
 const OnboardingTour = lazy(() => import('@/components/builder/OnboardingTour'));
 
 const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
-  const { resolvedTheme } = useTheme();
   const { viewMode, previewMode, setViewMode, setPreviewMode } = useWidgets();
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
+  const [rightSidebarTab, setRightSidebarTab] = useState<'properties' | 'ai'>('properties');
   const [isFirstTime, setIsFirstTime] = useState(false);
   const [showWelcomeOverlay, setShowWelcomeOverlay] = useState(false);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [mobileBannerDismissed, setMobileBannerDismissed] = useState(false);
+  const [isTopBarHovered, setIsTopBarHovered] = useState(false);
+  const topBarTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const PROPERTIES_PANEL_WIDTH = 280;
+  const AI_PANEL_WIDTH = 340;
+  const rightPanelWidth = rightSidebarTab === 'ai' ? AI_PANEL_WIDTH : PROPERTIES_PANEL_WIDTH;
   const { projects } = useProjects();
   const projectsRef = useRef(projects);
   projectsRef.current = projects;
@@ -38,6 +43,19 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
     };
     window.addEventListener('open-projects-modal', handler);
     return () => window.removeEventListener('open-projects-modal', handler);
+  }, []);
+
+  useEffect(() => {
+    const handleTabChange = (event: Event) => {
+      const customEvent = event as CustomEvent<{ tab?: 'properties' | 'ai' }>;
+      const tab = customEvent.detail?.tab;
+      if (tab === 'properties' || tab === 'ai') {
+        setRightSidebarTab(tab);
+      }
+    };
+
+    window.addEventListener('right-sidebar-tab-change', handleTabChange);
+    return () => window.removeEventListener('right-sidebar-tab-change', handleTabChange);
   }, []);
 
   // Ne lancer le tour qu'après création/ouverture d'un projet
@@ -106,53 +124,86 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
   // En mode preview, cacher les panels
   const shouldShowPanels = previewMode !== 'preview';
 
-  const darkThemeStyle: React.CSSProperties = {
+  const workspaceStyle: React.CSSProperties = {
     background: `
-      radial-gradient(circle at 14% 16%, rgba(15, 52, 96, 0.12), transparent 34%),
-      radial-gradient(circle at 82% 78%, rgba(15, 52, 96, 0.12), transparent 38%),
-      linear-gradient(145deg, #060b14 0%, #0a1020 46%, #0d1327 100%)
-    `,
-  };
-
-  const lightThemeStyle: React.CSSProperties = {
-    background: `
-      radial-gradient(circle at 18% 12%, rgba(15, 52, 96, 0.1), transparent 36%),
-      radial-gradient(circle at 78% 82%, rgba(15, 52, 96, 0.08), transparent 34%),
-      linear-gradient(135deg, #EBF0F7 0%, #D5E1EE 46%, #e8f0fa 100%)
+      radial-gradient(circle at 14% 14%, rgba(15, 52, 96, 0.10), transparent 34%),
+      radial-gradient(circle at 88% 24%, rgba(31, 90, 160, 0.08), transparent 38%),
+      radial-gradient(circle at 72% 84%, rgba(15, 52, 96, 0.06), transparent 32%),
+      linear-gradient(135deg, #ebf0f7 0%, #d8e3ef 46%, #eaf1fa 100%)
     `,
   };
 
   return (
     <div
       className="h-screen w-screen flex flex-col bg-background text-foreground transition-all duration-500 ease-in-out"
-      style={resolvedTheme === 'dark' ? darkThemeStyle : lightThemeStyle}
+      style={workspaceStyle}
     >
-      {!showWelcomeOverlay && (
+      {!showWelcomeOverlay && previewMode !== 'preview' && (
         <div className="relative z-[80] flex-shrink-0">
           <TopBar minimal={!hasFiles || isNoProject} />
         </div>
       )}
 
-      <main className="flex-1 flex overflow-hidden relative">
+      {/* TopBar hover zone in preview mode */}
+      {!showWelcomeOverlay && previewMode === 'preview' && (
+        <>
+          {/* Invisible hover trigger zone at top of screen */}
+          <div
+            className="fixed inset-x-0 top-0 z-[90] h-5"
+            onMouseEnter={() => {
+              if (topBarTimeoutRef.current) clearTimeout(topBarTimeoutRef.current);
+              setIsTopBarHovered(true);
+            }}
+          />
+          {/* Sliding TopBar */}
+          <div
+            className={`fixed inset-x-0 top-0 z-[85] transition-all duration-300 ease-in-out ${
+              isTopBarHovered ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'
+            }`}
+            onMouseEnter={() => {
+              if (topBarTimeoutRef.current) clearTimeout(topBarTimeoutRef.current);
+              setIsTopBarHovered(true);
+            }}
+            onMouseLeave={() => {
+              topBarTimeoutRef.current = setTimeout(() => setIsTopBarHovered(false), 400);
+            }}
+          >
+            <div className="bg-card/95 shadow-lg backdrop-blur-md border-b border-border">
+              <TopBar minimal={!hasFiles || isNoProject} />
+            </div>
+          </div>
+        </>
+      )}
+
+      <main className="flex flex-1 overflow-hidden relative">
+        <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+          <GridAnimation
+            spacing={28}
+            strokeLength={10}
+            strokeWidth={0.8}
+            fillParent
+            className="pointer-events-auto opacity-70"
+          />
+        </div>
         {/* Left Panel - Widget Sidebar */}
         <div
-          className="widget-sidebar relative transition-all duration-300 ease-in-out border-r border-slate-300/80 dark:border-slate-700/70 shadow-[4px_0_16px_rgba(15,23,42,0.06)] dark:shadow-[6px_0_18px_rgba(2,8,23,0.4)]"
+          className="widget-sidebar relative z-10 transition-all duration-300 ease-in-out border-r border-slate-300/70 bg-[#F7F9FC] shadow-[inset_-1px_0_0_rgba(255,255,255,0.92),12px_0_35px_rgba(15,23,42,0.06)]"
           style={{
-            width: shouldShowPanels && isLeftPanelOpen ? '280px' : '0px',
-            minWidth: shouldShowPanels && isLeftPanelOpen ? '280px' : '0px',
+            width: shouldShowPanels && isLeftPanelOpen ? '260px' : '0px',
+            minWidth: shouldShowPanels && isLeftPanelOpen ? '260px' : '0px',
             overflow: 'hidden'
           }}
         >
           <WidgetSidebar />
           {isNoProject && (
             <div
-              className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/80 dark:bg-slate-950/85 backdrop-blur-[1px] cursor-pointer hover:bg-white/90 dark:hover:bg-slate-950/90 transition-colors"
+              className="absolute inset-0 z-30 flex cursor-pointer flex-col items-center justify-center bg-[#F7F9FC]/90 transition-colors hover:bg-[#F7F9FC]"
               onClick={() => setShowWelcomeOverlay(true)}
             >
-              <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3 shadow-inner">
-                <Lock className="w-8 h-8 text-slate-400 dark:text-slate-500" />
+              <div className="mb-3 flex size-16 items-center justify-center rounded-2xl bg-slate-100 shadow-inner">
+                <Lock className="w-8 h-8 text-slate-400" />
               </div>
-              <p className="text-xs font-medium text-slate-400 dark:text-slate-500 text-center px-4">Créez un projet pour débloquer</p>
+              <p className="text-xs font-medium text-slate-500 text-center px-4">Créez un projet pour débloquer</p>
             </div>
           )}
         </div>
@@ -162,9 +213,9 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
           <Button
             variant="outline"
             size="icon"
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-50 h-12 w-6 rounded-r-md rounded-l-none border-l-0 border-slate-300/90 bg-white/95 dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-200 dark:hover:bg-slate-800 shadow-lg dark:shadow-[0_10px_28px_rgba(2,8,23,0.5)] hover:w-8 transition-all"
+            className="absolute left-0 top-1/2 z-50 h-12 w-7 -translate-y-1/2 rounded-l-none rounded-r-xl border border-l-0 border-slate-300/80 bg-white/92 shadow-lg backdrop-blur-md transition-all hover:w-9"
             style={{
-              left: isLeftPanelOpen ? '280px' : '0px',
+              left: isLeftPanelOpen ? '260px' : '0px',
               transition: 'left 0.3s ease-in-out, width 0.2s ease-in-out'
             }}
             onClick={() => setIsLeftPanelOpen(!isLeftPanelOpen)}
@@ -179,12 +230,12 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
         )}
 
         {/* Center Panel - Canvas or Code */}
-        <div className="canvas-container flex-1 overflow-hidden relative border-x border-slate-300/65 dark:border-slate-700/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.75),rgba(248,251,255,0.92))] dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.46),rgba(10,16,28,0.68))]">
+        <div className="canvas-container relative z-10 flex-1 overflow-hidden border-x border-slate-300/60">
           <ErrorBoundary>
             {viewMode === 'design' ? (
               <Canvas />
             ) : (
-              <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
+              <Suspense fallback={<div className="flex h-full items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div></div>}>
                 <CodeView />
               </Suspense>
             )}
@@ -192,23 +243,23 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
 
           {/* Mobile device warning — shown on the canvas */}
           {isMobileDevice && !mobileBannerDismissed && (
-            <div className="absolute inset-x-0 bottom-0 z-40 p-4 flex justify-center pointer-events-none">
-              <div className="pointer-events-auto w-full max-w-md rounded-2xl border border-indigo-500/20 bg-slate-900/95 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.5)] p-5">
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-40 flex justify-center p-4">
+              <div className="pointer-events-auto w-full max-w-md rounded-2xl border border-[#1F5AA0]/25 bg-white/95 backdrop-blur-xl shadow-[0_20px_60px_rgba(15,52,96,0.22)] p-5">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-500/15 flex items-center justify-center shrink-0">
-                    <Monitor className="w-5 h-5 text-indigo-400" />
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1F5AA0]/12">
+                    <Monitor className="w-5 h-5 text-[#0F3460]" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-semibold text-slate-100 mb-1">Optimisé pour les grands écrans</p>
-                    <p className="text-[11px] leading-relaxed text-slate-400">
-                      <strong className="text-slate-300">Notorious.PY</strong> est un outil de bureau.
+                    <p className="text-[13px] font-semibold text-slate-800 mb-1">Optimisé pour les grands écrans</p>
+                    <p className="text-[11px] leading-relaxed text-slate-500">
+                      <strong className="text-[#0F3460]">Notorious.PY</strong> est un outil de bureau.
                       Pour une meilleure expérience, utilisez un ordinateur.
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setMobileBannerDismissed(true)}
-                  className="mt-3 w-full h-9 rounded-xl border border-indigo-500/25 bg-indigo-500/10 text-indigo-300 text-xs font-semibold hover:bg-indigo-500/20 transition-colors"
+                  className="mt-3 w-full h-9 rounded-xl border border-[#1F5AA0]/25 bg-[#1F5AA0]/10 text-[#0F3460] text-xs font-semibold hover:bg-[#1F5AA0]/20 transition-colors"
                 >
                   J'ai compris
                 </button>
@@ -222,9 +273,9 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
           <Button
             variant="outline"
             size="icon"
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-50 h-12 w-6 rounded-l-md rounded-r-none border-r-0 border-slate-300/90 bg-white/95 dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-200 dark:hover:bg-slate-800 shadow-lg dark:shadow-[0_10px_28px_rgba(2,8,23,0.5)] hover:w-8 transition-all"
+            className="absolute right-0 top-1/2 z-50 h-12 w-7 -translate-y-1/2 rounded-l-xl rounded-r-none border border-r-0 border-slate-300/80 bg-white/92 shadow-lg backdrop-blur-md transition-all hover:w-9"
             style={{
-              right: isRightPanelOpen ? '320px' : '0px',
+              right: isRightPanelOpen ? `${rightPanelWidth}px` : '0px',
               transition: 'right 0.3s ease-in-out, width 0.2s ease-in-out'
             }}
             onClick={() => setIsRightPanelOpen(!isRightPanelOpen)}
@@ -240,23 +291,23 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
 
         {/* Right Panel - Properties Sidebar */}
         <div
-          className="properties-panel-container relative transition-all duration-300 ease-in-out border-l border-slate-300/80 dark:border-slate-700/70 shadow-[-4px_0_16px_rgba(15,23,42,0.06)] dark:shadow-[-6px_0_18px_rgba(2,8,23,0.4)]"
+          className="properties-panel-container relative z-10 transition-all duration-300 ease-in-out border-l border-slate-300/70 bg-[#F7F9FC] shadow-[inset_1px_0_0_rgba(255,255,255,0.92),-12px_0_35px_rgba(15,23,42,0.06)]"
           style={{
-            width: shouldShowPanels && isRightPanelOpen ? '320px' : '0px',
-            minWidth: shouldShowPanels && isRightPanelOpen ? '320px' : '0px',
+            width: shouldShowPanels && isRightPanelOpen ? `${rightPanelWidth}px` : '0px',
+            minWidth: shouldShowPanels && isRightPanelOpen ? `${rightPanelWidth}px` : '0px',
             overflow: 'hidden'
           }}
         >
           <RightSidebar />
           {(!hasFiles || isNoProject) && (
             <div
-              className={`absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/80 dark:bg-slate-950/85 backdrop-blur-[1px] ${isNoProject ? 'cursor-pointer hover:bg-white/90 dark:hover:bg-slate-950/90 transition-colors' : ''}`}
+              className={`absolute inset-0 z-30 flex flex-col items-center justify-center bg-[#F7F9FC]/90 ${isNoProject ? 'cursor-pointer transition-colors hover:bg-[#F7F9FC]' : ''}`}
               onClick={isNoProject ? () => setShowWelcomeOverlay(true) : undefined}
             >
-              <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3 shadow-inner">
-                <Lock className="w-8 h-8 text-slate-400 dark:text-slate-500" />
+              <div className="mb-3 flex size-16 items-center justify-center rounded-2xl bg-slate-100 shadow-inner">
+                <Lock className="w-8 h-8 text-slate-400" />
               </div>
-              <p className="text-xs font-medium text-slate-400 dark:text-slate-500 text-center px-4">{isNoProject ? 'Créez un projet pour débloquer' : 'Créez un fichier .py'}</p>
+              <p className="text-xs font-medium text-slate-500 text-center px-4">{isNoProject ? 'Créez un projet pour débloquer' : 'Créez un fichier .py'}</p>
             </div>
           )}
         </div>

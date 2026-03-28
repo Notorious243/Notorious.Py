@@ -651,6 +651,139 @@ export async function cloneGalleryProject(
   return newProject.id;
 }
 
+// ==================== AI CONVERSATIONS ====================
+
+export interface SupabaseConversation {
+  id: string;
+  user_id: string;
+  title: string;
+  first_message: string | null;
+  messages: unknown[];
+  api_keys_encrypted: unknown | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function fetchConversations(): Promise<SupabaseConversation[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('ai_conversations')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    console.warn('[AI] ai_conversations table not found; persistence is disabled until migration is applied:', error.message);
+    return [];
+  }
+  return data ?? [];
+}
+
+export async function upsertConversation(conversation: {
+  id: string;
+  title: string;
+  first_message?: string | null;
+  messages: unknown[];
+}): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { error } = await supabase
+    .from('ai_conversations')
+    .upsert({
+      id: conversation.id,
+      user_id: user.id,
+      title: conversation.title,
+      first_message: conversation.first_message ?? null,
+      messages: conversation.messages,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'id' });
+
+  if (error) {
+    console.warn('[AI] Failed to save conversation to Supabase:', error.message);
+  }
+}
+
+export async function deleteConversation(conversationId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { error } = await supabase
+    .from('ai_conversations')
+    .delete()
+    .eq('id', conversationId)
+    .eq('user_id', user.id);
+
+  if (error) {
+    console.warn('[AI] Failed to delete conversation from Supabase:', error.message);
+  }
+}
+
+export async function saveApiKeysToSupabase(keys: Record<string, string | undefined>): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { error } = await supabase
+    .from('user_settings')
+    .upsert({
+      user_id: user.id,
+      ai_api_keys: keys,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+
+  if (error) {
+    console.warn('[AI] Failed to save API keys:', error.message);
+  }
+}
+
+export async function fetchApiKeysFromSupabase(): Promise<Record<string, string> | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from('user_settings')
+    .select('ai_api_keys')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return (data.ai_api_keys as Record<string, string>) ?? null;
+}
+
+export async function saveAIGenerationHistoryToSupabase(history: unknown[]): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { error } = await supabase
+    .from('user_settings')
+    .upsert({
+      user_id: user.id,
+      ai_generation_history: history,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+
+  if (error) {
+    console.warn('[AI] Failed to save generation history:', error.message);
+  }
+}
+
+export async function fetchAIGenerationHistoryFromSupabase(): Promise<unknown[] | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from('user_settings')
+    .select('ai_generation_history')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  if (!Array.isArray(data.ai_generation_history)) return null;
+  return data.ai_generation_history as unknown[];
+}
+
 // ==================== HELPERS ====================
 
 function dbWidgetToWidgetData(row: SupabaseWidget): WidgetData {

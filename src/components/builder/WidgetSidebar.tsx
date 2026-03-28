@@ -73,15 +73,15 @@ const DraggableWidget: React.FC<DraggableWidgetProps> = ({ type, name, descripti
   return (
     <div
       ref={drag as any}
-      className={`group flex items-center gap-3 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl cursor-grab hover:border-violet-500 hover:shadow-sm transition-all duration-200 ${isDragging ? 'opacity-30' : ''
+      className={`group flex cursor-grab items-center gap-3 rounded-xl border border-border bg-secondary p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary/10 hover:shadow-[0_10px_20px_rgba(15,52,96,0.15)] ${isDragging ? 'opacity-30' : ''
         }`}
     >
-      <div className="text-slate-500 group-hover:text-violet-500 transition-colors">
+      <div className="text-muted-foreground transition-colors group-hover:text-primary">
         <Icon className="h-5 w-5" strokeWidth={1.5} />
       </div>
       <div>
-        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 group-hover:text-violet-600 transition-colors">{name}</p>
-        <p className="text-[10px] text-slate-400 line-clamp-1 hidden">{description}</p>
+        <p className="text-sm font-medium text-foreground transition-colors group-hover:text-primary">{name}</p>
+        <p className="text-[10px] text-muted-foreground line-clamp-1 hidden">{description}</p>
       </div>
     </div>
   );
@@ -545,20 +545,20 @@ export const WidgetSidebar: React.FC = () => {
   };
 
   return (
-    <div className="w-full border-r border-slate-200 dark:border-slate-700/70 bg-white dark:bg-[#0b1422] flex flex-col h-full overflow-hidden">
+    <div className="flex h-full w-full flex-col overflow-hidden border-r border-border bg-card">
       <Tabs defaultValue="explorer" value={currentTab} onValueChange={setCurrentTab} className="flex flex-col h-full">
         {/* ... existing tabs content ... */}
-        <div className="px-4 pt-4 pb-2 border-b border-slate-100 dark:border-slate-700/70 flex-shrink-0 bg-white dark:bg-[#0c1728] z-10">
-          <TabsList className="grid w-full grid-cols-2 h-9 p-1 bg-slate-100 dark:bg-[#121f34] text-slate-500 dark:text-slate-400">
+        <div className="z-10 flex-shrink-0 border-b border-border bg-card px-4 pb-2 pt-4">
+          <TabsList className="grid h-10 w-full grid-cols-2 rounded-xl border border-border bg-secondary p-1 text-muted-foreground">
             <TabsTrigger
               value="components"
               disabled={!hasFiles}
-              className="text-xs gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-[#1a2b45] data-[state=active]:text-slate-900 dark:data-[state=active]:text-slate-100 data-[state=active]:shadow-sm transition-all duration-300"
+              className="gap-2 rounded-lg text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
             >
               <Layers className="h-3.5 w-3.5" />
               Composants
             </TabsTrigger>
-            <TabsTrigger value="explorer" className="text-xs gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-[#1a2b45] data-[state=active]:text-slate-900 dark:data-[state=active]:text-slate-100 data-[state=active]:shadow-sm transition-all duration-300">
+            <TabsTrigger value="explorer" className="gap-2 rounded-lg text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <Folder className="h-3.5 w-3.5" />
               Explorateur
             </TabsTrigger>
@@ -566,21 +566,21 @@ export const WidgetSidebar: React.FC = () => {
         </div>
 
         <TabsContent value="components" className="flex-1 flex flex-col min-h-0 m-0 data-[state=inactive]:hidden">
-          <div className="p-4 space-y-4 flex-shrink-0">
+          <div className="flex-shrink-0 space-y-4 p-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <h2 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                 <Monitor className="w-4 h-4" />
                 Bibliothèque
               </h2>
-              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-mono">{ALL_WIDGET_DEFINITIONS.length}</Badge>
+              <Badge variant="secondary" className="h-5 rounded-full border border-border bg-secondary px-2 text-[10px] font-mono text-muted-foreground">{ALL_WIDGET_DEFINITIONS.length}</Badge>
             </div>
-            <div className="relative group">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors duration-200" />
+            <div className="group relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground transition-colors duration-200 group-hover:text-primary" />
               <Input
                 placeholder="Rechercher..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9 bg-background/50 border-border/50 focus:bg-background transition-all duration-200"
+                className="h-10 rounded-xl border-border bg-background pl-9 transition-all duration-200 focus:bg-secondary"
               />
             </div>
           </div>
@@ -592,22 +592,22 @@ export const WidgetSidebar: React.FC = () => {
                   const isLockedCategory = isGuest && category.name === 'Composites';
                   return (
                   <div key={category.name} className="space-y-3">
-                    <div className="flex items-center justify-between sticky top-0 bg-white/95 dark:bg-[#0c1728]/95 backdrop-blur-sm py-2 z-10 border-b border-transparent">
-                      <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                    <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card py-2">
+                      <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                         {category.name}
                       </h3>
                       {isLockedCategory && (
-                        <LockIcon className="w-3 h-3 text-slate-400 dark:text-slate-500" />
+                        <LockIcon className="w-3 h-3 text-muted-foreground" />
                       )}
                     </div>
-                    <div className={`grid gap-3 relative ${isLockedCategory ? 'pointer-events-none' : ''}`}>
+                    <div className={`relative grid gap-3 ${isLockedCategory ? 'pointer-events-none' : ''}`}>
                       {isLockedCategory && (
                         <div
-                          className="absolute inset-0 z-20 bg-white/60 dark:bg-slate-950/60 backdrop-blur-[2px] rounded-xl flex flex-col items-center justify-center cursor-pointer pointer-events-auto"
+                          className="absolute inset-0 z-20 flex cursor-pointer flex-col items-center justify-center rounded-xl bg-background/80 pointer-events-auto"
                           onClick={() => setAuthPromptOpen(true)}
                         >
-                          <LockIcon className="w-5 h-5 text-indigo-500 dark:text-indigo-400 mb-1" />
-                          <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">Compte requis</span>
+                          <LockIcon className="w-5 h-5 text-primary mb-1" />
+                          <span className="text-[10px] font-medium text-muted-foreground">Compte requis</span>
                         </div>
                       )}
                       <AnimatePresence>
@@ -638,14 +638,14 @@ export const WidgetSidebar: React.FC = () => {
           </ScrollArea>
         </TabsContent>
 
-        <TabsContent value="explorer" className="flex-1 flex flex-col min-h-0 m-0 data-[state=inactive]:hidden relative bg-slate-50/50 dark:bg-slate-900/20">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border/40 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Fichiers</span>
+        <TabsContent value="explorer" className="relative m-0 flex min-h-0 flex-1 flex-col bg-background data-[state=inactive]:hidden">
+          <div className="flex items-center justify-between border-b border-border bg-card px-4 py-3">
+            <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Fichiers</span>
             <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 text-slate-500 hover:text-violet-600 hover:bg-violet-50 dark:text-slate-400 dark:hover:text-violet-400 dark:hover:bg-violet-500/10 rounded-md transition-colors"
+                className="h-7 w-7 rounded-md border border-transparent text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
                 onClick={() => startCreating()}
                 data-tour-first-py-file-button
                 title="Nouveau Fichier"
@@ -655,7 +655,7 @@ export const WidgetSidebar: React.FC = () => {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors disabled:opacity-30"
+                className="h-7 w-7 rounded-md border border-transparent text-muted-foreground transition-colors hover:border-border hover:bg-accent hover:text-foreground disabled:opacity-30"
                 onClick={() => {
                   if (selectedNodeId) {
                     const node = getNodeForRenaming(data, selectedNodeId);
@@ -670,7 +670,7 @@ export const WidgetSidebar: React.FC = () => {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:text-slate-400 dark:hover:text-red-400 dark:hover:bg-red-500/10 rounded-md transition-colors disabled:opacity-30"
+                className="h-7 w-7 rounded-md border border-transparent text-muted-foreground transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
                 onClick={() => {
                   if (selectedNodeId) {
                     setIsDeleteConfirmOpen(true);
@@ -685,7 +685,7 @@ export const WidgetSidebar: React.FC = () => {
           </div>
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <div className="flex-1 px-1 py-1.5 overflow-hidden flex flex-col">
-              <div className="h-full relative flex-1">
+                <div className="relative h-full flex-1 rounded-xl border border-border bg-background p-1">
                 <Tree
                   className="bg-transparent"
                   initialSelectedId={data[0]?.id}
@@ -722,8 +722,8 @@ export const WidgetSidebar: React.FC = () => {
 
                 {/* Empty State with Button */}
                 {data.length === 0 && !creatingNode && (
-                  <div className="flex flex-col items-center justify-center p-6 text-center space-y-4 absolute inset-0 top-0">
-                    <div className="p-4 rounded-full bg-muted shadow-inner animate-in fade-in zoom-in duration-300">
+                  <div className="absolute inset-0 top-0 flex flex-col items-center justify-center space-y-4 p-6 text-center">
+                    <div className="animate-in zoom-in rounded-full bg-muted p-4 shadow-inner fade-in duration-300">
                       <FilePlus className="h-8 w-8 text-muted-foreground" />
                     </div>
                     <div className="space-y-2">

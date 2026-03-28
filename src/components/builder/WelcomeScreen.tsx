@@ -102,7 +102,10 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
 
   const handleCreateWithAI = async () => {
     await createProject('Projet IA ' + new Date().toLocaleTimeString());
-    try { localStorage.setItem('ctk_open_ai_on_load', 'true'); } catch { /* ignore */ }
+    try {
+      localStorage.setItem('ctk_open_ai_on_load', 'true');
+      window.dispatchEvent(new CustomEvent('open-ai-sidebar'));
+    } catch { /* ignore */ }
     onClose?.();
   };
 
@@ -178,14 +181,12 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
   ];
 
   return (
-    <div className="h-full w-full overflow-y-auto animate-in fade-in duration-500 relative text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-950">
-      {/* Animated gradient background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-violet-50/80 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900" />
+    <div className="h-full w-full overflow-y-auto animate-in fade-in duration-500 relative text-foreground bg-background">
+      <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-secondary" />
 
-      {/* Animated gradient orbs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div
-          className="absolute w-[500px] h-[500px] rounded-full opacity-[0.07] dark:opacity-[0.05]"
+          className="absolute w-[500px] h-[500px] rounded-full opacity-[0.07]"
           style={{
             background: 'radial-gradient(circle, #1F5AA0, transparent 70%)',
             top: '-10%', right: '-8%',
@@ -193,7 +194,7 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
           }}
         />
         <div
-          className="absolute w-[400px] h-[400px] rounded-full opacity-[0.06] dark:opacity-[0.04]"
+          className="absolute w-[400px] h-[400px] rounded-full opacity-[0.06]"
           style={{
             background: 'radial-gradient(circle, #0F3460, transparent 70%)',
             bottom: '-5%', left: '-5%',
@@ -201,7 +202,7 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
           }}
         />
         <div
-          className="absolute w-[300px] h-[300px] rounded-full opacity-[0.05] dark:opacity-[0.03]"
+          className="absolute w-[300px] h-[300px] rounded-full opacity-[0.05]"
           style={{
             background: 'radial-gradient(circle, #153E6E, transparent 70%)',
             top: '40%', left: '50%',
@@ -212,7 +213,7 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
 
       {/* Subtle dot grid pattern */}
       <div
-        className="absolute inset-0 pointer-events-none opacity-[0.35] dark:opacity-[0.12]"
+        className="absolute inset-0 pointer-events-none opacity-[0.25]"
         style={{
           backgroundImage: 'radial-gradient(circle, #94a3b8 0.7px, transparent 0.7px)',
           backgroundSize: '28px 28px',
@@ -226,7 +227,7 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
             key={i}
             className="absolute font-mono text-[11px] whitespace-nowrap select-none"
             style={{
-              color: i % 3 === 0 ? 'rgba(15,52,96,0.12)' : i % 3 === 1 ? 'rgba(31,90,160,0.10)' : 'rgba(15,52,96,0.10)',
+              color: i % 3 === 0 ? 'rgba(15,52,96,0.10)' : i % 3 === 1 ? 'rgba(31,90,160,0.08)' : 'rgba(15,52,96,0.09)',
               top: `${8 + (i * 7.5) % 85}%`,
               left: i % 2 === 0 ? `${-2 + (i * 13) % 30}%` : `${68 + (i * 7) % 28}%`,
               animation: `float-code-${(i % 4) + 1} ${18 + (i * 3) % 12}s ease-in-out infinite`,
@@ -281,7 +282,7 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
       {onClose && (
         <button
           onClick={onClose}
-          className="absolute top-5 left-5 z-50 flex items-center gap-2 h-10 px-5 rounded-full bg-white/95 dark:bg-slate-800/95 border border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 dark:hover:bg-indigo-500/10 dark:hover:border-indigo-500/40 dark:hover:text-indigo-300 shadow-md backdrop-blur-md transition-all duration-200 text-sm font-semibold"
+          className="absolute top-5 left-5 z-50 flex items-center gap-2 h-10 px-5 rounded-full bg-secondary border border-border text-foreground hover:bg-primary/10 hover:border-primary/40 hover:text-primary shadow-md transition-all duration-200 text-sm font-semibold"
         >
           <ArrowLeft className="w-4 h-4" />
           Retour au projet
@@ -293,14 +294,14 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
         <div className="flex flex-col items-center text-center">
           {/* Animated logo with glow */}
           <div className="relative mb-5">
-            <div className="absolute inset-0 w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-500 to-purple-600 blur-2xl opacity-30 animate-pulse" />
+            <div className="absolute inset-0 w-20 h-20 rounded-3xl bg-gradient-to-br from-[#0F3460] to-[#1F5AA0] blur-2xl opacity-40 animate-pulse" />
             <div className="relative w-20 h-20 rounded-3xl shadow-[0_18px_38px_rgba(15,52,96,0.38)] flex items-center justify-center transition-transform duration-500 hover:scale-105 overflow-hidden">
               <img src="/logo-128x128.png" alt="Logo" className="w-20 h-20 rounded-3xl" />
             </div>
           </div>
 
-          <h1 className="text-4xl font-semibold tracking-tight text-slate-900 dark:text-white">Notorious.PY</h1>
-          <p className="mt-3 text-slate-600 dark:text-slate-400 text-lg max-w-md">
+          <h1 className="text-4xl font-semibold tracking-tight text-foreground">Notorious.PY</h1>
+          <p className="mt-3 text-muted-foreground text-lg max-w-md">
             L'outil ultime pour créer des interfaces Python modernes.
           </p>
 
@@ -319,7 +320,7 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
           <div className="mt-5 w-full max-w-lg flex flex-col sm:flex-row gap-3">
             <Button
               onClick={() => setIsCreateModalOpen(true)}
-              className="flex-1 h-11 text-sm font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white border-0 shadow-[0_10px_26px_rgba(15,52,96,0.35)] hover:shadow-[0_14px_34px_rgba(15,52,96,0.45)] transition-all duration-300 hover:scale-[1.02] rounded-xl"
+              className="flex-1 h-11 text-sm font-semibold bg-gradient-to-r from-[#0F3460] to-[#1F5AA0] hover:brightness-110 text-white border-0 shadow-[0_10px_26px_rgba(15,52,96,0.25)] hover:shadow-[0_14px_34px_rgba(15,52,96,0.35)] transition-all duration-300 hover:scale-[1.02] rounded-xl"
               size="lg"
             >
               <Plus className="mr-2 h-4 w-4" />
@@ -329,17 +330,17 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
             <Button
               onClick={() => isGuest ? setAuthPromptFeature('La génération IA') : handleCreateWithAI()}
               variant="outline"
-              className={`flex-1 h-11 text-sm font-semibold border-slate-300/80 bg-white/80 backdrop-blur-sm hover:bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:bg-slate-800 dark:text-slate-100 rounded-xl transition-all duration-300 hover:scale-[1.02] ${isGuest ? 'opacity-60' : ''}`}
+              className={`flex-1 h-11 text-sm font-semibold border-border bg-secondary hover:bg-accent text-foreground rounded-xl transition-all duration-300 hover:scale-[1.02] ${isGuest ? 'opacity-60' : ''}`}
               size="lg"
             >
-              <Sparkles className="mr-2 h-4 w-4 text-violet-400" />
+              <Sparkles className="mr-2 h-4 w-4 text-primary" />
               Générer avec l'IA
             </Button>
 
             <Button
               onClick={() => isGuest ? setAuthPromptFeature('L\'importation de projet') : setShowImportDialog(true)}
               variant="outline"
-              className={`flex-1 h-11 text-sm font-semibold border-slate-300/80 bg-white/80 backdrop-blur-sm hover:bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:bg-slate-800 dark:text-slate-100 rounded-xl transition-all duration-300 hover:scale-[1.02] ${isGuest ? 'opacity-60' : ''}`}
+              className={`flex-1 h-11 text-sm font-semibold border-border bg-secondary hover:bg-accent text-foreground rounded-xl transition-all duration-300 hover:scale-[1.02] ${isGuest ? 'opacity-60' : ''}`}
               size="lg"
             >
               <Upload className="mr-2 h-4 w-4" />
@@ -349,50 +350,50 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
         </div>
 
         {/* ESPACE DE TRAVAIL section — Image 3 list design */}
-        <section className="mt-10 rounded-2xl border border-slate-300/70 bg-white/80 shadow-[0_20px_48px_rgba(15,23,42,0.1)] backdrop-blur-md overflow-hidden dark:border-slate-800/80 dark:bg-slate-900/50 dark:shadow-[0_20px_48px_rgba(0,0,0,0.3)]">
-          <div className="sticky top-0 z-10 p-4 border-b border-slate-200/80 bg-white/90 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/85">
+        <section className="mt-10 rounded-2xl border border-border bg-card shadow-[0_20px_48px_rgba(15,52,96,0.08)] overflow-hidden">
+          <div className="sticky top-0 z-10 p-4 border-b border-border bg-card">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Espace de travail</h2>
-              <div className="text-xs px-2.5 py-1 rounded-full border border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Espace de travail</h2>
+              <div className="text-xs px-2.5 py-1 rounded-full border border-border bg-secondary text-muted-foreground">
                 {filteredProjects.length} / {recentProjects.length}
               </div>
             </div>
 
             <div className="mt-3 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Rechercher un projet..."
-                className="pl-9 h-10 bg-white/90 border-slate-300 text-slate-800 placeholder:text-slate-400 dark:bg-slate-900/80 dark:border-slate-700 dark:text-slate-100 dark:placeholder:text-slate-500 rounded-xl"
+                className="pl-9 h-10 bg-background border-border text-foreground placeholder:text-muted-foreground rounded-xl"
               />
             </div>
           </div>
 
           <div className="max-h-[52vh] overflow-y-auto p-3">
             {!hasProjects ? (
-              <div className="h-[34vh] flex flex-col items-center justify-center text-center p-8 border border-dashed border-slate-300 rounded-xl bg-slate-50/80 dark:border-slate-700 dark:bg-slate-900/60">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-indigo-500/10 flex items-center justify-center mb-4 dark:from-indigo-500/15 dark:to-indigo-500/15">
-                  <Rocket className="w-7 h-7 text-indigo-500/60 dark:text-indigo-400/60" />
+              <div className="h-[34vh] flex flex-col items-center justify-center text-center p-8 border border-dashed border-border rounded-xl bg-secondary/50">
+                <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+                  <Rocket className="w-7 h-7 text-primary/60" />
                 </div>
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Aucun projet pour l'instant</p>
-                <p className="text-xs text-slate-400 dark:text-slate-500">Créez votre premier projet pour commencer.</p>
+                <p className="text-sm font-semibold text-foreground mb-1">Aucun projet pour l'instant</p>
+                <p className="text-xs text-muted-foreground">Créez votre premier projet pour commencer.</p>
               </div>
             ) : filteredProjects.length > 0 ? (
               <div className="space-y-2">
                 {filteredProjects.map((project) => (
                   <div
                     key={project.id}
-                    className="group flex items-center gap-3 p-3.5 rounded-xl border border-slate-200/80 bg-white/70 hover:bg-indigo-50/70 hover:border-indigo-400/60 transition-all duration-300 cursor-pointer dark:border-slate-800/80 dark:bg-slate-900/60 dark:hover:bg-slate-800/80 dark:hover:border-indigo-500/40 hover:shadow-[0_4px_16px_rgba(15,52,96,0.1)] backdrop-blur-sm"
+                    className="group flex items-center gap-3 p-3.5 rounded-xl border border-border bg-secondary hover:bg-primary/10 hover:border-primary/40 transition-all duration-300 cursor-pointer hover:shadow-[0_4px_16px_rgba(15,52,96,0.15)]"
                     onClick={() => handleOpenProject(project.id)}
                   >
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/10 to-indigo-500/10 flex items-center justify-center text-indigo-600 group-hover:from-indigo-500/20 group-hover:to-indigo-500/20 group-hover:shadow-[0_0_16px_rgba(15,52,96,0.15)] transition-all duration-300 shrink-0 dark:from-indigo-500/15 dark:to-indigo-500/15 dark:text-indigo-400">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary/20 group-hover:shadow-[0_0_16px_rgba(15,52,96,0.2)] transition-all duration-300 shrink-0">
                       <PythonIcon className="w-6 h-6" />
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-slate-800 truncate text-sm dark:text-slate-100">{project.name}</h3>
-                      <p className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1 mt-0.5">
+                      <h3 className="font-semibold text-foreground truncate text-sm">{project.name}</h3>
+                      <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
                         <Calendar className="w-3 h-3" />
                         {format(new Date(project.updatedAt), "d MMM yyyy 'à' HH:mm", { locale: fr })}
                       </p>
@@ -402,7 +403,7 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="text-slate-400 hover:text-blue-500 hover:bg-blue-500/10 rounded-lg h-8 w-8 dark:text-slate-500 dark:hover:text-blue-400"
+                        className="text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg h-8 w-8"
                         onClick={(e) => handleRenameProject(e, project.id, project.name)}
                         title="Renommer"
                       >
@@ -411,7 +412,7 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="text-slate-400 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg h-8 w-8 dark:text-slate-500 dark:hover:text-amber-400"
+                        className="text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10 rounded-lg h-8 w-8"
                         onClick={(e) => handleChangeThumbnail(e, project.id)}
                         title="Changer l'image"
                       >
@@ -420,7 +421,7 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg h-8 w-8 dark:text-slate-500 dark:hover:text-red-400"
+                        className="text-muted-foreground hover:text-red-400 hover:bg-red-500/10 rounded-lg h-8 w-8"
                         onClick={(e) => handleDeleteProject(e, project.id)}
                         title="Supprimer"
                       >
@@ -431,39 +432,39 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
                 ))}
               </div>
             ) : (
-              <div className="h-[34vh] flex flex-col items-center justify-center text-center p-8 border border-dashed border-slate-300 rounded-xl bg-slate-50/80 dark:border-slate-700 dark:bg-slate-900/60">
-                <Search className="w-8 h-8 text-slate-400 dark:text-slate-500 mb-3" />
-                <p className="text-sm text-slate-600 dark:text-slate-400">Aucun projet ne correspond à votre recherche.</p>
+              <div className="h-[34vh] flex flex-col items-center justify-center text-center p-8 border border-dashed border-border rounded-xl bg-secondary/50">
+                <Search className="w-8 h-8 text-muted-foreground mb-3" />
+                <p className="text-sm text-muted-foreground">Aucun projet ne correspond à votre recherche.</p>
               </div>
             )}
           </div>
         </section>
 
         {/* Footer badges */}
-        <div className="mt-6 flex items-center justify-center gap-6 text-xs text-slate-400 dark:text-slate-500">
+        <div className="mt-6 flex items-center justify-center gap-6 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <Rocket className="w-3.5 h-3.5" /> Rapide
           </span>
-          <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
+          <span className="w-1 h-1 rounded-full bg-border" />
           <span className="flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5" /> IA intégrée
           </span>
-          <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
+          <span className="w-1 h-1 rounded-full bg-border" />
           <span>Export Python</span>
         </div>
       </div>
 
       {/* Import Project Dialog */}
       <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
-        <DialogContent className="sm:max-w-md rounded-2xl bg-white dark:bg-zinc-950 border-slate-300 dark:border-zinc-800 text-slate-900 dark:text-zinc-100 z-[70]">
+        <DialogContent className="sm:max-w-md rounded-2xl bg-card border-border text-foreground z-[70]">
           <DialogHeader>
-            <DialogTitle className="text-xl text-slate-900 dark:text-white">Importer un projet</DialogTitle>
+            <DialogTitle className="text-xl text-foreground">Importer un projet</DialogTitle>
           </DialogHeader>
           <div
             className={`mt-2 flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-all cursor-pointer ${
               isDragOver
-                ? 'border-indigo-500 bg-indigo-50/60 dark:bg-indigo-500/10'
-                : 'border-slate-300 dark:border-zinc-700 hover:border-indigo-400 hover:bg-slate-50/50 dark:hover:bg-zinc-800/30'
+                ? 'border-primary bg-primary/10'
+                : 'border-border hover:border-primary/40 hover:bg-secondary'
             }`}
             onClick={() => importZipRef.current?.click()}
             onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
@@ -472,13 +473,13 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
           >
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 transition-colors ${
               isDragOver
-                ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400'
-                : 'bg-slate-100 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500'
+                ? 'bg-primary/20 text-primary'
+                : 'bg-secondary text-muted-foreground'
             }`}>
               <Upload className="w-7 h-7" />
             </div>
-            <p className="text-sm font-semibold text-slate-700 dark:text-zinc-200">Glissez-d\u00e9posez votre fichier .zip ici</p>
-            <p className="text-xs text-slate-400 dark:text-zinc-500 mt-1">ou cliquez pour parcourir</p>
+            <p className="text-sm font-semibold text-foreground">Glissez-d\u00e9posez votre fichier .zip ici</p>
+            <p className="text-xs text-muted-foreground mt-1">ou cliquez pour parcourir</p>
           </div>
           <input ref={importZipRef} type="file" accept=".zip" className="hidden" onChange={handleImportZip} />
         </DialogContent>
@@ -486,9 +487,9 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
 
       {/* Create Modal */}
        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-            <DialogContent className="sm:max-w-md rounded-2xl bg-white dark:bg-zinc-950 border-slate-300 dark:border-zinc-800 text-slate-900 dark:text-zinc-100 z-[70]">
+            <DialogContent className="sm:max-w-md rounded-2xl bg-card border-border text-foreground z-[70]">
                 <DialogHeader>
-                    <DialogTitle className="text-xl text-slate-900 dark:text-white">Nouveau projet</DialogTitle>
+                    <DialogTitle className="text-xl text-foreground">Nouveau projet</DialogTitle>
                 </DialogHeader>
                 <div className="py-6">
                     <Input
@@ -497,12 +498,12 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
                         onChange={(e) => setNewProjectName(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleCreateProject()}
                         autoFocus
-                        className="h-12 text-lg rounded-xl bg-slate-50 dark:bg-zinc-900 border-slate-300 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-zinc-600 focus-visible:ring-indigo-600"
+                        className="h-12 text-lg rounded-xl bg-background border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-primary"
                     />
                 </div>
                 <DialogFooter>
-                    <Button variant="ghost" onClick={() => setIsCreateModalOpen(false)} className="rounded-xl h-11 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-900">Annuler</Button>
-                    <Button onClick={handleCreateProject} className="rounded-xl h-11 px-6 bg-indigo-600 hover:bg-indigo-500 text-white">Créer</Button>
+                    <Button variant="ghost" onClick={() => setIsCreateModalOpen(false)} className="rounded-xl h-11 text-muted-foreground hover:text-foreground hover:bg-accent">Annuler</Button>
+                    <Button onClick={handleCreateProject} className="rounded-xl h-11 px-6 bg-gradient-to-r from-[#0F3460] to-[#1F5AA0] hover:brightness-110 text-white">Créer</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -518,10 +519,10 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
 
         {/* Rename Project Modal */}
         <Dialog open={renameTarget !== null} onOpenChange={(open) => { if (!open) setRenameTarget(null); }}>
-            <DialogContent className="sm:max-w-md rounded-2xl bg-white dark:bg-zinc-950 border-slate-300 dark:border-zinc-800 text-slate-900 dark:text-zinc-100 z-[70]">
+            <DialogContent className="sm:max-w-md rounded-2xl bg-card border-border text-foreground z-[70]">
                 <DialogHeader>
-                    <DialogTitle className="text-xl text-slate-900 dark:text-white">Renommer le projet</DialogTitle>
-                    <DialogDescription className="pt-1 text-slate-600 dark:text-zinc-400">
+                    <DialogTitle className="text-xl text-foreground">Renommer le projet</DialogTitle>
+                    <DialogDescription className="pt-1 text-muted-foreground">
                         Modifiez le nom de votre projet.
                     </DialogDescription>
                 </DialogHeader>
@@ -532,30 +533,30 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
                         onChange={(e) => setRenameValue(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && confirmRename()}
                         autoFocus
-                        className="h-12 text-lg rounded-xl bg-slate-50 dark:bg-zinc-900 border-slate-300 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-zinc-600 focus-visible:ring-indigo-600"
+                        className="h-12 text-lg rounded-xl bg-background border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-primary"
                     />
                 </div>
                 <DialogFooter>
-                    <Button variant="ghost" onClick={() => setRenameTarget(null)} className="rounded-xl h-11 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-900">Annuler</Button>
-                    <Button onClick={confirmRename} className="rounded-xl h-11 px-6 bg-indigo-600 hover:bg-indigo-500 text-white">Renommer</Button>
+                    <Button variant="ghost" onClick={() => setRenameTarget(null)} className="rounded-xl h-11 text-muted-foreground hover:text-foreground hover:bg-accent">Annuler</Button>
+                    <Button onClick={confirmRename} className="rounded-xl h-11 px-6 bg-gradient-to-r from-[#0F3460] to-[#1F5AA0] hover:brightness-110 text-white">Renommer</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
 
         {/* Delete Confirmation Dialog */}
         <Dialog open={deleteTargetId !== null} onOpenChange={(open) => { if (!open) setDeleteTargetId(null); }}>
-            <DialogContent className="rounded-2xl bg-white dark:bg-zinc-950 border-slate-300 dark:border-zinc-800 text-slate-900 dark:text-zinc-100 z-[70]">
+            <DialogContent className="rounded-2xl bg-card border-border text-foreground z-[70]">
                 <DialogHeader>
                     <DialogTitle className="text-red-400 flex items-center gap-2">
                         <Trash2 className="w-5 h-5" /> Supprimer le projet ?
                     </DialogTitle>
-                    <DialogDescription className="pt-2 text-slate-600 dark:text-zinc-400">
+                    <DialogDescription className="pt-2 text-muted-foreground">
                         Cette action est irréversible. Toutes les données du projet seront définitivement perdues.
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter className="mt-4 gap-2 sm:gap-0">
-                    <Button variant="outline" onClick={() => setDeleteTargetId(null)} className="rounded-xl border-slate-300 dark:border-zinc-700 bg-transparent text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-900 hover:text-slate-900 dark:hover:text-white">Annuler</Button>
-                    <Button variant="destructive" onClick={confirmDelete} className="rounded-xl bg-red-600 hover:bg-red-700 text-white">Supprimer</Button>
+                    <Button variant="outline" onClick={() => setDeleteTargetId(null)} className="rounded-xl border-border bg-secondary text-foreground hover:bg-accent">Annuler</Button>
+                    <Button variant="destructive" onClick={confirmDelete} className="rounded-xl">Supprimer</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

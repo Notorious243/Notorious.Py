@@ -2,14 +2,15 @@ import React from 'react';
 import { AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Toggle } from '@/components/ui/toggle';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { useWidgets } from '@/contexts/WidgetContext';
-import { Square, Bold, Trash2, Upload, Link, MapPin, Target, Smartphone, Image as ImageIcon } from 'lucide-react';
+import { Square, Bold, Trash2, Upload, Link, MapPin, Target, Smartphone, Image as ImageIcon, ChevronRight, Ruler, Palette, Settings2 } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ColorPicker } from './ColorPicker';
 import { LazyInput } from './ui/LazyInput';
+import { AnimatedDropdown, type AnimatedDropdownOption } from '@/components/ui/animated-dropdown';
 
 const PRESET_SIZES = [
   { label: '640 × 480', value: '640,480' },
@@ -18,10 +19,20 @@ const PRESET_SIZES = [
   { label: '1280 × 720 (HD)', value: '1280,720' },
 ];
 
+const LAYOUT_MODE_OPTIONS: AnimatedDropdownOption[] = [
+  { value: 'absolute', label: 'Absolu', icon: <MapPin className="h-3.5 w-3.5" /> },
+  { value: 'centered', label: 'Centre', icon: <Target className="h-3.5 w-3.5" /> },
+  { value: 'responsive', label: 'Responsif', icon: <Smartphone className="h-3.5 w-3.5" /> },
+];
+
 export const CanvasProperties: React.FC = () => {
   const { canvasSettings, updateCanvasSettings } = useWidgets();
   const bgImageInputRef = React.useRef<HTMLInputElement>(null);
   const iconInputRef = React.useRef<HTMLInputElement>(null);
+  const presetSelection = React.useMemo(() => {
+    const target = `${canvasSettings.width},${canvasSettings.height}`;
+    return PRESET_SIZES.find((size) => size.value === target)?.value;
+  }, [canvasSettings.width, canvasSettings.height]);
 
   const handlePresetChange = (value: string) => {
     if (!value) return;
@@ -84,228 +95,214 @@ export const CanvasProperties: React.FC = () => {
   const iconPreview = canvasSettings.icon_data || canvasSettings.icon_path;
 
   return (
-    <AccordionItem value="canvas">
-      <AccordionTrigger className="px-4">
-        <div className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
+    <AccordionItem value="canvas" className="rounded-2xl border border-border bg-card">
+      <AccordionTrigger className="px-4 py-3 hover:no-underline">
+        <div className="flex items-center gap-2 font-semibold text-foreground">
           <Square className="h-4 w-4" />Propriétés du Canvas
         </div>
       </AccordionTrigger>
       <AccordionContent className="p-3 space-y-3">
 
-        {/* Dimensions */}
-        <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-2">
-          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Dimensions</Label>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label className="text-xs">Largeur</Label>
-              <LazyInput
-                inputMode="numeric"
-                value={canvasSettings.width}
-                onValueChange={val => {
-                  const updateVal = val === '' ? 400 : Math.max(300, Number(val));
-                  updateCanvasSettings({ width: updateVal });
-                }}
-                onFocus={e => e.target.select()}
-                className="h-8 text-xs"
+        {/* ── DIMENSIONS & TITRE ── */}
+        <Collapsible defaultOpen>
+          <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 hover:bg-muted/60 transition-colors group">
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+            <Ruler className="h-3.5 w-3.5 text-primary" />
+            <span className="text-xs font-semibold text-foreground uppercase tracking-wide">Dimensions</span>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-2 pt-2">
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Taille</Label>
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Largeur</Label>
+                  <LazyInput
+                    inputMode="numeric"
+                    value={canvasSettings.width}
+                    onValueChange={val => {
+                      const updateVal = val === '' ? 400 : Math.max(300, Number(val));
+                      updateCanvasSettings({ width: updateVal });
+                    }}
+                    onFocus={e => e.target.select()}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Hauteur</Label>
+                  <LazyInput
+                    inputMode="numeric"
+                    value={canvasSettings.height}
+                    onValueChange={val => {
+                      const updateVal = val === '' ? 300 : Math.max(200, Number(val));
+                      updateCanvasSettings({ height: updateVal });
+                    }}
+                    onFocus={e => e.target.select()}
+                  />
+                </div>
+              </div>
+              <AnimatedDropdown
+                value={presetSelection}
+                placeholder="Taille prédéfinie..."
+                options={PRESET_SIZES.map((size) => ({ value: size.value, label: size.label }))}
+                onValueChange={handlePresetChange}
               />
             </div>
-            <div>
-              <Label className="text-xs">Hauteur</Label>
-              <LazyInput
-                inputMode="numeric"
-                value={canvasSettings.height}
-                onValueChange={val => {
-                  const updateVal = val === '' ? 300 : Math.max(200, Number(val));
-                  updateCanvasSettings({ height: updateVal });
-                }}
-                onFocus={e => e.target.select()}
-                className="h-8 text-xs"
-              />
+
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-1.5">
+              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Titre de la fenêtre</Label>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  value={canvasSettings.title}
+                  onChange={e => updateCanvasSettings({ title: e.target.value })}
+                  placeholder="Nom de l'application"
+                  className="h-8 text-xs bg-background/50"
+                />
+                <Toggle
+                  pressed={canvasSettings.titleFontWeight === 'bold'}
+                  onPressedChange={pressed => updateCanvasSettings({ titleFontWeight: pressed ? 'bold' : 'normal' })}
+                  aria-label="Gras"
+                  className="h-8 w-8"
+                >
+                  <Bold className="h-3.5 w-3.5" />
+                </Toggle>
+              </div>
             </div>
-          </div>
-          <Select onValueChange={handlePresetChange}>
-            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Taille prédéfinie..." /></SelectTrigger>
-            <SelectContent>
-              {PRESET_SIZES.map(size => (
-                <SelectItem key={size.value} value={size.value}>{size.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+          </CollapsibleContent>
+        </Collapsible>
 
-        {/* Titre */}
-        <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-2">
-          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Titre</Label>
-          <div className="flex items-center gap-2">
-            <Input
-              value={canvasSettings.title}
-              onChange={e => updateCanvasSettings({ title: e.target.value })}
-              placeholder="Nom de l'application"
-              className="h-8 text-xs"
-            />
-            <Toggle
-              pressed={canvasSettings.titleFontWeight === 'bold'}
-              onPressedChange={pressed => updateCanvasSettings({ titleFontWeight: pressed ? 'bold' : 'normal' })}
-              aria-label="Gras"
-              className="h-8 w-8"
-            >
-              <Bold className="h-3.5 w-3.5" />
-            </Toggle>
-          </div>
-        </div>
-
-        {/* Options fenêtre */}
-        <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-2">
-          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Paramètres de la fenêtre</Label>
-
-          <div className="flex items-center justify-between gap-2">
-            <Label className="text-xs">Redimensionnable</Label>
-            <Switch
-              checked={canvasSettings.resizable}
-              onCheckedChange={checked => updateCanvasSettings({ resizable: checked })}
-            />
-          </div>
-
-          <div>
-            <Label className="text-xs">Mode de disposition</Label>
-            <Select
-              value={canvasSettings.layoutMode || 'absolute'}
-              onValueChange={(value: 'absolute' | 'centered' | 'responsive') => updateCanvasSettings({ layoutMode: value })}
-            >
-              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="absolute">
-                  <span className="flex items-center gap-1.5"><MapPin className="h-3 w-3" /> Absolu</span>
-                </SelectItem>
-                <SelectItem value="centered">
-                  <span className="flex items-center gap-1.5"><Target className="h-3 w-3" /> Centré</span>
-                </SelectItem>
-                <SelectItem value="responsive">
-                  <span className="flex items-center gap-1.5"><Smartphone className="h-3 w-3" /> Responsif</span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Apparence — colors side by side */}
-        <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-2">
-          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Couleurs</Label>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <Label className="text-xs">En-tête</Label>
-              <ColorPicker
-                color={canvasSettings.headerBackgroundColor || '#2b2b2b'}
-                onChange={color => updateCanvasSettings({ headerBackgroundColor: color })}
-              />
+        {/* ── PARAMÈTRES ── */}
+        <Collapsible defaultOpen>
+          <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 hover:bg-muted/60 transition-colors group">
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+            <Settings2 className="h-3.5 w-3.5 text-primary" />
+            <span className="text-xs font-semibold text-foreground uppercase tracking-wide">Paramètres</span>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-2 pt-2">
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Fenêtre</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-[10px] text-muted-foreground">Redimensionnable</Label>
+                <Switch
+                  checked={canvasSettings.resizable}
+                  onCheckedChange={checked => updateCanvasSettings({ resizable: checked })}
+                />
+              </div>
+              <div>
+                <Label className="text-[10px] text-muted-foreground">Mode de disposition</Label>
+                <AnimatedDropdown
+                  value={canvasSettings.layoutMode || 'absolute'}
+                  options={LAYOUT_MODE_OPTIONS}
+                  onValueChange={(value) =>
+                    updateCanvasSettings({ layoutMode: value as 'absolute' | 'centered' | 'responsive' })
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-[10px] text-muted-foreground">Afficher la grille</Label>
+                <Switch
+                  checked={canvasSettings.gridVisible}
+                  onCheckedChange={checked => updateCanvasSettings({ gridVisible: checked })}
+                />
+              </div>
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Fond</Label>
-              <ColorPicker
-                color={canvasSettings.backgroundColor || '#FFFFFF'}
-                onChange={color => updateCanvasSettings({ backgroundColor: color })}
-              />
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* ── APPARENCE ── */}
+        <Collapsible defaultOpen>
+          <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 hover:bg-muted/60 transition-colors group">
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+            <Palette className="h-3.5 w-3.5 text-primary" />
+            <span className="text-xs font-semibold text-foreground uppercase tracking-wide">Apparence</span>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-2 pt-2">
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Couleurs</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">En-tête</Label>
+                  <ColorPicker
+                    color={canvasSettings.headerBackgroundColor || '#2b2b2b'}
+                    onChange={color => updateCanvasSettings({ headerBackgroundColor: color })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Fond</Label>
+                  <ColorPicker
+                    color={canvasSettings.backgroundColor || '#FFFFFF'}
+                    onChange={color => updateCanvasSettings({ backgroundColor: color })}
+                  />
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* Quadrillage */}
-        <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-2">
-          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Quadrillage</Label>
-          <div className="flex items-center justify-between gap-2">
-            <Label className="text-xs">Afficher la grille</Label>
-            <Switch
-              checked={canvasSettings.gridVisible}
-              onCheckedChange={checked => updateCanvasSettings({ gridVisible: checked })}
-            />
-          </div>
-        </div>
-
-        {/* Image de fond */}
-        <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-2">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Image de Fond</Label>
-            {backgroundPreview && (
-              <Button variant="ghost" size="sm" onClick={clearBackground} className="h-6 text-xs text-destructive hover:text-destructive px-2">
-                <Trash2 className="h-3 w-3 mr-1" />Retirer
-              </Button>
-            )}
-          </div>
-          <input ref={bgImageInputRef} type="file" accept=".png,.jpg,.jpeg,.ico" className="hidden" onChange={handleBackgroundUpload} />
-          <div className="grid grid-cols-2 gap-2">
-            <Button variant="outline" size="sm" className="h-7 text-xs justify-start" onClick={() => bgImageInputRef.current?.click()}>
-              <Upload className="h-3 w-3 mr-1.5 shrink-0" />Fichier
-            </Button>
-            <Button variant="outline" size="sm" className="h-7 text-xs justify-start" onClick={handleBackgroundUrl}>
-              <Link className="h-3 w-3 mr-1.5 shrink-0" />URL
-            </Button>
-          </div>
-          {backgroundPreview && (
-            <div className="h-16 border border-border/40 rounded-lg overflow-hidden bg-muted/30">
-              <img src={backgroundPreview} alt="Fond" className="w-full h-full object-cover" />
-            </div>
-          )}
-        </div>
-
-        {/* Logo / Icône */}
-        <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Logo / Icône</Label>
-            {iconPreview && (
-              <Button variant="ghost" size="sm" onClick={clearIcon} className="h-6 text-xs text-destructive hover:text-destructive px-2">
-                <Trash2 className="h-3 w-3 mr-1" />Retirer
-              </Button>
-            )}
-          </div>
-
-          {/* Aperçu ou placeholder */}
-          <div className="flex items-center gap-3">
-            <div className={`
-              w-14 h-14 rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden transition-all
-              ${iconPreview
-                ? 'border-primary/40 bg-primary/5 dark:bg-primary/10'
-                : 'border-border/60 bg-muted/20 dark:bg-muted/10'
-              }
-            `}>
-              {iconPreview ? (
-                <img src={iconPreview} alt="Logo" className="w-10 h-10 object-contain" />
-              ) : (
-                <ImageIcon className="h-5 w-5 text-muted-foreground/40" />
+            {/* Image de fond */}
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Image de fond</Label>
+                {backgroundPreview && (
+                  <Button variant="ghost" size="sm" onClick={clearBackground} className="h-5 text-[10px] text-destructive hover:text-destructive px-1.5">
+                    <Trash2 className="h-2.5 w-2.5 mr-0.5" />Retirer
+                  </Button>
+                )}
+              </div>
+              <input ref={bgImageInputRef} type="file" accept=".png,.jpg,.jpeg,.ico" className="hidden" onChange={handleBackgroundUpload} />
+              <div className="grid grid-cols-2 gap-1.5">
+                <Button variant="outline" size="sm" className="h-7 text-xs justify-start" onClick={() => bgImageInputRef.current?.click()}>
+                  <Upload className="h-3 w-3 mr-1.5 shrink-0" />Fichier
+                </Button>
+                <Button variant="outline" size="sm" className="h-7 text-xs justify-start" onClick={handleBackgroundUrl}>
+                  <Link className="h-3 w-3 mr-1.5 shrink-0" />URL
+                </Button>
+              </div>
+              {backgroundPreview && (
+                <div className="h-14 border border-border/30 rounded-md overflow-hidden bg-muted/30">
+                  <img src={backgroundPreview} alt="Fond" className="w-full h-full object-cover" />
+                </div>
               )}
             </div>
-            <div className="flex-1 min-w-0 space-y-1">
-              <p className="text-xs font-medium text-foreground truncate">
-                {iconPreview ? 'Logo appliqué' : 'Aucun logo'}
-              </p>
-              <p className="text-[10px] text-muted-foreground leading-tight">
-                32×32 ou 64×64 px · PNG transparent recommandé
-              </p>
-            </div>
-          </div>
 
-          {/* Boutons d'import */}
-          <input ref={iconInputRef} type="file" accept=".png,.jpg,.jpeg,.ico" className="hidden" onChange={handleIconUpload} />
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs justify-center gap-1.5 font-medium"
-              onClick={() => iconInputRef.current?.click()}
-            >
-              <Upload className="h-3.5 w-3.5 shrink-0" />
-              Fichier
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs justify-center gap-1.5 font-medium"
-              onClick={handleIconUrl}
-            >
-              <Link className="h-3.5 w-3.5 shrink-0" />
-              URL
-            </Button>
-          </div>
-        </div>
+            {/* Logo / Icône */}
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Logo / Icône</Label>
+                {iconPreview && (
+                  <Button variant="ghost" size="sm" onClick={clearIcon} className="h-5 text-[10px] text-destructive hover:text-destructive px-1.5">
+                    <Trash2 className="h-2.5 w-2.5 mr-0.5" />Retirer
+                  </Button>
+                )}
+              </div>
+              <div className="flex items-center gap-2.5">
+                <div className={`
+                  w-12 h-12 rounded-lg border-2 border-dashed flex items-center justify-center overflow-hidden transition-all
+                  ${iconPreview
+                    ? 'border-primary/40 bg-primary/5 dark:bg-primary/10'
+                    : 'border-border/60 bg-muted/20 dark:bg-muted/10'
+                  }
+                `}>
+                  {iconPreview ? (
+                    <img src={iconPreview} alt="Logo" className="w-8 h-8 object-contain" />
+                  ) : (
+                    <ImageIcon className="h-4 w-4 text-muted-foreground/40" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] text-muted-foreground leading-tight">
+                    32×32 ou 64×64 px · PNG recommandé
+                  </p>
+                </div>
+              </div>
+              <input ref={iconInputRef} type="file" accept=".png,.jpg,.jpeg,.ico" className="hidden" onChange={handleIconUpload} />
+              <div className="grid grid-cols-2 gap-1.5">
+                <Button variant="outline" size="sm" className="h-7 text-xs justify-center gap-1" onClick={() => iconInputRef.current?.click()}>
+                  <Upload className="h-3 w-3 shrink-0" />Fichier
+                </Button>
+                <Button variant="outline" size="sm" className="h-7 text-xs justify-center gap-1" onClick={handleIconUrl}>
+                  <Link className="h-3 w-3 shrink-0" />URL
+                </Button>
+              </div>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
 
       </AccordionContent>
     </AccordionItem>

@@ -13,7 +13,7 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({ width, height, scale }) 
     <svg
       width={width}
       height={height}
-      className="absolute inset-0 pointer-events-none text-slate-300/80 dark:text-white/5"
+      className="absolute inset-0 pointer-events-none text-[#0F3460]/[0.08]"
     >
       <defs>
         <pattern

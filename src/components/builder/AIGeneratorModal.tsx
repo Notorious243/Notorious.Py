@@ -20,8 +20,16 @@ import {
     PREMIUM_PROVIDERS,
     type AIProvider,
 } from '@/lib/aiPrompts';
+import { useAuth } from '@/contexts/AuthContext';
 import { useWidgets } from '@/contexts/WidgetContext';
 import { useFileSystem } from '@/hooks/useFileSystem';
+import {
+    fetchApiKeysFromSupabase,
+    saveApiKeysToSupabase,
+    fetchAIGenerationHistoryFromSupabase,
+    saveAIGenerationHistoryToSupabase,
+} from '@/lib/supabaseService';
+import { supabase } from '@/lib/supabase';
 import {
     Sparkles,
     Upload,
@@ -49,109 +57,27 @@ interface AIGeneratorModalProps {
     onOpenChange: (isOpen: boolean) => void;
 }
 
-const SESSION_PREFIX = 'ctk-ai-key-session';
-const PERSIST_PREFIX = 'ctk-ai-key-persist';
+type GenerationMode = 'create' | 'iterate' | 'image';
 
-// ── AES-GCM encryption helpers ─────────────────────────────────────────────
-const CRYPTO_SALT = 'notorious-py-key-v1';
-
-async function deriveKey(): Promise<CryptoKey> {
-    const enc = new TextEncoder();
-    const material = await crypto.subtle.importKey('raw', enc.encode(CRYPTO_SALT), 'PBKDF2', false, ['deriveKey']);
-    return crypto.subtle.deriveKey(
-        { name: 'PBKDF2', salt: enc.encode('ntrs-salt'), iterations: 100_000, hash: 'SHA-256' },
-        material,
-        { name: 'AES-GCM', length: 256 },
-        false,
-        ['encrypt', 'decrypt'],
-    );
+interface GenerationHistoryItem {
+    id: string;
+    timestamp: number;
+    prompt: string;
+    provider: AIProvider;
+    model: string;
+    widgetCount: number;
+    mode: GenerationMode;
 }
 
-async function encryptKey(plaintext: string): Promise<string> {
-    try {
-        const key = await deriveKey();
-        const iv = crypto.getRandomValues(new Uint8Array(12));
-        const encoded = new TextEncoder().encode(plaintext);
-        const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
-        const combined = new Uint8Array(iv.length + new Uint8Array(ciphertext).length);
-        combined.set(iv);
-        combined.set(new Uint8Array(ciphertext), iv.length);
-        return btoa(String.fromCharCode(...combined));
-    } catch { return ''; }
-}
-
-async function decryptKey(stored: string): Promise<string> {
-    try {
-        const key = await deriveKey();
-        const raw = Uint8Array.from(atob(stored), c => c.charCodeAt(0));
-        const iv = raw.slice(0, 12);
-        const ciphertext = raw.slice(12);
-        const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
-        return new TextDecoder().decode(decrypted);
-    } catch { return ''; }
-}
-
-// Legacy decode for migration
-function deobfuscateLegacy(encoded: string): string {
-    try { return decodeURIComponent(atob(encoded)); } catch { return ''; }
-}
-
-function loadApiKey(provider: AIProvider): string {
-    const sessionKey = `${SESSION_PREFIX}-${provider}`;
-    try {
-        const session = sessionStorage.getItem(sessionKey);
-        if (session) return session;
-        // Migrate from old plain-text / base64 storage
-        if (provider === 'openrouter') {
-            const legacySession = sessionStorage.getItem('ctk-ai-key-session');
-            if (legacySession) {
-                sessionStorage.setItem(sessionKey, legacySession);
-                sessionStorage.removeItem('ctk-ai-key-session');
-                return legacySession;
-            }
-            const legacyPersist = localStorage.getItem('ctk-ai-key-persist');
-            if (legacyPersist) {
-                const key = deobfuscateLegacy(legacyPersist);
-                if (key) sessionStorage.setItem(sessionKey, key);
-                localStorage.removeItem('ctk-ai-key-persist');
-                return key;
-            }
-            const legacyPlain = localStorage.getItem('ctk-ai-key-openrouter');
-            if (legacyPlain) {
-                sessionStorage.setItem(sessionKey, legacyPlain);
-                localStorage.removeItem('ctk-ai-key-openrouter');
-                return legacyPlain;
-            }
-        }
-        // Migrate old per-provider persist keys (base64)
-        const oldPersist = localStorage.getItem(`${PERSIST_PREFIX}-${provider}`);
-        if (oldPersist) {
-            const key = deobfuscateLegacy(oldPersist);
-            if (key) sessionStorage.setItem(sessionKey, key);
-            localStorage.removeItem(`${PERSIST_PREFIX}-${provider}`);
-            return key;
-        }
-    } catch { /* storage unavailable */ }
-    return '';
-}
-
-function saveApiKey(provider: AIProvider, value: string, persist: boolean) {
-    const sessionKey = `${SESSION_PREFIX}-${provider}`;
-    const persistKey = `${PERSIST_PREFIX}-${provider}`;
-    try {
-        if (value) {
-            sessionStorage.setItem(sessionKey, value);
-            if (persist) {
-                encryptKey(value).then(encrypted => {
-                    if (encrypted) localStorage.setItem(persistKey, encrypted);
-                });
-            }
-        } else {
-            sessionStorage.removeItem(sessionKey);
-            localStorage.removeItem(persistKey);
-        }
-    } catch { /* storage unavailable */ }
-}
+const EMPTY_API_KEYS: Record<AIProvider, string> = {
+    openrouter: '',
+    groq: '',
+    huggingface: '',
+    google: '',
+    openai: '',
+    anthropic: '',
+    deepseek: '',
+};
 
 // Provider color classes for UI styling
 const PROVIDER_COLORS: Record<string, { active: string; ring: string; text: string }> = {
@@ -165,27 +91,10 @@ const PROVIDER_COLORS: Record<string, { active: string; ring: string; text: stri
 };
 
 export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({ isOpen, onOpenChange }) => {
+    const { user } = useAuth();
     const [activeProvider, setActiveProvider] = useState<AIProvider>('openrouter');
     const [selectedModel, setSelectedModel] = useState<string>(() => MODELS_BY_PROVIDER.openrouter[0].id);
-    const [apiKeys, setApiKeys] = useState<Record<AIProvider, string>>(() => ({
-        openrouter: loadApiKey('openrouter'),
-        groq: loadApiKey('groq'),
-        huggingface: loadApiKey('huggingface'),
-        google: loadApiKey('google'),
-        openai: loadApiKey('openai'),
-        anthropic: loadApiKey('anthropic'),
-        deepseek: loadApiKey('deepseek'),
-    }));
-    const [rememberKeys, setRememberKeys] = useState<Record<AIProvider, boolean>>(() => {
-        const check = (p: AIProvider) => {
-            try { return !!localStorage.getItem(`${PERSIST_PREFIX}-${p}`); } catch { return false; }
-        };
-        return {
-            openrouter: check('openrouter'), groq: check('groq'), huggingface: check('huggingface'),
-            google: check('google'), openai: check('openai'),
-            anthropic: check('anthropic'), deepseek: check('deepseek'),
-        };
-    });
+    const [apiKeys, setApiKeys] = useState<Record<AIProvider, string>>(EMPTY_API_KEYS);
     const [showApiKey, setShowApiKey] = useState(false);
     const [prompt, setPrompt] = useState('');
     const [uploadedImage, setUploadedImage] = useState<string | null>(null);
@@ -196,47 +105,91 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({ isOpen, onOp
         if (mode === 'iterate') setActiveTab('prompt');
     }, []);
     const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
-    const [generationHistory, setGenerationHistory] = useState<Array<{
-        id: string;
-        timestamp: number;
-        prompt: string;
-        provider: AIProvider;
-        model: string;
-        widgetCount: number;
-        mode: 'create' | 'iterate' | 'image';
-    }>>(() => {
-        try {
-            const stored = localStorage.getItem('ctk-ai-history');
-            return stored ? JSON.parse(stored) : [];
-        } catch { return []; }
-    });
+    const [generationHistory, setGenerationHistory] = useState<GenerationHistoryItem[]>([]);
+    const [dbReady, setDbReady] = useState(false);
 
-    // Persist history to localStorage
+    // Load API keys + generation history from Supabase
     useEffect(() => {
-        try {
-            localStorage.setItem('ctk-ai-history', JSON.stringify(generationHistory));
-        } catch { /* storage unavailable */ }
-    }, [generationHistory]);
+        if (!isOpen) return;
+        if (!user) {
+            setApiKeys(EMPTY_API_KEYS);
+            setGenerationHistory([]);
+            setDbReady(false);
+            return;
+        }
 
-    // On mount: async-decrypt persisted AES keys into sessionStorage
-    useEffect(() => {
-        const providers: AIProvider[] = ['openrouter', 'groq', 'huggingface', 'google', 'openai', 'anthropic', 'deepseek'];
         let cancelled = false;
         (async () => {
-            for (const p of providers) {
-                const sessionKey = `${SESSION_PREFIX}-${p}`;
-                if (sessionStorage.getItem(sessionKey)) continue; // already loaded
-                const stored = localStorage.getItem(`${PERSIST_PREFIX}-${p}`);
-                if (!stored) continue;
-                const plain = await decryptKey(stored);
-                if (plain && !cancelled) {
-                    sessionStorage.setItem(sessionKey, plain);
-                    setApiKeys(prev => ({ ...prev, [p]: plain }));
+            try {
+                const [dbKeys, dbHistory] = await Promise.all([
+                    fetchApiKeysFromSupabase(),
+                    fetchAIGenerationHistoryFromSupabase(),
+                ]);
+
+                if (cancelled) return;
+
+                setApiKeys({
+                    ...EMPTY_API_KEYS,
+                    ...(dbKeys ?? {}),
+                } as Record<AIProvider, string>);
+
+                if (Array.isArray(dbHistory)) {
+                    setGenerationHistory(dbHistory as GenerationHistoryItem[]);
+                } else {
+                    setGenerationHistory([]);
                 }
+                setDbReady(true);
+            } catch {
+                if (!cancelled) setDbReady(false);
             }
         })();
+
         return () => { cancelled = true; };
-    }, []);
+    }, [isOpen, user]);
+
+    // Persist generation history to Supabase
+    useEffect(() => {
+        if (!dbReady || !user) return;
+        void saveAIGenerationHistoryToSupabase(generationHistory as unknown[]);
+    }, [generationHistory, dbReady, user]);
+
+    useEffect(() => {
+        if (!dbReady || !user) return;
+
+        const settingsChannel = supabase
+            .channel(`ai-generator-settings-${user.id}`)
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'user_settings', filter: `user_id=eq.${user.id}` },
+                (payload) => {
+                    if (payload.eventType === 'DELETE') {
+                        setApiKeys(EMPTY_API_KEYS);
+                        setGenerationHistory([]);
+                        return;
+                    }
+
+                    const row = payload.new as {
+                        ai_api_keys?: Record<string, string> | null;
+                        ai_generation_history?: unknown[] | null;
+                    } | null;
+
+                    if (row?.ai_api_keys && typeof row.ai_api_keys === 'object') {
+                        const nextKeys = { ...EMPTY_API_KEYS, ...row.ai_api_keys } as Record<AIProvider, string>;
+                        setApiKeys((prev) => JSON.stringify(prev) === JSON.stringify(nextKeys) ? prev : nextKeys);
+                    }
+                    if (Array.isArray(row?.ai_generation_history)) {
+                        const nextHistory = row.ai_generation_history as GenerationHistoryItem[];
+                        setGenerationHistory((prev) => JSON.stringify(prev) === JSON.stringify(nextHistory) ? prev : nextHistory);
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            void supabase.removeChannel(settingsChannel);
+        };
+    }, [dbReady, user]);
+
     const preGenSnapshotRef = useRef<{ widgets: any[]; settings: any } | null>(null);
     const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
@@ -260,7 +213,6 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({ isOpen, onOp
     const allFiles = useMemo(() => getAllFiles(), [getAllFiles, isOpen]);
 
     const apiKey = apiKeys[activeProvider];
-    const rememberKey = rememberKeys[activeProvider];
     const providerConfig = PROVIDER_CONFIGS[activeProvider];
     const colorTheme = PROVIDER_COLORS[providerConfig.color] || PROVIDER_COLORS.indigo;
 
@@ -287,18 +239,14 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({ isOpen, onOp
     }, []);
 
     const handleApiKeyChange = useCallback((value: string) => {
-        setApiKeys(prev => ({ ...prev, [activeProvider]: value }));
-        saveApiKey(activeProvider, value, rememberKeys[activeProvider]);
-    }, [activeProvider, rememberKeys]);
-
-    const handleRememberToggle = useCallback((checked: boolean) => {
-        setRememberKeys(prev => ({ ...prev, [activeProvider]: checked }));
-        if (checked && apiKeys[activeProvider]) {
-            saveApiKey(activeProvider, apiKeys[activeProvider], true);
-        } else if (!checked) {
-            try { localStorage.removeItem(`${PERSIST_PREFIX}-${activeProvider}`); } catch { /* */ }
-        }
-    }, [activeProvider, apiKeys]);
+        setApiKeys(prev => {
+            const next = { ...prev, [activeProvider]: value };
+            if (dbReady && user) {
+                void saveApiKeysToSupabase(next as Record<string, string | undefined>);
+            }
+            return next;
+        });
+    }, [activeProvider, dbReady, user]);
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -572,24 +520,9 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({ isOpen, onOp
                                         </div>
                                     )}
                                     <div className="flex items-center justify-between pl-1 pr-1">
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRememberToggle(!rememberKey)}
-                                            className="flex items-center gap-2 cursor-pointer select-none group"
-                                        >
-                                            <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-all ${
-                                                rememberKey
-                                                    ? colorTheme.active.split(' ').slice(0, 2).join(' ')
-                                                    : 'border-zinc-700 bg-transparent hover:border-zinc-500'
-                                            }`}>
-                                                {rememberKey && (
-                                                    <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                                    </svg>
-                                                )}
-                                            </div>
-                                            <span className="text-[10px] text-zinc-500 group-hover:text-zinc-400 transition-colors">Se souvenir</span>
-                                        </button>
+                                        <span className="text-[10px] text-zinc-500">
+                                            Stockage sécurisé en base de données
+                                        </span>
                                         <a
                                             href={providerConfig.keyUrl}
                                             target="_blank"

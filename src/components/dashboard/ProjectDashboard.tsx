@@ -40,7 +40,10 @@ export const ProjectDashboard: React.FC = () => {
 
     const handleCreateWithAI = () => {
         createProject('Projet IA ' + new Date().toLocaleTimeString());
-        try { localStorage.setItem('ctk_open_ai_on_load', 'true'); } catch { /* ignore */ }
+        try {
+            localStorage.setItem('ctk_open_ai_on_load', 'true');
+            window.dispatchEvent(new CustomEvent('open-ai-sidebar'));
+        } catch { /* ignore */ }
     };
 
     const handleDeleteProject = (e: React.MouseEvent, id: string) => {

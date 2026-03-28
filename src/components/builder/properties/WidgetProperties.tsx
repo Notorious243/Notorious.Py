@@ -10,7 +10,8 @@ import { isCtkStyleSupported } from '@/constants/customtkinter-validation';
 import { FONT_FAMILIES } from '@/constants/widgets';
 import { WidgetData, WidgetStyle } from '@/types/widget';
 import { getParentContentBounds } from '@/lib/widgetLayout';
-import { Bold, Italic, Underline, Settings, Plus, Trash2, Upload, Link, FolderOpen, Image as ImageIcon, Ruler, PenSquare, Palette, Settings2 } from 'lucide-react';
+import { Bold, Italic, Underline, Settings, Plus, Trash2, Upload, Link, FolderOpen, Image as ImageIcon, Ruler, PenSquare, Palette, Settings2, ChevronRight } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ColorPicker } from './ColorPicker';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -97,14 +98,14 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
   // ✅ Maintenant on peut faire le early return APRÈS tous les hooks
   if (!selectedWidget) {
     return (
-      <AccordionItem value="proprietes">
-        <AccordionTrigger className="px-4">
-          <div className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
+      <AccordionItem value="proprietes" className="rounded-2xl border border-border bg-card">
+        <AccordionTrigger className="px-4 py-3 hover:no-underline">
+          <div className="flex items-center gap-2 font-semibold text-foreground">
             <Settings className="h-4 w-4" />Propriétés
           </div>
         </AccordionTrigger>
         <AccordionContent className="p-6 text-center">
-          <p className="text-sm text-slate-500 dark:text-slate-400">Sélectionnez un widget pour modifier ses propriétés</p>
+          <p className="text-sm text-muted-foreground">Sélectionnez un widget pour modifier ses propriétés</p>
         </AccordionContent>
       </AccordionItem>
     );
@@ -270,144 +271,136 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
   };
 
   return (
-    <AccordionItem value="proprietes">
-      <AccordionTrigger className="px-4">
-        <div className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
+    <AccordionItem value="proprietes" className="rounded-2xl border border-border bg-card">
+      <AccordionTrigger className="px-4 py-3 hover:no-underline">
+        <div className="flex items-center gap-2 font-semibold text-foreground">
           <Settings className="h-4 w-4" />Propriétés
         </div>
       </AccordionTrigger>
       <AccordionContent className="p-3 space-y-3">
         {/* ========== SECTION 1: GÉOMÉTRIE ========== */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Ruler className="h-4 w-4 text-primary" />
-            <Label className="text-xs font-bold text-foreground uppercase tracking-wide">Géométrie</Label>
-          </div>
-
-          {/* Position + Dimensions - 2x2 grid */}
-          <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-2">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs">X</Label>
-                <LazyInput
-                  inputMode="numeric"
-                  value={position.x}
-                  onValueChange={val => handlePositionBlur('x', val)}
-                  onFocus={e => e.target.select()}
-                  placeholder="0"
-                  className="h-8 text-xs"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Y</Label>
-                <LazyInput
-                  inputMode="numeric"
-                  value={position.y}
-                  onValueChange={val => handlePositionBlur('y', val)}
-                  onFocus={e => e.target.select()}
-                  placeholder="0"
-                  className="h-8 text-xs"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">W</Label>
-                <LazyInput
-                  inputMode="numeric"
-                  value={size.width}
-                  onValueChange={val => handleSizeBlur('width', val)}
-                  onFocus={e => e.target.select()}
-                  placeholder="200"
-                  className="h-8 text-xs"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">H</Label>
-                <LazyInput
-                  inputMode="numeric"
-                  value={size.height}
-                  onValueChange={val => handleSizeBlur('height', val)}
-                  onFocus={e => e.target.select()}
-                  placeholder="50"
-                  className="h-8 text-xs"
-                />
+        <Collapsible defaultOpen>
+          <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 hover:bg-muted/60 transition-colors group">
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+            <Ruler className="h-3.5 w-3.5 text-primary" />
+            <span className="text-xs font-semibold text-foreground uppercase tracking-wide">Géométrie</span>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-2 pt-2">
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Position & Taille</Label>
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">X</Label>
+                  <LazyInput
+                    inputMode="numeric"
+                    value={position.x}
+                    onValueChange={val => handlePositionBlur('x', val)}
+                    onFocus={e => e.target.select()}
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Y</Label>
+                  <LazyInput
+                    inputMode="numeric"
+                    value={position.y}
+                    onValueChange={val => handlePositionBlur('y', val)}
+                    onFocus={e => e.target.select()}
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Largeur</Label>
+                  <LazyInput
+                    inputMode="numeric"
+                    value={size.width}
+                    onValueChange={val => handleSizeBlur('width', val)}
+                    onFocus={e => e.target.select()}
+                    placeholder="200"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Hauteur</Label>
+                  <LazyInput
+                    inputMode="numeric"
+                    value={size.height}
+                    onValueChange={val => handleSizeBlur('height', val)}
+                    onFocus={e => e.target.select()}
+                    placeholder="50"
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Alignement */}
-          <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-2">
-            <Label className="text-xs font-semibold text-foreground">Alignement</Label>
-            <div className="grid grid-cols-3 gap-1">
-              {[
-                { h: 'left', v: 'top', label: '↖', pos: 'top-0 left-0' },
-                { h: 'center', v: 'top', label: '↑', pos: 'top-0 left-1/2 -translate-x-1/2' },
-                { h: 'right', v: 'top', label: '↗', pos: 'top-0 right-0' },
-                { h: 'left', v: 'center', label: '←', pos: 'top-1/2 -translate-y-1/2 left-0' },
-                { h: 'center', v: 'center', label: '·', pos: 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2' },
-                { h: 'right', v: 'center', label: '→', pos: 'top-1/2 -translate-y-1/2 right-0' },
-                { h: 'left', v: 'bottom', label: '↙', pos: 'bottom-0 left-0' },
-                { h: 'center', v: 'bottom', label: '↓', pos: 'bottom-0 left-1/2 -translate-x-1/2' },
-                { h: 'right', v: 'bottom', label: '↘', pos: 'bottom-0 right-0' },
-              ].map(({ h, v, pos }) => (
-                <button
-                  key={`${h}-${v}`}
-                  onClick={() => alignPosition(h as any, v as any)}
-                  className="h-9 flex items-center justify-center border border-border/60 rounded-lg hover:bg-accent transition-colors"
-                >
-                  <div className="w-6 h-6 border border-border rounded relative">
-                    <div className={`absolute w-1.5 h-1.5 bg-primary rounded-sm ${pos}`} />
-                  </div>
-                </button>
-              ))}
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-1.5">
+              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Alignement</Label>
+              <div className="grid grid-cols-3 gap-1">
+                {[
+                  { h: 'left', v: 'top', pos: 'top-0 left-0' },
+                  { h: 'center', v: 'top', pos: 'top-0 left-1/2 -translate-x-1/2' },
+                  { h: 'right', v: 'top', pos: 'top-0 right-0' },
+                  { h: 'left', v: 'center', pos: 'top-1/2 -translate-y-1/2 left-0' },
+                  { h: 'center', v: 'center', pos: 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2' },
+                  { h: 'right', v: 'center', pos: 'top-1/2 -translate-y-1/2 right-0' },
+                  { h: 'left', v: 'bottom', pos: 'bottom-0 left-0' },
+                  { h: 'center', v: 'bottom', pos: 'bottom-0 left-1/2 -translate-x-1/2' },
+                  { h: 'right', v: 'bottom', pos: 'bottom-0 right-0' },
+                ].map(({ h, v, pos }) => (
+                  <button
+                    key={`${h}-${v}`}
+                    onClick={() => alignPosition(h as any, v as any)}
+                    className="h-8 flex items-center justify-center rounded-md border border-border/40 bg-background/50 hover:bg-primary/10 hover:border-primary/30 transition-all"
+                  >
+                    <div className="w-5 h-5 border border-border/60 rounded-sm relative">
+                      <div className={`absolute w-1.5 h-1.5 bg-primary rounded-sm ${pos}`} />
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        </div>
+          </CollapsibleContent>
+        </Collapsible>
 
         {/* ========== SECTION 2: CONTENU ========== */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <PenSquare className="h-4 w-4 text-primary" />
-            <Label className="text-xs font-bold text-foreground uppercase tracking-wide">Contenu</Label>
-          </div>
-
-          {/* Texte principal — masqué pour les composites qui gèrent leur propre champ texte */}
-          {('text' in properties) && !['menuItem', 'statCard', 'statCardWithProgress', 'productCard', 'userProfile', 'chart', 'image_label', 'passwordentry'].includes(selectedWidget.type) && (
-            <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Texte</Label>
-              <div>
-                <Label>Texte du widget</Label>
+        <Collapsible defaultOpen>
+          <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 hover:bg-muted/60 transition-colors group">
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+            <PenSquare className="h-3.5 w-3.5 text-primary" />
+            <span className="text-xs font-semibold text-foreground uppercase tracking-wide">Contenu</span>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-2 pt-2">
+            {('text' in properties) && !['menuItem', 'statCard', 'statCardWithProgress', 'productCard', 'userProfile', 'chart', 'image_label', 'passwordentry'].includes(selectedWidget.type) && (
+              <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-1.5">
+                <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Texte</Label>
                 <Input
                   value={properties.text || ''}
                   onChange={e => handlePropertyChange('text', e.target.value)}
                   placeholder="Entrer le texte..."
-                  className="h-10"
+                  className="h-8 text-xs bg-background/50"
                 />
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Placeholder */}
-          {('placeholder_text' in properties) && selectedWidget.type !== 'passwordentry' && (
-            <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Placeholder</Label>
-              <div>
-                <Label>Texte indicatif</Label>
+            {('placeholder_text' in properties) && selectedWidget.type !== 'passwordentry' && (
+              <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-1.5">
+                <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Texte indicatif</Label>
                 <Input
                   value={properties.placeholder_text || ''}
                   onChange={e => handlePropertyChange('placeholder_text', e.target.value)}
-                  placeholder="Entrer le texte..."
-                  />
+                  placeholder="Texte affiché quand vide..."
+                  className="h-8 text-xs bg-background/50"
+                />
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
 
         {/* Frame Properties — padding */}
         {(selectedWidget.type === 'frame' || selectedWidget.type === 'scrollableframe' || selectedWidget.type === 'tabview') && (
-          <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Conteneur</Label>
+          <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-1.5">
+            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Conteneur</Label>
             <div>
-              <Label>Padding interne (px)</Label>
+              <Label className="text-[10px] text-muted-foreground">Espacement intérieur (px)</Label>
               <LazyInput
                 inputMode="numeric"
                 value={style.padding ?? 12}
@@ -423,15 +416,15 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
 
         {/* PasswordEntry Properties */}
         {selectedWidget.type === 'passwordentry' && (
-          <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Champ Mot de Passe</Label>
-
+          <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-1.5">
+            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Champ mot de passe</Label>
             <div>
-              <Label>Texte indicatif</Label>
+              <Label className="text-[10px] text-muted-foreground">Texte indicatif</Label>
               <Input
                 value={properties.placeholder_text || ''}
                 onChange={e => handlePropertyChange('placeholder_text', e.target.value)}
                 placeholder="Mot de passe..."
+                className="h-8 text-xs bg-background/50"
               />
             </div>
           </div>
@@ -439,40 +432,39 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
 
         {/* ScrollableFrame: label_text */}
         {selectedWidget.type === 'scrollableframe' && (
-          <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cadre Défilant</Label>
+          <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-1.5">
+            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Cadre défilant</Label>
             <div>
-              <Label>Titre du cadre</Label>
+              <Label className="text-[10px] text-muted-foreground">Titre du cadre</Label>
               <Input
                 value={properties.label_text || ''}
                 onChange={e => handlePropertyChange('label_text', e.target.value)}
                 placeholder="Titre du cadre défilant..."
+                className="h-8 text-xs bg-background/50"
               />
             </div>
-
             <div>
-              <Label>Orientation</Label>
+              <Label className="text-[10px] text-muted-foreground">Orientation</Label>
               <Select
                 value={properties.orientation || 'vertical'}
                 onValueChange={v => handlePropertyChange('orientation', v)}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs bg-background/50"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="vertical">Vertical</SelectItem>
                   <SelectItem value="horizontal">Horizontal</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-
           </div>
         )}
 
         {('tabs' in properties) && selectedWidget.type === 'tabview' && (
-          <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Onglets</Label>
-            <div className="space-y-2">
+          <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Onglets</Label>
+            <div className="space-y-1.5">
               {((properties.tabs as string[]) || ['Tab 1', 'Tab 2']).map((tab, index) => (
-                <div key={index} className="flex items-center gap-2">
+                <div key={index} className="flex items-center gap-1.5">
                   <Input
                     value={tab}
                     onChange={e => {
@@ -481,19 +473,19 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
                       handlePropertyChange('tabs', newTabs);
                     }}
                     placeholder={`Onglet ${index + 1}`}
-                    className="flex-1"
+                    className="flex-1 h-7 text-xs bg-background/50"
                   />
                   {((properties.tabs as string[]) || []).length > 2 && (
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-9 w-9 text-destructive hover:text-destructive"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
                       onClick={() => {
                         const newTabs = ((properties.tabs as string[]) || []).filter((_, i) => i !== index);
                         handlePropertyChange('tabs', newTabs.length >= 2 ? newTabs : ['Tab 1', 'Tab 2']);
                       }}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3 w-3" />
                     </Button>
                   )}
                 </div>
@@ -501,27 +493,24 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
               <Button
                 variant="outline"
                 size="sm"
-                className="w-full"
+                className="w-full h-7 text-xs"
                 onClick={() => {
                   const currentTabs = (properties.tabs as string[]) || ['Tab 1', 'Tab 2'];
                   const newTabs = [...currentTabs, `Tab ${currentTabs.length + 1}`];
                   handlePropertyChange('tabs', newTabs);
                 }}
               >
-                <Plus className="h-4 w-4 mr-2" />
-                Ajouter un Onglet
+                <Plus className="h-3 w-3 mr-1.5" />
+                Ajouter un onglet
               </Button>
-              <p className="text-xs text-muted-foreground">
-                {((properties.tabs as string[]) || []).length} onglet(s)
-              </p>
             </div>
             <div>
-              <Label>Onglet sélectionné par défaut</Label>
+              <Label className="text-[10px] text-muted-foreground">Onglet par défaut</Label>
               <Select
                 value={String(properties.selectedIndex !== undefined ? properties.selectedIndex : 0)}
                 onValueChange={v => handlePropertyChange('selectedIndex', Number(v))}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs bg-background/50"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {((properties.tabs as string[]) || ['Tab 1', 'Tab 2']).map((tab, index) => (
                     <SelectItem key={index} value={String(index)}>{tab}</SelectItem>
@@ -529,20 +518,20 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Couleur de sélection</Label>
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">Couleur de sélection</Label>
               <ColorPicker
                 color={properties.segmented_button_selected_color || '#0F3460'}
                 onChange={color => handlePropertyChange('segmented_button_selected_color', color)}
               />
             </div>
             <div>
-              <Label>Position des onglets</Label>
+              <Label className="text-[10px] text-muted-foreground">Position des onglets</Label>
               <Select
                 value={properties.anchor || 'n'}
                 onValueChange={v => handlePropertyChange('anchor', v)}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs bg-background/50"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="n">Haut</SelectItem>
                   <SelectItem value="s">Bas</SelectItem>
@@ -551,8 +540,8 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Fond boutons non-sélectionnés</Label>
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">Fond non-sélectionné</Label>
               <ColorPicker
                 color={properties.segmented_button_unselected_color || '#2B2B2B'}
                 onChange={color => handlePropertyChange('segmented_button_unselected_color', color)}
@@ -562,8 +551,8 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
         )}
 
         {('src' in properties || 'imageUrl' in properties) && selectedWidget.type === 'image' && (
-          <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Image</Label>
+          <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Image</Label>
 
             {/* Afficher l'URL actuelle si elle existe */}
             {(properties.imageUrl || properties.src) && (
@@ -693,8 +682,8 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
         )}
 
         {selectedWidget.type === 'image_label' && (
-          <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+          <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
               Label + CTkImage
             </Label>
 
@@ -819,8 +808,8 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
 
         {/* ComboBox: values (pas items) */}
         {('values' in properties) && selectedWidget.type === 'combobox' && (
-          <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Options de la liste déroulante</Label>
+          <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Options de la liste déroulante</Label>
             <div className="space-y-2">
               {((properties.values as string[]) || ['Option 1']).map((item, index) => (
                 <div key={index} className="flex items-center gap-2">
@@ -943,8 +932,8 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
 
         {/* OptionMenu: values (pas items) */}
         {('values' in properties) && selectedWidget.type === 'optionmenu' && (
-          <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Options du menu déroulant</Label>
+          <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Options du menu déroulant</Label>
             <div className="space-y-2">
               {((properties.values as string[]) || ['Option 1', 'Option 2', 'Option 3']).map((item, index) => (
                 <div key={index} className="flex items-center gap-2">
@@ -1074,8 +1063,8 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
 
         {/* SegmentedButton: values (pas items) */}
         {('values' in properties) && selectedWidget.type === 'segmentedbutton' && (
-          <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Options Bouton Segmenté</Label>
+          <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Options Bouton Segmenté</Label>
             <div className="space-y-2">
               {((properties.values as string[]) || ['Option 1', 'Option 2', 'Option 3']).map((item, index) => (
                 <div key={index} className="flex items-center gap-2">
@@ -1191,10 +1180,10 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
 
         {/* DatePicker Properties */}
         {selectedWidget.type === 'datepicker' && (
-          <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-4">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Sélecteur de Date</Label>
+          <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Sélecteur de Date</Label>
 
-            <div className="space-y-3">
+            <div className="space-y-2">
               <div>
                 <Label>Format de Date</Label>
                 <Select
@@ -1294,137 +1283,133 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
         )}
 
         {/* ========== SECTION 3: APPARENCE ========== */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Palette className="h-4 w-4 text-primary" />
-            <Label className="text-xs font-bold text-foreground uppercase tracking-wide">Apparence</Label>
-          </div>
+        <Collapsible defaultOpen>
+          <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 hover:bg-muted/60 transition-colors group">
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+            <Palette className="h-3.5 w-3.5 text-primary" />
+            <span className="text-xs font-semibold text-foreground uppercase tracking-wide">Apparence</span>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-2 pt-2">
 
-          {/* Typographie - pour widgets avec texte */}
-          {!['slider', 'progressbar', 'scrollbar', 'frame', 'scrollableframe', 'image', 'table'].includes(selectedWidget.type) && (
-            <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Typographie</Label>
-
-              <div>
-                <Label>Police</Label>
-                <Select value={style.fontFamily || 'sans-serif'} onValueChange={v => handleStyleChange('fontFamily', v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{FONT_FAMILIES.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent>
-                </Select>
+            {/* Typographie */}
+            {!['slider', 'progressbar', 'scrollbar', 'frame', 'scrollableframe', 'image', 'table'].includes(selectedWidget.type) && (
+              <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+                <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Typographie</Label>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Police</Label>
+                  <Select value={style.fontFamily || 'sans-serif'} onValueChange={v => handleStyleChange('fontFamily', v)}>
+                    <SelectTrigger className="h-8 text-xs bg-background/50"><SelectValue /></SelectTrigger>
+                    <SelectContent>{FONT_FAMILIES.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Taille (px)</Label>
+                  <LazyInput
+                    inputMode="numeric"
+                    value={style.fontSize || 13}
+                    onValueChange={val => {
+                      handleStyleChange('fontSize', val === '' ? 13 : Math.max(8, Number(val)));
+                    }}
+                    onFocus={e => e.target.select()}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Style</Label>
+                  <ToggleGroup type="multiple" variant="outline" className="w-full justify-start bg-background/30 rounded-lg p-0.5" value={[...(style.fontWeight === 'bold' ? ['bold'] : []), ...(style.fontStyle === 'italic' ? ['italic'] : []), ...(style.textDecoration === 'underline' ? ['underline'] : [])]} onValueChange={(value) => {
+                    handleStyleChange('fontWeight', value.includes('bold') ? 'bold' : 'normal');
+                    handleStyleChange('fontStyle', value.includes('italic') ? 'italic' : 'normal');
+                    handleStyleChange('textDecoration', value.includes('underline') ? 'underline' : 'none');
+                  }}>
+                    <ToggleGroupItem value="bold" aria-label="Gras" className="h-7 w-7"><Bold className="h-3.5 w-3.5" /></ToggleGroupItem>
+                    <ToggleGroupItem value="italic" aria-label="Italique" className="h-7 w-7"><Italic className="h-3.5 w-3.5" /></ToggleGroupItem>
+                    <ToggleGroupItem value="underline" aria-label="Souligné" className="h-7 w-7"><Underline className="h-3.5 w-3.5" /></ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
               </div>
+            )}
 
+            {/* Couleurs */}
+            {selectedWidget.type !== 'image' && (
+              <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+                <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Couleurs</Label>
+                {!['slider', 'progressbar', 'scrollbar', 'frame', 'scrollableframe'].includes(selectedWidget.type) && (
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Texte</Label>
+                    <ColorPicker color={properties.text_color || style.textColor || '#DCE4EE'} onChange={color => { handleStyleChange('textColor', color); handlePropertyChange('text_color', color); }} />
+                  </div>
+                )}
+                {!['radiobutton'].includes(selectedWidget.type) && (
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Fond</Label>
+                    <ColorPicker color={properties.fg_color || style.backgroundColor || '#2B2B2B'} onChange={color => { handleStyleChange('backgroundColor', color); handlePropertyChange('fg_color', color); }} />
+                  </div>
+                )}
+                {('hover_color' in properties || ['button', 'checkbox', 'radiobutton', 'switch', 'combobox', 'optionmenu'].includes(selectedWidget.type)) && (
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Survol</Label>
+                    <ColorPicker color={properties.hover_color || style.hoverColor || '#1F5AA0'} onChange={color => { handleStyleChange('hoverColor', color); handlePropertyChange('hover_color', color); }} />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Bordures & Arrondis */}
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Bordures & Arrondis</Label>
+              {isCtkStyleSupported(selectedWidget.type, 'border_width') && (
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Épaisseur de bordure</Label>
+                  <LazyInput
+                    inputMode="numeric"
+                    value={properties.border_width ?? style.borderWidth ?? ''}
+                    onValueChange={val => {
+                      const num = val === '' ? 0 : Number(val);
+                      handleStyleChange('borderWidth', num);
+                      handlePropertyChange('border_width', num);
+                    }}
+                    onFocus={e => e.target.select()}
+                    placeholder="0"
+                  />
+                </div>
+              )}
+              {isCtkStyleSupported(selectedWidget.type, 'border_color') && (
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Couleur de bordure</Label>
+                  <ColorPicker color={properties.border_color || style.borderColor || '#565B5E'} onChange={color => { handleStyleChange('borderColor', color); handlePropertyChange('border_color', color); }} />
+                </div>
+              )}
               <div>
-                <Label>Taille de police</Label>
+                <Label className="text-[10px] text-muted-foreground">Arrondis des coins</Label>
                 <LazyInput
                   inputMode="numeric"
-                  value={style.fontSize || 13}
-                  onValueChange={val => {
-                    handleStyleChange('fontSize', val === '' ? 13 : Math.max(8, Number(val)));
-                  }}
-                  onFocus={e => e.target.select()}
-                />
-              </div>
-
-              <div>
-                <Label>Style de texte</Label>
-                <ToggleGroup type="multiple" variant="outline" className="w-full justify-start" value={[...(style.fontWeight === 'bold' ? ['bold'] : []), ...(style.fontStyle === 'italic' ? ['italic'] : []), ...(style.textDecoration === 'underline' ? ['underline'] : [])]} onValueChange={(value) => {
-                  handleStyleChange('fontWeight', value.includes('bold') ? 'bold' : 'normal');
-                  handleStyleChange('fontStyle', value.includes('italic') ? 'italic' : 'normal');
-                  handleStyleChange('textDecoration', value.includes('underline') ? 'underline' : 'none');
-                }}>
-                  <ToggleGroupItem value="bold" aria-label="Toggle bold"><Bold className="h-4 w-4" /></ToggleGroupItem>
-                  <ToggleGroupItem value="italic" aria-label="Toggle italic"><Italic className="h-4 w-4" /></ToggleGroupItem>
-                  <ToggleGroupItem value="underline" aria-label="Toggle underline"><Underline className="h-4 w-4" /></ToggleGroupItem>
-                </ToggleGroup>
-              </div>
-            </div>
-          )}
-
-          {/* Couleurs - pour tous sauf image */}
-          {selectedWidget.type !== 'image' && (
-            <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Couleurs</Label>
-
-              {!['slider', 'progressbar', 'scrollbar', 'frame', 'scrollableframe'].includes(selectedWidget.type) && (
-                <div className="space-y-2">
-                  <Label>Couleur du Texte</Label>
-                  <ColorPicker color={properties.text_color || style.textColor || '#DCE4EE'} onChange={color => { handleStyleChange('textColor', color); handlePropertyChange('text_color', color); }} />
-                </div>
-              )}
-
-              {!['radiobutton'].includes(selectedWidget.type) && (
-                <div className="space-y-2">
-                  <Label>Couleur de Fond</Label>
-                  <ColorPicker color={properties.fg_color || style.backgroundColor || '#2B2B2B'} onChange={color => { handleStyleChange('backgroundColor', color); handlePropertyChange('fg_color', color); }} />
-                </div>
-              )}
-
-              {('hover_color' in properties || ['button', 'checkbox', 'radiobutton', 'switch', 'combobox', 'optionmenu'].includes(selectedWidget.type)) && (
-                <div className="space-y-2">
-                  <Label>Couleur au Survol</Label>
-                  <ColorPicker color={properties.hover_color || style.hoverColor || '#1F5AA0'} onChange={color => { handleStyleChange('hoverColor', color); handlePropertyChange('hover_color', color); }} />
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Bordures & Radius — filtré selon les propriétés supportées par le widget */}
-          <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Bordures & Arrondis</Label>
-
-            {isCtkStyleSupported(selectedWidget.type, 'border_width') && (
-              <div>
-                <Label>Largeur Bordure</Label>
-                <LazyInput
-                  inputMode="numeric"
-                  value={properties.border_width ?? style.borderWidth ?? ''}
+                  value={properties.corner_radius ?? style.borderRadius ?? ''}
                   onValueChange={val => {
                     const num = val === '' ? 0 : Number(val);
-                    handleStyleChange('borderWidth', num);
-                    handlePropertyChange('border_width', num);
+                    handleStyleChange('borderRadius', num);
+                    handlePropertyChange('corner_radius', num);
                   }}
                   onFocus={e => e.target.select()}
                   placeholder="0"
                 />
               </div>
-            )}
-
-            {isCtkStyleSupported(selectedWidget.type, 'border_color') && (
-              <div>
-                <Label>Couleur Bordure</Label>
-                <ColorPicker color={properties.border_color || style.borderColor || '#565B5E'} onChange={color => { handleStyleChange('borderColor', color); handlePropertyChange('border_color', color); }} />
-              </div>
-            )}
-
-            <div>
-              <Label>Rayon Coins</Label>
-              <LazyInput
-                inputMode="numeric"
-                value={properties.corner_radius ?? style.borderRadius ?? ''}
-                onValueChange={val => {
-                  const num = val === '' ? 0 : Number(val);
-                  handleStyleChange('borderRadius', num);
-                  handlePropertyChange('corner_radius', num);
-                }}
-                onFocus={e => e.target.select()}
-                placeholder="0"
-              />
             </div>
-          </div>
 
-        </div>
+          </CollapsibleContent>
+        </Collapsible>
 
         {/* ========== SECTION 4: CONFIGURATION SPÉCIFIQUE ========== */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Settings2 className="h-4 w-4 text-primary" />
-            <Label className="text-xs font-bold text-foreground uppercase tracking-wide">Configuration Spécifique</Label>
-          </div>
+        <Collapsible defaultOpen>
+          <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 hover:bg-muted/60 transition-colors group">
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+            <Settings2 className="h-3.5 w-3.5 text-primary" />
+            <span className="text-xs font-semibold text-foreground uppercase tracking-wide">Configuration</span>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-2 pt-2">
 
           {/* ── État (universel) ── */}
           {['button', 'label', 'entry', 'passwordentry', 'textbox', 'checkbox', 'radiobutton', 'switch', 'combobox', 'optionmenu', 'segmentedbutton', 'slider', 'progressbar'].includes(selectedWidget.type) && (
-            <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">État</Label>
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">État</Label>
               <div>
                 <Label>État du widget</Label>
                 <Select
@@ -1446,8 +1431,8 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
 
           {/* ── Label ── */}
           {(selectedWidget.type === 'label' || selectedWidget.type === 'image_label') && (
-            <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Label</Label>
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Label</Label>
               <div>
                 <Label>Ancrage du texte</Label>
                 <Select
@@ -1487,8 +1472,8 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
 
           {/* ── Button ── */}
           {selectedWidget.type === 'button' && (
-            <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Bouton</Label>
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Bouton</Label>
               <div>
                 <Label>Ancrage du texte</Label>
                 <Select
@@ -1517,8 +1502,8 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
 
           {/* ── Entry ── */}
           {selectedWidget.type === 'entry' && (
-            <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Champ de saisie</Label>
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Champ de saisie</Label>
               <div>
                 <Label>Justification du texte</Label>
                 <Select
@@ -1545,8 +1530,8 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
 
           {/* ── Textbox ── */}
           {selectedWidget.type === 'textbox' && (
-            <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Zone de texte</Label>
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Zone de texte</Label>
               <div>
                 <Label>Retour à la ligne</Label>
                 <Select
@@ -1580,8 +1565,8 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
 
           {/* ── CheckBox ── */}
           {selectedWidget.type === 'checkbox' && (
-            <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Checkbox</Label>
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Checkbox</Label>
               <div className="space-y-2">
                 <Label>Couleur Coche</Label>
                 <ColorPicker
@@ -1638,8 +1623,8 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
 
           {/* ── Switch ── */}
           {selectedWidget.type === 'switch' && (
-            <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Switch</Label>
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Switch</Label>
               <div className="space-y-2">
                 <Label>Couleur Progression</Label>
                 <ColorPicker
@@ -1720,8 +1705,8 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
 
           {/* ── RadioButton ── */}
           {selectedWidget.type === 'radiobutton' && (
-            <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">RadioButton</Label>
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">RadioButton</Label>
               <div className="space-y-2">
                 <Label>Couleur Point</Label>
                 <ColorPicker
@@ -1788,8 +1773,8 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
 
           {/* ── Slider ── */}
           {selectedWidget.type === 'slider' && (
-            <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Curseur (Slider)</Label>
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Curseur (Slider)</Label>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label>Valeur min</Label>
@@ -1882,8 +1867,8 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
 
           {/* ── ProgressBar ── */}
           {selectedWidget.type === 'progressbar' && (
-            <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Barre de progression</Label>
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Barre de progression</Label>
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs">Progression</Label>
@@ -1960,8 +1945,8 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
 
           {/* ── Scrollbar ── */}
           {selectedWidget.type === 'scrollbar' && (
-            <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-3">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Barre de défilement</Label>
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Barre de défilement</Label>
               <div>
                 <Label>Orientation</Label>
                 <Select
@@ -2011,7 +1996,8 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
               </div>
             </div>
           )}
-        </div>
+          </CollapsibleContent>
+        </Collapsible>
       </AccordionContent>
 
       {/* Rename image dialog — shown before confirming any image import */}

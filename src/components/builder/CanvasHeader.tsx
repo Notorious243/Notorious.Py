@@ -2,12 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useWidgets } from '@/contexts/WidgetContext';
 import { Grid2X2 } from 'lucide-react';
 import { Toggle } from '@/components/ui/toggle';
-import { useTheme } from 'next-themes';
 
 export const CanvasHeader: React.FC = () => {
   const { canvasSettings, updateCanvasSettings, previewMode } = useWidgets();
   const isPreview = previewMode === 'preview';
-  const { theme } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   const [tempTitle, setTempTitle] = useState(canvasSettings.title);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -42,18 +40,17 @@ export const CanvasHeader: React.FC = () => {
     }
   };
 
-  // Déterminer la couleur par défaut en fonction du thème
   const getDefaultHeaderColor = () => {
     if (canvasSettings.headerBackgroundColor) {
       return canvasSettings.headerBackgroundColor;
     }
-    return theme === 'dark' ? '#1f1f1f' : '#f1f5f9';
+    return '#F3F6FB';
   };
   const iconSource = canvasSettings.icon_data || canvasSettings.icon_path;
 
   return (
     <div 
-      className="h-10 rounded-t-lg grid grid-cols-3 items-center px-4 border-b border-slate-200 dark:border-zinc-800"
+      className="grid h-11 grid-cols-3 items-center rounded-t-2xl border-b border-border px-4"
       style={{ 
         backgroundColor: getDefaultHeaderColor()
       }}
@@ -82,7 +79,7 @@ export const CanvasHeader: React.FC = () => {
           onChange={(e) => setTempTitle(e.target.value)}
           onBlur={handleTitleBlur}
           onKeyDown={handleKeyDown}
-          className="text-sm text-center bg-white dark:bg-zinc-800 border border-violet-500 rounded px-2 py-0.5 outline-none justify-self-center text-slate-700 dark:text-slate-200 shadow-sm"
+          className="justify-self-center rounded-md border border-primary/45 bg-background px-2 py-0.5 text-center text-sm text-foreground shadow-sm outline-none"
           style={{ 
             fontWeight: canvasSettings.titleFontWeight,
             fontFamily: 'Poppins, sans-serif',
@@ -92,7 +89,7 @@ export const CanvasHeader: React.FC = () => {
         />
       ) : (
         <p 
-          className={`text-sm font-medium text-slate-700 dark:text-slate-200 justify-self-center px-3 py-1 rounded transition-colors ${isPreview ? 'cursor-default' : 'cursor-pointer hover:bg-black/5 dark:hover:bg-white/10'}`}
+          className={`justify-self-center rounded-lg px-3 py-1 text-sm font-medium text-foreground transition-colors ${isPreview ? 'cursor-default' : 'cursor-pointer hover:bg-primary/10'}`}
           style={{ 
             fontWeight: canvasSettings.titleFontWeight,
             fontFamily: 'Poppins, sans-serif'
@@ -104,14 +101,14 @@ export const CanvasHeader: React.FC = () => {
         </p>
       )}
       
-      <div className="flex items-center gap-3 text-sm font-medium text-slate-400 justify-self-end">
+      <div className="flex items-center gap-3 text-sm font-medium text-muted-foreground justify-self-end">
         {!isPreview && (
           <Toggle
             size="sm"
             pressed={canvasSettings.gridVisible}
             onPressedChange={(pressed) => updateCanvasSettings({ gridVisible: pressed })}
             aria-label="Afficher/Masquer la grille"
-            className="h-7 w-7 data-[state=on]:bg-slate-200 dark:data-[state=on]:bg-zinc-800 text-slate-500"
+            className="h-7 w-7 rounded-md border border-border bg-secondary text-muted-foreground data-[state=on]:bg-primary/20 data-[state=on]:text-primary"
           >
             <Grid2X2 className="w-4 h-4" />
           </Toggle>

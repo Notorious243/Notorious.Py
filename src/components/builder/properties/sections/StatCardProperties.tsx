@@ -21,8 +21,8 @@ export const StatCardProperties: React.FC<WidgetPropertySectionProps> = ({
   const iconValue = normalizeIconKey(properties.icon);
 
   return (
-    <div className="p-3 border border-border/40 rounded-xl bg-card/30 space-y-4">
-      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Carte Statistique</Label>
+    <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-3">
+      <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Carte Statistique</Label>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">

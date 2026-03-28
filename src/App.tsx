@@ -7,7 +7,7 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 const AuthPage = lazy(() => import('@/components/auth/AuthPage').then(m => ({ default: m.AuthPage })));
 const WelcomePage = lazy(() => import('@/components/auth/WelcomePage').then(m => ({ default: m.WelcomePage })));
-const EmailVerificationPage = lazy(() => import('@/components/auth/EmailVerificationPage').then(m => ({ default: m.EmailVerificationPage })));
+
 const SharedProjectView = lazy(() => import('@/pages/SharedProjectView'));
 
 
@@ -72,28 +72,21 @@ function AppInner() {
 
   return (
     <ErrorBoundary>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+        <ThemeProvider attribute="class" defaultTheme="light" forcedTheme="light" disableTransitionOnChange>
         <Suspense fallback={<div className="h-screen w-screen flex items-center justify-center bg-background"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>}>
           {isPasswordRecovery ? (
             <AuthPage onNewUser={() => {}} forceResetPassword onResetComplete={() => setIsPasswordRecovery(false)} />
           ) : user ? (
-            !user.email_confirmed_at ? (
-              <EmailVerificationPage onVerified={() => window.location.reload()} />
-            ) : showWelcome ? (
+            showWelcome ? (
               <WelcomePage onContinue={handleContinue} />
             ) : (
               <Index />
             )
           ) : showAuthPage ? (
-            <div className="relative">
-              <button
-                onClick={() => setShowAuthPage(false)}
-                className="absolute top-5 left-5 z-50 flex items-center gap-2 h-10 px-5 rounded-full bg-white/95 dark:bg-slate-800/95 border border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 dark:hover:bg-indigo-500/10 dark:hover:border-indigo-500/40 dark:hover:text-indigo-300 shadow-md backdrop-blur-md transition-all duration-200 text-sm font-semibold"
-              >
-                ← Retour au canvas
-              </button>
-              <AuthPage onNewUser={() => setShowWelcome(true)} />
-            </div>
+            <AuthPage
+              onNewUser={() => setShowWelcome(true)}
+              onBackToCanvas={() => setShowAuthPage(false)}
+            />
           ) : (
             <Index />
           )}

@@ -25,7 +25,6 @@ const isValidHex = (v: string) => /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(v);
 const normalizeHex = (v: string | null | undefined, fallback = '#000000'): string => {
   if (!v || v === 'transparent' || v === 'none') return fallback;
   if (isValidHex(v)) return v.toUpperCase();
-  // Try adding # prefix
   if (isValidHex('#' + v)) return ('#' + v).toUpperCase();
   return fallback;
 };
@@ -47,7 +46,6 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({ color, onChange, allow
   }, [color]);
 
   const handleHexInputChange = (value: string) => {
-    // Auto-prepend # if user types raw hex digits
     let normalized = value;
     if (normalized && !normalized.startsWith('#')) {
       normalized = '#' + normalized;
@@ -88,73 +86,56 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({ color, onChange, allow
 
   return (
     <div className="flex items-center gap-1.5 w-full">
-      {/* Inline hex input — always visible */}
-      <div className="flex-1 relative">
-        <input
-          ref={inputRef}
-          type="text"
-          value={hexInput}
-          onChange={(e) => handleHexInputChange(e.target.value.toUpperCase())}
-          onBlur={handleHexBlur}
-          onFocus={(e) => e.target.select()}
-          className="w-full h-8 px-2 border border-input rounded-md text-xs font-mono bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-          placeholder={isTransparent ? 'transparent' : '#000000'}
-          maxLength={7}
-        />
-      </div>
-
-      {/* Swatch — opens visual picker popover */}
       <Popover>
         <PopoverTrigger asChild>
           <button
-            className="h-8 w-8 shrink-0 rounded-md border border-input hover:border-primary transition-colors relative overflow-hidden"
+            className="h-7 w-7 shrink-0 rounded-lg border border-border/60 shadow-sm hover:border-primary/50 transition-all relative overflow-hidden ring-1 ring-black/5"
             style={{ backgroundColor: isTransparent ? 'transparent' : safeColor }}
             title="Ouvrir le sélecteur de couleur"
           >
             {isTransparent && (
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="w-full h-[1px] bg-red-500 rotate-45 absolute" />
-                <div className="absolute inset-0 bg-[length:8px_8px] bg-[linear-gradient(45deg,#ccc_25%,transparent_25%,transparent_75%,#ccc_75%),linear-gradient(45deg,#ccc_25%,transparent_25%,transparent_75%,#ccc_75%)] bg-[position:0_0,4px_4px]" />
+                <div className="absolute inset-0 bg-[length:6px_6px] bg-[linear-gradient(45deg,#ddd_25%,transparent_25%,transparent_75%,#ddd_75%),linear-gradient(45deg,#ddd_25%,transparent_25%,transparent_75%,#ddd_75%)] bg-[position:0_0,3px_3px]" />
               </div>
             )}
           </button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0 border-none" align="end">
-          <div className="p-4 bg-popover rounded-md border border-border shadow-lg space-y-3">
-            <HexColorPicker color={safeColor} onChange={onChange} />
+        <PopoverContent className="w-auto p-0 border-none" align="end" side="left">
+          <div className="p-3 bg-popover rounded-xl border border-border shadow-xl space-y-2.5">
+            <HexColorPicker color={safeColor} onChange={onChange} className="!w-[200px]" />
 
-            {/* Couleurs préréglées — organisées par thème */}
             <div className="space-y-1.5">
-              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Sombre</p>
-              <div className="grid grid-cols-7 gap-1.5">
+              <p className="text-[9px] font-semibold text-muted-foreground/70 uppercase tracking-widest">Sombre</p>
+              <div className="flex gap-1">
                 {CTK_DARK_PRESETS.map(preset => (
                   <button
                     key={preset}
-                    className={`w-6 h-6 rounded border-2 hover:scale-110 transition-all ${safeColor.toUpperCase() === preset.toUpperCase() ? 'border-primary ring-1 ring-primary' : 'border-secondary'}`}
+                    className={`w-5 h-5 rounded-md border hover:scale-110 transition-all ${safeColor.toUpperCase() === preset.toUpperCase() ? 'border-primary ring-1 ring-primary/50' : 'border-border/40'}`}
                     style={{ backgroundColor: preset }}
                     onClick={() => onChange(preset)}
                     title={preset}
                   />
                 ))}
               </div>
-              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Clair</p>
-              <div className="grid grid-cols-7 gap-1.5">
+              <p className="text-[9px] font-semibold text-muted-foreground/70 uppercase tracking-widest">Clair</p>
+              <div className="flex gap-1">
                 {CTK_LIGHT_PRESETS.map(preset => (
                   <button
                     key={preset}
-                    className={`w-6 h-6 rounded border-2 hover:scale-110 transition-all ${safeColor.toUpperCase() === preset.toUpperCase() ? 'border-primary ring-1 ring-primary' : 'border-secondary'}`}
+                    className={`w-5 h-5 rounded-md border hover:scale-110 transition-all ${safeColor.toUpperCase() === preset.toUpperCase() ? 'border-primary ring-1 ring-primary/50' : 'border-border/40'}`}
                     style={{ backgroundColor: preset }}
                     onClick={() => onChange(preset)}
                     title={preset}
                   />
                 ))}
               </div>
-              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Accent</p>
-              <div className="grid grid-cols-7 gap-1.5">
+              <p className="text-[9px] font-semibold text-muted-foreground/70 uppercase tracking-widest">Accent</p>
+              <div className="flex gap-1">
                 {CTK_ACCENT_PRESETS.map(preset => (
                   <button
                     key={preset}
-                    className={`w-6 h-6 rounded border-2 hover:scale-110 transition-all ${safeColor.toUpperCase() === preset.toUpperCase() ? 'border-primary ring-1 ring-primary' : 'border-secondary'}`}
+                    className={`w-5 h-5 rounded-md border hover:scale-110 transition-all ${safeColor.toUpperCase() === preset.toUpperCase() ? 'border-primary ring-1 ring-primary/50' : 'border-border/40'}`}
                     style={{ backgroundColor: preset }}
                     onClick={() => onChange(preset)}
                     title={preset}
@@ -163,43 +144,42 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({ color, onChange, allow
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <button
                 onClick={handleCopyColor}
-                className="flex-1 h-7 flex items-center justify-center gap-1 border border-input rounded-md bg-background hover:bg-accent transition-colors text-[11px]"
+                className="flex-1 h-6 flex items-center justify-center gap-1 rounded-md bg-muted/50 hover:bg-muted transition-colors text-[10px] font-medium"
                 title="Copier"
               >
-                {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+                {copied ? <Check className="w-2.5 h-2.5 text-green-500" /> : <Copy className="w-2.5 h-2.5" />}
                 {copied ? 'Copié' : 'Copier'}
               </button>
               {eyedropperSupported && (
                 <button
                   onClick={handleEyeDropper}
-                  className="flex-1 h-7 flex items-center justify-center gap-1 border border-input rounded-md bg-background hover:bg-accent transition-colors text-[11px]"
+                  className="flex-1 h-6 flex items-center justify-center gap-1 rounded-md bg-muted/50 hover:bg-muted transition-colors text-[10px] font-medium"
                   title="Pipette"
                 >
-                  <Pipette className="w-3 h-3" />
+                  <Pipette className="w-2.5 h-2.5" />
                   Pipette
                 </button>
               )}
               {allowTransparent && (
                 <button
                   onClick={() => onChange('transparent')}
-                  className={`flex-1 h-7 flex items-center justify-center gap-1 border rounded-md transition-colors text-[11px] ${isTransparent ? 'border-primary bg-primary/10 text-primary' : 'border-input bg-background hover:bg-accent'}`}
+                  className={`flex-1 h-6 flex items-center justify-center gap-1 rounded-md transition-colors text-[10px] font-medium ${isTransparent ? 'bg-primary/10 text-primary' : 'bg-muted/50 hover:bg-muted'}`}
                   title="Transparent"
                 >
-                  <Ban className="w-3 h-3" />
+                  <Ban className="w-2.5 h-2.5" />
                   Transp.
                 </button>
               )}
               {allowReset && onReset && (
                 <button
                   onClick={onReset}
-                  className="flex-1 h-7 flex items-center justify-center gap-1 border border-input rounded-md bg-background hover:bg-accent transition-colors text-[11px]"
-                  title="Réinitialiser (thème auto)"
+                  className="flex-1 h-6 flex items-center justify-center gap-1 rounded-md bg-muted/50 hover:bg-muted transition-colors text-[10px] font-medium"
+                  title="Réinitialiser"
                 >
-                  <RotateCcw className="w-3 h-3" />
+                  <RotateCcw className="w-2.5 h-2.5" />
                   Auto
                 </button>
               )}
@@ -207,6 +187,18 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({ color, onChange, allow
           </div>
         </PopoverContent>
       </Popover>
+
+      <input
+        ref={inputRef}
+        type="text"
+        value={hexInput}
+        onChange={(e) => handleHexInputChange(e.target.value.toUpperCase())}
+        onBlur={handleHexBlur}
+        onFocus={(e) => e.target.select()}
+        className="flex-1 h-7 px-2 rounded-lg border border-border/50 bg-muted/30 text-xs font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/40 transition-all"
+        placeholder={isTransparent ? 'transparent' : '#000000'}
+        maxLength={7}
+      />
     </div>
   );
 };

@@ -4,85 +4,75 @@
 
 @layer base {
   :root {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
+    --background: 216 20% 97%;
+    --foreground: 222 47% 8%;
 
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 8%;
 
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 8%;
 
     --primary: 213 73% 22%;
     --primary-foreground: 0 0% 98%;
 
-    --secondary: 240 5.9% 10%; /* Darker secondary for deep theme */
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 216 18% 93%;
+    --secondary-foreground: 222 47% 8%;
 
-    --muted: 240 5.9% 10%; /* Match secondary */
-    --muted-foreground: 240 5% 64.9%;
+    --muted: 216 18% 93%;
+    --muted-foreground: 215 16% 42%;
 
-    --accent: 240 5.9% 10%; /* Match secondary */
-    --accent-foreground: 0 0% 98%;
+    --accent: 216 18% 91%;
+    --accent-foreground: 222 47% 8%;
 
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 240 3.7% 15.9%; /* Subtle lighter border */
-    --input: 240 3.7% 15.9%;
+    --border: 216 14% 82%;
+    --input: 216 14% 82%;
     --ring: 213 73% 22%;
 
     --radius: 0.5rem;
 
-    /* CustomTkinter Theme Colors (Dark) */
-    --ctk-bg-1: #242424; /* Darkest, Window BG */
-    --ctk-bg-2: #2B2B2B; /* Main BG */
-    --ctk-bg-3: #343638; /* Input BG */
-    --ctk-fg-1: #DCE4EE; /* Main Text */
-    --ctk-fg-2: #9A9A9A; /* Placeholder Text */
-    --ctk-border: #565B5E;
-    --ctk-blue: #0F3460;
+    /* CustomTkinter Theme Colors (Light) */
+    --ctk-bg-1: #E3E6EA;
+    --ctk-bg-2: #E8EBF0;
+    --ctk-bg-3: #F5F6F8;
+    --ctk-fg-1: #0F1219;
+    --ctk-fg-2: #4A5565;
+    --ctk-border: #94A3B8;
+    --ctk-blue: #1F5AA0;
     --ctk-blue-hover: #1F5AA0;
   }
 
-  .light {
-    --background: 220 13% 95%; /* Keep background light */
-    --foreground: 222 47% 10%; /* Darker foreground for text */
+  .auth-theme-dark {
+    --background: 220 13% 9%;
+    --foreground: 220 13% 93%;
 
-    --card: 0 0% 100%; /* Pure white cards */
-    --card-foreground: 222 47% 10%;
+    --card: 220 13% 11%;
+    --card-foreground: 220 13% 93%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 10%;
+    --popover: 220 13% 11%;
+    --popover-foreground: 220 13% 93%;
 
     --primary: 213 73% 22%;
     --primary-foreground: 0 0% 98%;
 
-    --secondary: 220 14% 90%; /* Slightly darker secondary for contrast */
-    --secondary-foreground: 222 47% 10%;
+    --secondary: 220 10% 14%;
+    --secondary-foreground: 220 13% 93%;
 
-    --muted: 220 14% 90%;
-    --muted-foreground: 215 25% 40%; /* Darker muted text for icons/labels */
+    --muted: 220 10% 14%;
+    --muted-foreground: 220 8% 55%;
 
-    --accent: 220 14% 90%;
-    --accent-foreground: 222 47% 10%;
+    --accent: 220 10% 16%;
+    --accent-foreground: 220 13% 93%;
 
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 220 13% 75%; /* Much darker borders (was 82-91%) for visibility */
-    --input: 220 13% 75%; /* Darker input borders */
+    --border: 220 10% 20%;
+    --input: 220 10% 20%;
     --ring: 213 73% 22%;
-
-    /* CustomTkinter Theme Colors (Light) - Improved contrast */
-    --ctk-bg-1: #E3E6EA;
-    --ctk-bg-2: #E8EBF0;
-    --ctk-bg-3: #F5F6F8;
-    --ctk-fg-1: #0F1219; /* Darker text */
-    --ctk-fg-2: #4A5565; /* Darker secondary text */
-    --ctk-border: #94A3B8; /* Slate-400 equivalent for good border visibility */
-    --ctk-blue: #1F5AA0;
-    --ctk-blue-hover: #1F5AA0;
   }
 }
 
@@ -121,10 +111,10 @@
 
 /* Dark Theme */
 .driver-theme-dark .driver-popover {
-  background: #2B2B2B;
+  background: #2b2d31;
   color: #DCE4EE;
-  border: 1px solid #565B5E;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
 }
 
 .driver-theme-dark .driver-popover-title {
@@ -141,7 +131,7 @@
 }
 
 .driver-theme-dark .driver-popover-footer {
-  border-top: 1px solid #565B5E;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding-top: 12px;
   margin-top: 12px;
 }
@@ -164,11 +154,11 @@
 .driver-theme-dark .driver-popover-btn-prev {
   background: transparent;
   color: #DCE4EE;
-  border: 1px solid #565B5E;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .driver-theme-dark .driver-popover-btn-prev:hover {
-  background: #343638;
+  background: #363840;
 }
 
 .driver-theme-dark .driver-popover-close-btn {

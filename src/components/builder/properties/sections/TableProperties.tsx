@@ -91,7 +91,7 @@ export const TableProperties: React.FC<WidgetPropertySectionProps> = ({
   return (
     <div className="space-y-6">
       <Accordion type="multiple" defaultValue={['structure', 'colors', 'columns', 'rows']} className="space-y-4">
-        <AccordionItem value="structure" className="rounded-xl border border-border/80 bg-card/50 px-4 shadow-sm">
+        <AccordionItem value="structure" className="rounded-lg border border-border/30 bg-muted/20 px-3 shadow-sm">
           <AccordionTrigger className="flex items-center gap-2 py-3.5 text-sm font-semibold">
             <Settings2 className="h-5 w-5 text-primary" />
             <span className="text-foreground">Structure du Tableau</span>
@@ -146,7 +146,7 @@ export const TableProperties: React.FC<WidgetPropertySectionProps> = ({
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="colors" className="rounded-xl border border-border/80 bg-card/50 px-4 shadow-sm">
+        <AccordionItem value="colors" className="rounded-lg border border-border/30 bg-muted/20 px-3 shadow-sm">
           <AccordionTrigger className="flex items-center gap-2 py-3.5 text-sm font-semibold">
             <Palette className="h-5 w-5 text-primary" />
             <span className="text-foreground">Couleurs</span>
@@ -160,7 +160,7 @@ export const TableProperties: React.FC<WidgetPropertySectionProps> = ({
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="columns" className="rounded-xl border border-border/80 bg-card/50 px-4 shadow-sm">
+        <AccordionItem value="columns" className="rounded-lg border border-border/30 bg-muted/20 px-3 shadow-sm">
           <AccordionTrigger className="flex items-center gap-2 py-3.5 text-sm font-semibold">
             <Columns3 className="h-5 w-5 text-primary" />
             <span className="text-foreground">Colonnes</span>
@@ -223,7 +223,7 @@ export const TableProperties: React.FC<WidgetPropertySectionProps> = ({
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="rows" className="rounded-xl border border-border/80 bg-card/50 px-4 shadow-sm">
+        <AccordionItem value="rows" className="rounded-lg border border-border/30 bg-muted/20 px-3 shadow-sm">
           <AccordionTrigger className="flex items-center gap-2 py-3.5 text-sm font-semibold">
             <Rows3 className="h-5 w-5 text-primary" />
             <span className="text-foreground">Données</span>

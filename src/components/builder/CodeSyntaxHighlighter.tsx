@@ -17,9 +17,9 @@ export const CodeSyntaxHighlighter: React.FC<CodeSyntaxHighlighterProps> = ({ co
       background: '#1E1E1E',
       fontFamily: '"JetBrains Mono", "Fira Code", monospace',
       textAlign: 'left' as const,
-      whiteSpace: 'pre' as const,
+      whiteSpace: 'pre-wrap' as const,
       wordSpacing: 'normal' as const,
-      wordBreak: 'normal' as const,
+      wordBreak: 'break-word' as const,
       wordWrap: 'normal' as const,
       lineHeight: '1.6',
       tabSize: 4,
@@ -29,15 +29,15 @@ export const CodeSyntaxHighlighter: React.FC<CodeSyntaxHighlighterProps> = ({ co
       background: '#1E1E1E',
       fontFamily: '"JetBrains Mono", "Fira Code", monospace',
       textAlign: 'left' as const,
-      whiteSpace: 'pre' as const,
+      whiteSpace: 'pre-wrap' as const,
       wordSpacing: 'normal' as const,
-      wordBreak: 'normal' as const,
+      wordBreak: 'break-word' as const,
       wordWrap: 'normal' as const,
       lineHeight: '1.6',
       tabSize: 4,
       margin: 0,
       padding: 0,
-      overflow: 'auto' as const,
+      overflow: 'visible' as const,
     },
     'comment': { color: '#6A9955' }, // Green comments
     'prolog': { color: '#6A9955' },
@@ -77,9 +77,9 @@ export const CodeSyntaxHighlighter: React.FC<CodeSyntaxHighlighterProps> = ({ co
       background: '#F5F5F5', // Soft gray background (blanc cassé)
       fontFamily: '"JetBrains Mono", "Fira Code", monospace',
       textAlign: 'left' as const,
-      whiteSpace: 'pre' as const,
+      whiteSpace: 'pre-wrap' as const,
       wordSpacing: 'normal' as const,
-      wordBreak: 'normal' as const,
+      wordBreak: 'break-word' as const,
       wordWrap: 'normal' as const,
       lineHeight: '1.6',
       tabSize: 4,
@@ -89,15 +89,15 @@ export const CodeSyntaxHighlighter: React.FC<CodeSyntaxHighlighterProps> = ({ co
       background: '#F5F5F5',
       fontFamily: '"JetBrains Mono", "Fira Code", monospace',
       textAlign: 'left' as const,
-      whiteSpace: 'pre' as const,
+      whiteSpace: 'pre-wrap' as const,
       wordSpacing: 'normal' as const,
-      wordBreak: 'normal' as const,
+      wordBreak: 'break-word' as const,
       wordWrap: 'normal' as const,
       lineHeight: '1.6',
       tabSize: 4,
       margin: 0,
       padding: 0,
-      overflow: 'auto' as const,
+      overflow: 'visible' as const,
     },
     'comment': { color: '#6C7A89' }, // Medium gray comments
     'prolog': { color: '#6C7A89' },
@@ -140,16 +140,15 @@ export const CodeSyntaxHighlighter: React.FC<CodeSyntaxHighlighterProps> = ({ co
       style={activeTheme}
       showLineNumbers={true}
       wrapLines={false}
-      wrapLongLines={false}
+      wrapLongLines={true}
       customStyle={{
         width: '100%',
-        minHeight: '100%',
         padding: '1.5rem',
         fontSize: '0.875rem',
         fontFamily: '"JetBrains Mono", "Fira Code", "Consolas", monospace',
         backgroundColor: bgColor,
         margin: 0,
-        borderRadius: '0.375rem',
+        borderRadius: 0,
       }}
       codeTagProps={{
         style: {

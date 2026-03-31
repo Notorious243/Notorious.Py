@@ -2,6 +2,7 @@
  * AI System Prompts for CustomTkinter Interface Generation
  * These prompts ensure consistent, accurate widget generation across providers
  */
+import type { WidgetData } from '@/types/widget';
 
 export const AVAILABLE_WIDGETS = [
   'button', 'label', 'entry', 'passwordentry', 'textbox', 'checkbox', 'radiobutton',
@@ -129,40 +130,111 @@ COMPOSITE WIDGETS:
 STRICT: Do NOT invent widget types. Do NOT use keys not listed above. Do NOT use HTML elements.`;
 
 const DESIGN_RULES = `
-DESIGN RULES (CRITICAL):
-1. Choose a canvas size that fits the UI type. Set it in canvasSettings:
+DESIGN RULES (CRITICAL — FOLLOW EXACTLY):
+
+1. CANVAS SIZE by UI type (set in canvasSettings):
    - Login / Register / Simple form: 800x600
-   - Dashboard / Admin panel: 1200x800
+   - Dashboard / Admin panel: 1200x800 or 1400x900
    - Settings / Profile page: 900x700
    - Mobile preview: 400x700
    - E-commerce / Product page: 1000x750
    FILL the ENTIRE canvas. No tiny widgets lost in a corner.
-2. ALWAYS start with large frame containers that divide the canvas into regions.
-   Frames MUST be big: sidebars ~20-30% width, headers ~60px tall, content panels fill remaining space.
-3. Child widgets go INSIDE frames via parentId. Position is RELATIVE to parent frame origin.
-4. Every frame MUST have a backgroundColor. Use professional colors:
-   Dark: #1A1A2E, #0F3460, #1B5E5E, #2D3436, #0B4F3A
-   Light: #FFFFFF, #F5F5F5, #F0F4F8
-   Accents: #1A5C5C, #6C63FF, #4361EE, #E94560
-5. Sizing: titles fontSize 24-32, buttons 200-300 wide × 42-48 tall, entries 250-320 wide × 38-42 tall.
-6. Spacing: 15-25px vertical gap between widgets. Center content horizontally in frames.
-7. Make it look like a REAL professional desktop application.
-8. For dashboard prompts, compose clear zones: top bar, navigation area, KPI row, primary content blocks (table/chart/cards), and action area.
-9. Never stack duplicated widgets with same label in the same zone. If uncertain, keep one coherent component and improve styling.
-10. Use a deliberate visual system: consistent radius, spacing rhythm, and at most 2 accent colors.
-11. Avoid micro-components floating in corners; every widget must belong to a visible, aligned section.
-12. Prefer fewer but high-quality blocks over many noisy widgets.`;
+
+2. LAYOUT-FIRST APPROACH — ALWAYS start with frame containers:
+   - Build the skeleton FIRST: sidebar frame, header frame, content frame(s).
+   - Frames MUST cover 100% of the canvas — no gaps between frames.
+   - Sidebar: 220-280px wide, full height, dark bg (#0F172A, #1E293B, #0C4A6E, #1A1A2E).
+   - Header: full remaining width, 56-64px tall.
+   - Content area: fill remaining space, lighter bg (#F8FAFC, #F1F5F9, #FFFFFF).
+
+3. DASHBOARD STRUCTURAL TEMPLATE (mandatory for dashboard/admin requests):
+   Step A — Sidebar frame (left, full height):
+     - Logo/app name label at top (fontSize 18-20, bold, white).
+     - 5-8 menuItem widgets for navigation, vertically stacked with 4-8px gaps.
+     - One menuItem has selected:true. Use icons: layoutDashboard, package, users, shoppingCart, barChart3, settings, fileText, bell.
+     - Bottom: userProfile widget or small label with user info.
+   Step B — Header frame (top-right area):
+     - Title label (fontSize 22-26, bold) describing current page.
+     - Optional: search entry, notification button, date label.
+   Step C — KPI Row (3-5 stat cards in a horizontal row):
+     - Use statCard widgets OR build custom KPI blocks with frames containing:
+       a label for title (fontSize 11-12, muted color),
+       a label for value (fontSize 28-36, bold, dark),
+       a label for caption/trend (fontSize 10-11, green/red accent).
+     - Space evenly across content width. Each card: 200-260px wide, 110-140px tall.
+   Step D — Primary content zone (below KPI row):
+     - Table widget for data grids (640-900px wide, 280-400px tall).
+     - Chart widget for visualizations (350-500px wide, 250-320px tall).
+     - Arrange side-by-side when space permits, or stack vertically.
+   Step E — Action zone (optional):
+     - Buttons for primary actions ("Ajouter", "Exporter", etc.).
+     - Place in header or above table.
+
+4. CHILD WIDGETS & POSITIONING:
+   - Children go INSIDE frames via parentId. Position is RELATIVE to parent frame origin.
+   - Start children at x:16-24, y:16-24 (padding from frame edge).
+   - Vertical gap between widgets: 12-20px. Horizontal gap: 16-24px.
+
+5. COLOR SYSTEM — Pick ONE palette and use it consistently:
+   Palette A (Dark Sidebar): sidebar #0F172A, header #FFFFFF, content #F8FAFC, accent #3B82F6, text #1E293B
+   Palette B (Teal Pro): sidebar #0C4A6E, header #FFFFFF, content #F0F9FF, accent #0EA5E9, text #0F172A
+   Palette C (Emerald): sidebar #064E3B, header #FFFFFF, content #ECFDF5, accent #10B981, text #1A1A2E
+   Palette D (Indigo): sidebar #312E81, header #FFFFFF, content #EEF2FF, accent #6366F1, text #1E1B4B
+   Palette E (Slate): sidebar #1E293B, header #F8FAFC, content #FFFFFF, accent #6C63FF, text #334155
+   Every frame MUST have a backgroundColor from the chosen palette.
+
+6. TYPOGRAPHY HIERARCHY:
+   - Page title: fontSize 24-28, bold, dark color.
+   - Section title: fontSize 16-18, semibold.
+   - Card title/label: fontSize 11-13, muted/gray color.
+   - Card value: fontSize 28-36, bold.
+   - Body text: fontSize 13-14.
+   - Small caption: fontSize 10-11, muted.
+
+7. SIZING STANDARDS:
+   - Buttons: 140-280 wide × 38-46 tall, borderRadius 8-12.
+   - Entries: 220-340 wide × 36-42 tall.
+   - Labels: width matches text content + 20px padding.
+   - Tables: at least 600px wide.
+   - Charts: at least 340px wide, 240px tall.
+
+8. COMPOSITION QUALITY:
+   - NO micro-components floating in corners.
+   - Every widget must belong to a visible, aligned section.
+   - Prefer fewer high-quality blocks over many noisy widgets.
+   - Never stack duplicated widgets with same label in the same zone.
+   - Use consistent borderRadius (8 or 12) across all widgets.
+   - Use at most 2 accent colors + 1 muted gray.
+
+9. CREATIVE VARIATIONS — Do NOT always produce identical layouts:
+   - Vary sidebar width (220-280px), color palette, and KPI card count.
+   - For pharmacies: use medical icons, green/teal palette, medication-related labels.
+   - For e-commerce: use cart icons, product grids, order tables.
+   - For CRM: use user icons, pipeline charts, contact tables.
+   - Adapt canvas title, labels, and data to match the domain.
+
+10. ANTI-PATTERNS (NEVER DO):
+   - Never dump widgets without frame containers.
+   - Never use the same x,y for multiple widgets (overlap).
+   - Never create a dashboard without a sidebar.
+   - Never leave large empty areas (>200px gap) in the content zone.
+   - Never use generic labels like "Label 1", "Button 1" — use contextual text.
+   - Never create more than 2 charts or 2 tables unless explicitly requested.`;
 
 const QUALITY_RUBRIC = `
-QUALITY RUBRIC (MANDATORY BEFORE OUTPUT):
-- Visual hierarchy: strong heading/subheading/body/action hierarchy.
-- Legibility: avoid tiny components; text should remain readable at 100% zoom.
-- Composition: no empty unusable zones and no crowded clusters.
-- Anti-truncation: ensure labels/buttons/inputs are wide enough for their text.
-- Alignment: keep clean left/right edges and consistent vertical rhythm.
-- Professional finish: balanced contrast, coherent typography, polished spacing.
-- Dashboard readiness: structure should look production-ready, not raw widget dumping.
-- Duplicate prevention: verify no repeated component block appears twice unintentionally.`;
+QUALITY RUBRIC (MANDATORY SELF-CHECK BEFORE OUTPUT):
+Before outputting JSON, verify ALL of the following:
+1. STRUCTURE: Does the layout have clear frame-based zones (sidebar, header, content)?
+2. HIERARCHY: Is there a strong heading > subheading > body > action visual hierarchy?
+3. LEGIBILITY: Are all text widgets wide enough? No fontSize below 10?
+4. COMPOSITION: No empty unusable zones (>200px gap) AND no crowded clusters?
+5. ALIGNMENT: Clean left/right edges within each frame? Consistent vertical rhythm?
+6. CONTRAST: Text readable on its background? White text on dark, dark text on light?
+7. TRUNCATION: Labels/buttons wide enough for their text content?
+8. DUPLICATES: No repeated widget block appears twice unintentionally?
+9. COVERAGE: Does the layout fill the entire canvas with no bare corners?
+10. PROFESSIONALISM: Would a designer approve this as production-ready?
+If ANY check fails, fix it BEFORE outputting the JSON.`;
 
 const EXAMPLE_LOGIN = `
 EXAMPLE — "page de login" produces:
@@ -179,6 +251,30 @@ EXAMPLE — "page de login" produces:
 {"id":"b3","type":"label","position":{"x":30,"y":300},"size":{"width":260,"height":20},"style":{"fontSize":12,"textColor":"#AADECC"},"properties":{"text":"LA SANTÉ, NOTRE PRIORITÉ"},"parentId":"right","parentSlot":null}
 ],"canvasSettings":{"width":800,"height":600,"title":"Connexion"}}
 Key points: frames cover full canvas, passwordentry for passwords, checkbox for toggle, all children use parentId, positions relative to parent.`;
+
+const EXAMPLE_DASHBOARD = `
+EXAMPLE — "dashboard pharmacie" produces:
+{"widgets":[
+{"id":"sidebar","type":"frame","position":{"x":0,"y":0},"size":{"width":240,"height":800},"style":{"backgroundColor":"#0F172A","padding":16},"properties":{},"parentId":null,"parentSlot":null},
+{"id":"logo","type":"label","position":{"x":16,"y":20},"size":{"width":200,"height":36},"style":{"fontSize":20,"textColor":"#FFFFFF"},"properties":{"text":"PharmaCare"},"parentId":"sidebar","parentSlot":null},
+{"id":"nav1","type":"menuItem","position":{"x":8,"y":80},"size":{"width":216,"height":44},"properties":{"text":"Tableau de bord","icon":"layoutDashboard","selected":true,"fg_color":"#1E40AF","text_color":"#FFFFFF"},"parentId":"sidebar","parentSlot":null},
+{"id":"nav2","type":"menuItem","position":{"x":8,"y":128},"size":{"width":216,"height":44},"properties":{"text":"Produits","icon":"package","selected":false,"text_color":"#94A3B8"},"parentId":"sidebar","parentSlot":null},
+{"id":"nav3","type":"menuItem","position":{"x":8,"y":176},"size":{"width":216,"height":44},"properties":{"text":"Commandes","icon":"shoppingCart","selected":false,"text_color":"#94A3B8"},"parentId":"sidebar","parentSlot":null},
+{"id":"nav4","type":"menuItem","position":{"x":8,"y":224},"size":{"width":216,"height":44},"properties":{"text":"Clients","icon":"users","selected":false,"text_color":"#94A3B8"},"parentId":"sidebar","parentSlot":null},
+{"id":"nav5","type":"menuItem","position":{"x":8,"y":272},"size":{"width":216,"height":44},"properties":{"text":"Statistiques","icon":"barChart3","selected":false,"text_color":"#94A3B8"},"parentId":"sidebar","parentSlot":null},
+{"id":"nav6","type":"menuItem","position":{"x":8,"y":320},"size":{"width":216,"height":44},"properties":{"text":"Parametres","icon":"settings","selected":false,"text_color":"#94A3B8"},"parentId":"sidebar","parentSlot":null},
+{"id":"header","type":"frame","position":{"x":240,"y":0},"size":{"width":960,"height":60},"style":{"backgroundColor":"#FFFFFF","borderColor":"#E2E8F0","borderWidth":1,"padding":12},"properties":{},"parentId":null,"parentSlot":null},
+{"id":"page-title","type":"label","position":{"x":20,"y":14},"size":{"width":300,"height":32},"style":{"fontSize":22,"textColor":"#0F172A"},"properties":{"text":"Tableau de bord"},"parentId":"header","parentSlot":null},
+{"id":"search","type":"entry","position":{"x":560,"y":10},"size":{"width":240,"height":38},"style":{"borderRadius":10,"borderColor":"#E2E8F0","borderWidth":1,"backgroundColor":"#F8FAFC"},"properties":{"placeholder_text":"Rechercher..."},"parentId":"header","parentSlot":null},
+{"id":"content","type":"frame","position":{"x":240,"y":60},"size":{"width":960,"height":740},"style":{"backgroundColor":"#F8FAFC","padding":24},"properties":{},"parentId":null,"parentSlot":null},
+{"id":"kpi1","type":"statCard","position":{"x":0,"y":0},"size":{"width":220,"height":120},"properties":{"title":"Ventes du jour","value":"24 850 F","caption":"+12% vs hier","icon":"dollarSign","backgroundColor":"#FFFFFF","accentColor":"#10B981"},"parentId":"content","parentSlot":null},
+{"id":"kpi2","type":"statCard","position":{"x":236,"y":0},"size":{"width":220,"height":120},"properties":{"title":"Ordonnances","value":"47","caption":"+5 aujourd'hui","icon":"fileText","backgroundColor":"#FFFFFF","accentColor":"#3B82F6"},"parentId":"content","parentSlot":null},
+{"id":"kpi3","type":"statCard","position":{"x":472,"y":0},"size":{"width":220,"height":120},"properties":{"title":"Stock critique","value":"8","caption":"produits a reapprovisionner","icon":"alertTriangle","backgroundColor":"#FFFFFF","accentColor":"#EF4444"},"parentId":"content","parentSlot":null},
+{"id":"kpi4","type":"statCard","position":{"x":708,"y":0},"size":{"width":220,"height":120},"properties":{"title":"Clients actifs","value":"312","caption":"+18 ce mois","icon":"users","backgroundColor":"#FFFFFF","accentColor":"#8B5CF6"},"parentId":"content","parentSlot":null},
+{"id":"chart1","type":"chart","position":{"x":0,"y":140},"size":{"width":450,"height":280},"properties":{"chartType":"line","title":"Ventes hebdomadaires","data":[{"label":"Lun","value":3200},{"label":"Mar","value":4100},{"label":"Mer","value":3800},{"label":"Jeu","value":5200},{"label":"Ven","value":4700},{"label":"Sam","value":6100},{"label":"Dim","value":2900}],"lineColor":"#3B82F6"},"parentId":"content","parentSlot":null},
+{"id":"table1","type":"table","position":{"x":470,"y":140},"size":{"width":460,"height":280},"properties":{"columns":[{"id":"produit","label":"Produit","width":160},{"id":"stock","label":"Stock","width":80},{"id":"prix","label":"Prix","width":100},{"id":"statut","label":"Statut","width":100}],"rows":[["Paracetamol 500mg","234","1 200 F","Disponible"],["Amoxicilline 1g","12","3 500 F","Critique"],["Ibuprofene 400mg","89","1 800 F","Disponible"],["Vitamine C 1000mg","156","2 200 F","Disponible"],["Omeprazole 20mg","5","4 100 F","Critique"]],"headerBgColor":"#F1F5F9"},"parentId":"content","parentSlot":null}
+],"canvasSettings":{"width":1200,"height":800,"title":"Tableau de bord - PharmaCare"}}
+Key points: sidebar with navigation covers full height, header spans remaining width, content area has KPI row + chart + table side by side, all positions relative to parent frame, professional color palette, contextual French labels.`;
 
 // IMPORTANT: This system prompt is INVISIBLE to the user but CRITICAL for correct output
 export const SYSTEM_PROMPT_TEXT = `You are the Notorious.PY CustomTkinter UI generator. You produce JSON for a visual canvas builder. Output ONLY valid JSON matching the schema below. No text, no markdown, no explanation — just the JSON object.
@@ -197,6 +293,7 @@ IMPORTANT RULES:
 ${DESIGN_RULES}
 ${QUALITY_RUBRIC}
 ${EXAMPLE_LOGIN}
+${EXAMPLE_DASHBOARD}
 
 OUTPUT: Pure JSON only. No text before or after the JSON. No explanation. No markdown.`;
 
@@ -262,6 +359,7 @@ ACCURACY REQUIREMENTS:
 
 ${DESIGN_RULES}
 ${QUALITY_RUBRIC}
+${EXAMPLE_DASHBOARD}
 
 OUTPUT: Pure JSON only. No text before or after the JSON. No explanation. No markdown.`;
 
@@ -284,6 +382,7 @@ JSON OUTPUT SCHEMA:
 ${WIDGET_SCHEMA}
 ${DESIGN_RULES}
 ${QUALITY_RUBRIC}
+${EXAMPLE_DASHBOARD}
 
 OUTPUT: Pure JSON only. No text before or after the JSON. No explanation. No markdown.`;
 
@@ -291,7 +390,7 @@ OUTPUT: Pure JSON only. No text before or after the JSON. No explanation. No mar
  * Serializes current widgets to a compact JSON representation for the AI context.
  * Strips unnecessary fields to reduce token usage.
  */
-export function serializeWidgetsForAI(widgets: any[]): string {
+export function serializeWidgetsForAI(widgets: WidgetData[]): string {
   const compact = widgets.map(w => ({
     id: w.id,
     type: w.type,
@@ -318,9 +417,6 @@ export interface AIModel {
   provider: AIProvider;
   free?: boolean;
 }
-
-// Keep legacy alias for compatibility
-export type OpenRouterModel = AIModel;
 
 export interface ProviderConfig {
   endpoint: string;

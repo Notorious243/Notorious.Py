@@ -16,7 +16,7 @@ import {
   Lock,
   Hash,
 } from "lucide-react";
-import { Model, InputStatus, Provider, ModelInfo, Attachment, ApiKeys, AIMode, TaggedFile } from "./types";
+import { Model, InputStatus, Provider, ModelInfo, Attachment, ApiKeys, AIMode, TaggedFile, ProviderToggleMap } from "./types";
 import type { Message } from "./types";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
@@ -128,7 +128,7 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
 };
 const DEFAULT_CONTEXT_WINDOW = 32000;
 
-const MODE_CONFIG: Record<AIMode, { icon: any; label: string; description: string }> = {
+const MODE_CONFIG: Record<AIMode, { icon: React.ElementType; label: string; description: string }> = {
   agent: { icon: User, label: 'Agent', description: 'Creer et modifier le canvas' },
   discussions: { icon: MessageSquare, label: 'Discussion', description: 'Questions et reponses simples' },
   plan: { icon: FileText, label: 'Plan', description: 'Planification multi-interfaces' },
@@ -143,6 +143,7 @@ interface InputAreaProps {
   onStopGeneration?: () => void;
   onOpenSettings?: () => void;
   apiKeys: ApiKeys;
+  providerToggles: ProviderToggleMap;
   availableFiles?: AvailableFile[];
   conversationMessages?: Message[];
 }
@@ -156,6 +157,7 @@ export function InputArea({
   onStopGeneration,
   onOpenSettings,
   apiKeys,
+  providerToggles,
   availableFiles = [],
   conversationMessages = [],
 }: InputAreaProps) {
@@ -174,7 +176,7 @@ export function InputArea({
   const [fileSearchQuery, setFileSearchQuery] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<{ start: () => void; stop: () => void; continuous: boolean; interimResults: boolean; lang: string; onresult: ((event: { resultIndex: number; results: { isFinal: boolean; 0: { transcript: string } }[] }) => void) | null; onend: (() => void) | null; onerror: (() => void) | null } | null>(null);
   const menuContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -192,18 +194,23 @@ export function InputArea({
 
   useEffect(() => {
     if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
-      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      recognitionRef.current = new SR();
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = 'fr-FR';
-      recognitionRef.current.onresult = (event: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const SR = (window as Record<string, unknown>).SpeechRecognition || (window as Record<string, unknown>).webkitSpeechRecognition;
+      if (!SR) return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const SRConstructor = SR as { new(): any };
+      const recognition = new SRConstructor();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'fr-FR';
+      recognition.onresult = (event: { resultIndex: number; results: { isFinal: boolean; 0: { transcript: string } }[] }) => {
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           if (event.results[i].isFinal) setContent(prev => prev + event.results[i][0].transcript);
         }
       };
-      recognitionRef.current.onend = () => setIsListening(false);
-      recognitionRef.current.onerror = () => setIsListening(false);
+      recognition.onend = () => setIsListening(false);
+      recognition.onerror = () => setIsListening(false);
+      recognitionRef.current = recognition;
     }
   }, []);
 
@@ -213,7 +220,16 @@ export function InputArea({
   };
 
   const configuredProviders = useMemo(
-    () => PROVIDERS.filter((provider) => Boolean(apiKeys[provider.id as keyof ApiKeys]?.trim())),
+    () =>
+      PROVIDERS.filter(
+        (provider) =>
+          Boolean(apiKeys[provider.id as keyof ApiKeys]?.trim()) &&
+          (providerToggles[provider.id] ?? true)
+      ),
+    [apiKeys, providerToggles]
+  );
+  const hasConfiguredKeys = useMemo(
+    () => PROVIDERS.some((provider) => Boolean(apiKeys[provider.id as keyof ApiKeys]?.trim())),
     [apiKeys]
   );
   const providerModels = MODELS_BY_PROVIDER[selectedProvider] ?? [];
@@ -490,7 +506,9 @@ export function InputArea({
                     {configuredProviders.length === 0 ? (
                       <div className="space-y-2 px-2 pb-2">
                         <p className="text-[10px] text-muted-foreground leading-relaxed">
-                          Aucun provider configure. Ajoutez une cle API ou un token d'acces dans les parametres.
+                          {hasConfiguredKeys
+                            ? "Tous les providers configures sont desactives. Activez-en un dans les parametres."
+                            : "Aucun provider configure. Ajoutez une cle API ou un token d'acces dans les parametres."}
                         </p>
                         <button
                           onClick={() => {

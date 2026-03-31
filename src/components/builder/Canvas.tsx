@@ -1,8 +1,10 @@
 import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
+import { devWarn, devError } from '@/lib/logger';
 import { WidgetData } from '@/types/widget';
 import { useWidgets } from '@/contexts/useWidgets';
-import { useCanvasDrop } from '@/hooks/useDragDrop';
+import { useCanvasDrop, type WidgetTypeDragItem } from '@/hooks/useDragDrop';
+import type { FileSystemItem } from '@/hooks/useFileSystem';
 import { ALL_WIDGET_DEFINITIONS } from '@/constants/widgets';
 import { isContainerWidget, getParentContentBounds, getWidgetDepth, getActiveTabSlot, getDefaultTabSlot } from '@/lib/widgetLayout';
 import { CanvasGrid } from './CanvasGrid';
@@ -140,7 +142,7 @@ export const Canvas: React.FC = () => {
   const processZipFile = async (file: File) => {
     try {
       const zip = await JSZip.loadAsync(file);
-      const tree: any[] = [];
+      const tree: FileSystemItem[] = [];
       const entries = Object.entries(zip.files).filter(([, f]) => !f.dir);
       const paths = entries.map(([p]) => p);
       const commonPrefix = paths.length > 0 && paths.every(p => p.includes('/'))
@@ -158,7 +160,7 @@ export const Canvas: React.FC = () => {
       const newId = await createProject(projectName);
       await supabase.from('projects').update({ file_tree: tree, updated_at: new Date().toISOString() }).eq('id', newId);
     } catch (err) {
-      console.error('Import ZIP error:', err);
+      devError('Import ZIP error:', err);
     }
   };
 
@@ -178,7 +180,7 @@ export const Canvas: React.FC = () => {
       setShowCreateModal(false);
       setNewProjectName('');
     } catch (error) {
-      console.error('Erreur creation projet:', error);
+      devError('Erreur creation projet:', error);
     }
   };
   // Drag updates go directly to SmartGuides via ref callback — NO Canvas re-render
@@ -224,10 +226,10 @@ export const Canvas: React.FC = () => {
     }, null);
   }, [widgets, canvasSettings]);
 
-  const handleDrop = (item: any, monitor: DropTargetMonitor) => {
+  const handleDrop = (item: WidgetTypeDragItem, monitor: DropTargetMonitor) => {
     // LOCK: Empêcher les drops simultanés
     if (isDropInProgress.current) {
-      console.warn('[Canvas] Drop ignored - another drop is in progress');
+      devWarn('[Canvas] Drop ignored - another drop is in progress');
       return;
     }
 
@@ -237,13 +239,13 @@ export const Canvas: React.FC = () => {
       const now = Date.now();
 
       if (!canvasRef.current) {
-        console.warn('[Canvas] canvasRef not available');
+        devWarn('[Canvas] canvasRef not available');
         isDropInProgress.current = false;
         return;
       }
 
       if (!item?.widgetType) {
-        console.warn('[Canvas] No widgetType in dropped item');
+        devWarn('[Canvas] No widgetType in dropped item');
         isDropInProgress.current = false;
         return;
       }
@@ -251,7 +253,7 @@ export const Canvas: React.FC = () => {
       // PROTECTION CRITIQUE: Ne traiter QUE les nouveaux widgets depuis la sidebar
       // Les widgets existants utilisent Framer Motion pour le reparenting
       if (!item.transactionId) {
-        console.warn('[Canvas] Drop ignored - no transactionId (probably existing widget being moved)');
+        devWarn('[Canvas] Drop ignored - no transactionId (probably existing widget being moved)');
         isDropInProgress.current = false;
         return;
       }
@@ -260,7 +262,7 @@ export const Canvas: React.FC = () => {
       const transactionId = item.transactionId;
       if (transactionId) {
         if (processedTransactions.current.has(transactionId)) {
-          console.warn('[Canvas] Drop ignored - transaction already processed:', transactionId);
+          devWarn('[Canvas] Drop ignored - transaction already processed:', transactionId);
           isDropInProgress.current = false;
           return;
         }
@@ -276,14 +278,14 @@ export const Canvas: React.FC = () => {
       // Protection secondaire: ignorer les drops trop rapprochés (< 100ms)
       const timeSinceLastDrop = now - lastDropTimestamp.current;
       if (timeSinceLastDrop < 100) {
-        console.warn('[Canvas] Drop ignored - too fast (debounce)', timeSinceLastDrop, 'ms');
+        devWarn('[Canvas] Drop ignored - too fast (debounce)', timeSinceLastDrop, 'ms');
         isDropInProgress.current = false;
         return;
       }
 
       const clientOffset = monitor.getClientOffset();
       if (!clientOffset) {
-        console.warn('[Canvas] No client offset');
+        devWarn('[Canvas] No client offset');
         isDropInProgress.current = false;
         return;
       }
@@ -300,7 +302,7 @@ export const Canvas: React.FC = () => {
 
       const widgetDef = ALL_WIDGET_DEFINITIONS.find(w => w.type === item.widgetType);
       if (!widgetDef) {
-        console.error('[Canvas] Widget definition not found for type:', item.widgetType);
+        devError('[Canvas] Widget definition not found for type:', item.widgetType);
         isDropInProgress.current = false;
         return;
       }
@@ -346,10 +348,10 @@ export const Canvas: React.FC = () => {
         size: { width, height },
         style: {
           fontFamily: 'Roboto',
-          backgroundColor: widgetDef.defaultProperties?.fg_color || '#FFFFFF',
-          borderColor: widgetDef.defaultProperties?.border_color || '#000000',
-          borderWidth: widgetDef.defaultProperties?.border_width ?? 0,
-          borderRadius: widgetDef.defaultProperties?.corner_radius ?? 0,
+          backgroundColor: String(widgetDef.defaultProperties?.fg_color || '#FFFFFF'),
+          borderColor: String(widgetDef.defaultProperties?.border_color || '#000000'),
+          borderWidth: Number(widgetDef.defaultProperties?.border_width ?? 0),
+          borderRadius: Number(widgetDef.defaultProperties?.corner_radius ?? 0),
         },
         properties: widgetDef.defaultProperties ? { ...widgetDef.defaultProperties } : {},
         parentId: targetParentId,
@@ -361,7 +363,7 @@ export const Canvas: React.FC = () => {
         const distX = Math.abs(lastDropPosition.current.x - absX);
         const distY = Math.abs(lastDropPosition.current.y - absY);
         if (distX < 5 && distY < 5 && timeSinceLastDrop < 500) {
-          console.warn('[Canvas] Drop ignored - duplicate at same position');
+          devWarn('[Canvas] Drop ignored - duplicate at same position');
           isDropInProgress.current = false;
           return;
         }
@@ -380,8 +382,8 @@ export const Canvas: React.FC = () => {
       }, 50);
 
     } catch (error) {
-      console.error('[Canvas] drop error:', error);
-      console.error('[Canvas] Error details:', { item, widgets: widgets.length, canvasSettings });
+      devError('[Canvas] drop error:', error);
+      devError('[Canvas] Error details:', { item, widgets: widgets.length, canvasSettings });
       isDropInProgress.current = false;
     } finally {
       // SnapLines removed - SmartGuides handles all alignment visualization

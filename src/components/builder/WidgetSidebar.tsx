@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { devError } from '@/lib/logger';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -57,7 +58,7 @@ const DraggableWidget: React.FC<DraggableWidgetProps> = ({ type, name, descripti
 
   return (
     <div
-      ref={drag as any}
+      ref={drag as unknown as React.Ref<HTMLDivElement>}
       className={`group flex cursor-grab items-center gap-3 rounded-xl border border-border bg-secondary p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary/10 hover:shadow-[0_10px_20px_rgba(15,52,96,0.15)] ${isDragging ? 'opacity-30' : ''
         }`}
     >
@@ -317,7 +318,7 @@ export const WidgetSidebar: React.FC = () => {
             });
           }
         } catch (e) {
-          console.error('Failed to parse file content', e);
+          devError('Failed to parse file content', e);
           // Load empty
           loadWorkspaceState([], {
             width: 800,

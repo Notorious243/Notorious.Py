@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
-import { WidgetData, CanvasSettings } from '@/types/widget';
+import { WidgetData, CanvasSettings, type WidgetProperties } from '@/types/widget';
+import { devWarn, devError } from '@/lib/logger';
 import {
     SYSTEM_PROMPT_TEXT,
     SYSTEM_PROMPT_IMAGE,
@@ -10,6 +11,40 @@ import {
     type AIProvider,
     type ProviderConfig,
 } from '@/lib/aiPrompts';
+
+interface RawAIWidget {
+    id: string;
+    type: string;
+    position: { x: number; y: number };
+    size: { width: number; height: number };
+    style: Record<string, string | number | undefined>;
+    properties: WidgetProperties;
+    parentId?: string | null;
+    parentSlot?: string | null;
+}
+
+interface AIMessageContent {
+    type: string;
+    text?: string;
+    image_url?: { url: string };
+    source?: { type: string; media_type: string; data: string };
+}
+
+interface AIMessage {
+    role: 'system' | 'user' | 'assistant';
+    content: string | AIMessageContent[];
+}
+
+interface AIResponseData {
+    model?: string;
+    choices?: Array<{
+        message?: { content?: string; reasoning_content?: string };
+        text?: string;
+        delta?: { content?: string };
+    }>;
+    content?: Array<{ type: string; text?: string }>;
+    response?: { widgets?: unknown[] };
+}
 
 export interface ContextFile {
     name: string;
@@ -81,7 +116,7 @@ const RETRYABLE_ERROR_CODES = new Set<AIErrorCode>([
 
 const devDebug = (...args: unknown[]) => {
     if (!import.meta.env.DEV) return;
-    console.warn('[AI Debug]', ...args);
+    devWarn('[AI Debug]', ...args);
 };
 
 const withErrorCode = (code: AIErrorCode, message: string): string => `${code}:${message}`;
@@ -182,9 +217,9 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
      * The canvas stores all positions as absolute (x,y from canvas origin).
      * The rendering engine then subtracts parentBounds to get the visual offset.
      */
-    const convertRelativeToAbsolute = (widgets: any[]): any[] => {
-        const widgetMap = new Map<string, any>();
-        const result: any[] = [];
+    const convertRelativeToAbsolute = (widgets: RawAIWidget[]): RawAIWidget[] => {
+        const widgetMap = new Map<string, RawAIWidget>();
+        const result: RawAIWidget[] = [];
 
         // Deep-copy widgets and build lookup map
         for (const w of widgets) {
@@ -202,7 +237,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
         // Convert in depth-order (parents before children)
         const processed = new Set<string>();
 
-        function process(widget: any) {
+        function process(widget: RawAIWidget) {
             if (processed.has(widget.id)) return;
             processed.add(widget.id);
 
@@ -240,7 +275,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
      * - Fixes invalid hex colors
      * - Removes orphan parentId references
      */
-    const validateWidgets = (widgets: any[]): any[] => {
+    const validateWidgets = (widgets: RawAIWidget[]): RawAIWidget[] => {
         const validTypes = new Set([
             'button', 'label', 'entry', 'passwordentry', 'textbox', 'checkbox', 'radiobutton',
             'switch', 'slider', 'progressbar', 'combobox', 'optionmenu',
@@ -252,7 +287,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
         const widgetIds = new Set(widgets.map(w => w.id));
         const hexRegex = /^#[0-9a-fA-F]{3,8}$/;
 
-        const fixColor = (val: any): string | undefined => {
+        const fixColor = (val: unknown): string | undefined => {
             if (typeof val !== 'string') return undefined;
             if (val === 'transparent') return val;
             if (hexRegex.test(val)) return val;
@@ -265,7 +300,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
 
         let filtered = widgets.filter(w => {
             if (!validTypes.has(w.type)) {
-                console.warn(`[AI-Validate] Removed invalid widget type: "${w.type}" (id: ${w.id})`);
+                devWarn(`[AI-Validate] Removed invalid widget type: "${w.type}" (id: ${w.id})`);
                 return false;
             }
             return true;
@@ -285,7 +320,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
             // Fix parentId referencing non-existent widget
             let parentId = w.parentId || null;
             if (parentId && !widgetIds.has(parentId)) {
-                console.warn(`[AI-Validate] Removed orphan parentId "${parentId}" from widget ${w.id}`);
+                devWarn(`[AI-Validate] Removed orphan parentId "${parentId}" from widget ${w.id}`);
                 parentId = null;
             }
 
@@ -347,7 +382,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
         return Math.ceil(text.length * Math.max(8, fontSize) * 0.56) + 20;
     };
 
-    const getWidgetText = (widget: any): string => {
+    const getWidgetText = (widget: RawAIWidget): string => {
         const props = widget.properties || {};
         return String(
             props.text ||
@@ -359,7 +394,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
         ).trim();
     };
 
-    const getWidgetMinSize = (widget: any): { width: number; height: number } => {
+    const getWidgetMinSize = (widget: RawAIWidget): { width: number; height: number } => {
         switch (widget.type) {
             case 'label':
                 return { width: 60, height: 24 };
@@ -382,7 +417,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
         }
     };
 
-    const overlaps = (a: any, b: any, padding = 2): boolean => {
+    const overlaps = (a: RawAIWidget, b: RawAIWidget, padding = 2): boolean => {
         const ax1 = Number(a.position?.x) - padding;
         const ay1 = Number(a.position?.y) - padding;
         const ax2 = ax1 + Number(a.size?.width) + padding * 2;
@@ -395,9 +430,9 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
     };
 
     const runQualityPass = (
-        widgets: any[],
+        widgets: RawAIWidget[],
         canvasSettings?: Partial<CanvasSettings>
-    ): { widgets: any[]; checks: GenerationQualityCheck[]; summary: GenerationQualitySummary; selfHealApplied: boolean } => {
+    ): { widgets: RawAIWidget[]; checks: GenerationQualityCheck[]; summary: GenerationQualitySummary; selfHealApplied: boolean } => {
         const canvasWidth = Math.max(360, Number(canvasSettings?.width) || 800);
         const canvasHeight = Math.max(360, Number(canvasSettings?.height) || 600);
         const fixed = widgets.map((widget) => ({
@@ -509,7 +544,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
 
         const deduped = fixed.filter((widget) => !duplicateIds.has(widget.id));
 
-        const groups = new Map<string, any[]>();
+        const groups = new Map<string, RawAIWidget[]>();
         for (const widget of deduped) {
             const groupKey = widget.parentId ? `parent:${widget.parentId}` : 'root';
             const group = groups.get(groupKey) || [];
@@ -567,7 +602,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
         const totalIssues = checks.reduce((sum, check) => sum + check.issueCount, 0);
         const totalFixed = checks.reduce((sum, check) => sum + check.fixedCount, 0);
         const remainingIssues = Math.max(0, totalIssues - totalFixed);
-        const score = Math.max(0, Math.min(100, 100 - remainingIssues * 14 - Math.max(0, totalIssues - totalFixed) * 4));
+        const score = Math.max(0, Math.min(100, 100 - remainingIssues * 20 - totalFixed * 2));
         const notes = checks
             .filter((check) => check.issueCount > 0)
             .map((check) => check.detail);
@@ -631,7 +666,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
                 throw new Error('L\'IA a renvoyé 0 widgets. Reformulez votre prompt.');
             }
 
-            const widgetsWithIds = parsed.widgets.map((w: any, index: number) => ({
+            const widgetsWithIds = parsed.widgets.map((w: Record<string, unknown>, index: number) => ({
                 ...w,
                 id: w.id || `ai-widget-${Date.now()}-${index}`,
                 style: w.style || {},
@@ -661,9 +696,9 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
                 qualityGate,
                 selfHealApplied: quality.selfHealApplied,
             };
-        } catch (e: any) {
-            console.error('[AI] Parse error:', e.message);
-            console.error('[AI] Response text (first 500 chars):', responseText.substring(0, 500));
+        } catch (e: unknown) {
+            devError('[AI] Parse error:', e instanceof Error ? e.message : e);
+            devError('[AI] Response text (first 500 chars):', responseText.substring(0, 500));
             return null;
         }
     };
@@ -678,12 +713,13 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
      * Extracts text content from an API response, checking multiple
      * possible locations (content, reasoning, text, etc.)
      */
-    const extractContent = (data: any): string | null => {
+    const extractContent = (data: AIResponseData | Array<{ generated_text?: string }>): string | null => {
         // HuggingFace legacy format: [{generated_text: "..."}]
         if (Array.isArray(data) && data.length > 0 && data[0]?.generated_text) {
             return data[0].generated_text;
         }
 
+        if (Array.isArray(data)) return null;
         const choice = data?.choices?.[0];
         if (!choice) return null;
 
@@ -714,9 +750,9 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
      * Extracts content from Anthropic's response format.
      * Anthropic returns { content: [{ type: 'text', text: '...' }] }
      */
-    const extractAnthropicContent = (data: any): string | null => {
+    const extractAnthropicContent = (data: AIResponseData): string | null => {
         if (data?.content && Array.isArray(data.content)) {
-            const textBlock = data.content.find((b: any) => b.type === 'text');
+            const textBlock = data.content.find((b: { type: string; text?: string }) => b.type === 'text');
             if (textBlock?.text) return textBlock.text;
         }
         return null;
@@ -731,7 +767,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
     const callProvider = async (
         apiKey: string,
         model: string,
-        messages: any[],
+        messages: AIMessage[],
         signal?: AbortSignal
     ): Promise<string> => {
         const modelBase = model.split(':')[0];
@@ -753,15 +789,15 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
 
         if (config.apiFormat === 'anthropic') {
             // Anthropic: system prompt goes in 'system' field, not in messages
-            const systemMsg = messages.find((m: any) => m.role === 'system');
-            const userMessages = messages.filter((m: any) => m.role !== 'system');
+            const systemMsg = messages.find((m: AIMessage) => m.role === 'system');
+            const userMessages = messages.filter((m: AIMessage) => m.role !== 'system');
 
             // Convert OpenAI vision format to Anthropic format
-            const convertedMessages = userMessages.map((msg: any) => {
+            const convertedMessages = userMessages.map((msg: AIMessage) => {
                 if (Array.isArray(msg.content)) {
                     return {
                         ...msg,
-                        content: msg.content.map((block: any) => {
+                        content: msg.content.map((block: AIMessageContent) => {
                             if (block.type === 'image_url' && block.image_url?.url) {
                                 // Extract base64 data and media type from data URI
                                 const dataUri = block.image_url.url as string;
@@ -812,15 +848,15 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
                 body: requestBody,
                 signal,
             });
-        } catch (err: any) {
-            if (err.name === 'AbortError') throw err;
-            console.error(`[AI] Network error:`, err);
+        } catch (err: unknown) {
+            if (err instanceof Error && err.name === 'AbortError') throw err;
+            devError(`[AI] Network error:`, err);
             throw new Error(withErrorCode('NETWORK', `Impossible de contacter ${providerName}. Verifiez votre connexion.`));
         }
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            console.error(`[AI] ${providerName} ${response.status}:`, JSON.stringify(errorData, null, 2));
+            devError(`[AI] ${providerName} ${response.status}:`, JSON.stringify(errorData, null, 2));
 
             const apiMsg = String(errorData.error?.message || errorData.error?.code || errorData.message || '').trim();
 
@@ -856,7 +892,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
             : extractContent(data);
 
         if (!content) {
-            console.error('[AI] Empty content. Full response:', JSON.stringify(data, null, 2));
+            devError('[AI] Empty content. Full response:', JSON.stringify(data, null, 2));
             throw new Error(withErrorCode('EMPTY_CONTENT', `${providerName} (${actualModel}) a renvoye une reponse vide.`));
         }
 
@@ -866,7 +902,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
     const callWithRetry = async (
         apiKey: string,
         model: string,
-        messages: any[],
+        messages: AIMessage[],
         signal?: AbortSignal
     ): Promise<string> => {
         let lastError: Error | null = null;
@@ -874,10 +910,11 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
             try {
                 if (attempt > 1) setRetryCount(attempt - 1);
                 return await callProvider(apiKey, model, messages, signal);
-            } catch (attemptError: any) {
-                if (attemptError.name === 'AbortError') throw attemptError;
-                const { code, message } = splitErrorCode(attemptError.message || '');
-                lastError = new Error(withErrorCode(code, message || attemptError.message || 'Erreur IA'));
+            } catch (attemptError: unknown) {
+                if (attemptError instanceof Error && attemptError.name === 'AbortError') throw attemptError;
+                const rawMsg = attemptError instanceof Error ? attemptError.message : String(attemptError);
+                const { code, message } = splitErrorCode(rawMsg);
+                lastError = new Error(withErrorCode(code, message || rawMsg || 'Erreur IA'));
                 const isRetryable = RETRYABLE_ERROR_CODES.has(code);
                 if (!isRetryable || attempt >= MAX_RETRY_ATTEMPTS) {
                     throw lastError;
@@ -918,8 +955,8 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
             }
 
             return result;
-        } catch (e: any) {
-            if (e.name !== 'AbortError') setError(formatErrorForUi(e.message || ''));
+        } catch (e: unknown) {
+            if (!(e instanceof Error && e.name === 'AbortError')) setError(formatErrorForUi(e instanceof Error ? e.message : String(e)));
             return null;
         } finally {
             setIsGenerating(false);
@@ -964,8 +1001,8 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
             }
 
             return result;
-        } catch (e: any) {
-            if (e.name !== 'AbortError') setError(formatErrorForUi(e.message || ''));
+        } catch (e: unknown) {
+            if (!(e instanceof Error && e.name === 'AbortError')) setError(formatErrorForUi(e instanceof Error ? e.message : String(e)));
             return null;
         } finally {
             setIsGenerating(false);
@@ -1007,8 +1044,8 @@ USER INSTRUCTION: ${prompt}${contextPrompt}`;
             }
 
             return result;
-        } catch (e: any) {
-            if (e.name !== 'AbortError') setError(formatErrorForUi(e.message || ''));
+        } catch (e: unknown) {
+            if (!(e instanceof Error && e.name === 'AbortError')) setError(formatErrorForUi(e instanceof Error ? e.message : String(e)));
             return null;
         } finally {
             setIsGenerating(false);

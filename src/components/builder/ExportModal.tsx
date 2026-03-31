@@ -1,4 +1,5 @@
 import React from 'react';
+import { devError } from '@/lib/logger';
 import {
   Dialog,
   DialogContent,
@@ -521,7 +522,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onOpenChange }
   selectedWidgets.forEach(w => {
     [w.style?.fontFamily, w.properties?.font?.[0], w.properties?.nameFont, w.properties?.fontFamily]
       .filter(Boolean)
-      .forEach((f: any) => { if (!STANDARD_FONTS.has(f)) customFontsUsed.add(f); });
+      .forEach((f: string) => { if (!STANDARD_FONTS.has(f)) customFontsUsed.add(f); });
   });
   const hasCustomFonts = customFontsUsed.size > 0;
   const totalFiles = selectedPyCount === 0 ? 0 : pyFileCount + imageCount + 2 + (hasCustomFonts ? 1 : 0);
@@ -799,7 +800,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onOpenChange }
       URL.revokeObjectURL(url);
       toast.success(`Projet exporté : ${safeProjectName}.zip (${pyFileCount} fichier${pyFileCount > 1 ? 's' : ''} Python)`);
     } catch (err) {
-      console.error('ZIP export error:', err);
+      devError('ZIP export error:', err);
       toast.error("Erreur lors de l'exportation ZIP");
     } finally {
       setIsZipping(false);

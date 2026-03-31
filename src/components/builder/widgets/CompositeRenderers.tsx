@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ICON_LIBRARY, normalizeIconKey } from '@/constants/icons';
 import { WidgetRenderContext, getColor, toNumber } from './widget-shared';
+import type { TableColumn, ChartDataPoint } from '@/components/builder/properties/widget-properties-shared';
 
 const fallbackIcon = ICON_LIBRARY.clipboardList;
 
@@ -77,19 +78,19 @@ export const TableRenderer: React.FC<{ ctx: WidgetRenderContext }> = React.memo(
           {showHeaders && (
             <thead>
               <tr>
-                {columns.map((column: any, idx: number) => (
+                {columns.map((column: TableColumn, idx: number) => (
                   <th key={`th-${idx}`} style={{ backgroundColor: headerBg, color: headerTextColor, textAlign: 'left', padding: '0 12px', height: `${rowHeightValue}px`, lineHeight: `${rowHeightValue}px`, fontSize: '13px', fontWeight: 600, letterSpacing: '0.01em', borderBottom: `${borderWidthValue}px solid ${border}`, minWidth: column.width ? `${column.width}px` : undefined }}>{column.label || column.id}</th>
                 ))}
               </tr>
             </thead>
           )}
           <tbody>
-            {rows.map((row: any, rowIndex: number) => {
+            {rows.map((row: string[] | Record<string, string>, rowIndex: number) => {
               const backgroundColor = properties.alternateRowColors === false ? 'transparent' : rowIndex % 2 === 0 ? oddRowColor : evenRowColor;
-              const rowData = Array.isArray(row) ? row : columns.map((column: any) => (row && row[column.id]) || '');
+              const rowData = Array.isArray(row) ? row : columns.map((column: TableColumn) => (row && typeof row === 'object' && !Array.isArray(row) ? row[column.id] : '') || '');
               return (
                 <tr key={rowIndex} style={{ backgroundColor }}>
-                  {columns.map((column: any, colIndex: number) => {
+                  {columns.map((column: TableColumn, colIndex: number) => {
                     const cellValue = rowData[colIndex] || '';
                     const isStatusCol = column.type === 'status';
                     const statusColorMap: Record<string, string> = { 'vert': '#22C55E', 'green': '#22C55E', 'normal': '#22C55E', 'ok': '#22C55E', 'confirmé': '#22C55E', 'jaune': '#EAB308', 'yellow': '#EAB308', 'faible': '#EAB308', 'warning': '#EAB308', 'en cours': '#EAB308', 'rouge': '#EF4444', 'red': '#EF4444', 'bas': '#EF4444', 'error': '#EF4444', 'critique': '#EF4444', 'bleu': '#3B82F6', 'blue': '#3B82F6', 'info': '#3B82F6' };
@@ -178,11 +179,11 @@ export const ChartRenderer: React.FC<{ ctx: WidgetRenderContext }> = React.memo(
   const padding = { top: 50, right: 30, bottom: 40, left: 50 };
   const chartWidth = widget.size.width - padding.left - padding.right;
   const chartHeight = widget.size.height - padding.top - padding.bottom;
-  const values = chartData.map((d: any) => d.value || 0);
+  const values = chartData.map((d: ChartDataPoint) => d.value || 0);
   const maxValue = Math.max(...values, 1);
   const minValue = Math.min(...values, 0);
   const range = maxValue - minValue || 1;
-  const points = chartData.map((d: any, i: number) => {
+  const points = chartData.map((d: ChartDataPoint, i: number) => {
     const x = padding.left + (i / Math.max(chartData.length - 1, 1)) * chartWidth;
     const y = padding.top + chartHeight - ((d.value - minValue) / range) * chartHeight;
     return { x, y, label: d.label, value: d.value };
@@ -223,7 +224,7 @@ export const ChartRenderer: React.FC<{ ctx: WidgetRenderContext }> = React.memo(
           const cy = padding.top + chartHeight / 2;
           const gapAngle = 0.03;
 
-          const legendItems = showLegend ? chartData.map((d: any, i: number) => {
+          const legendItems = showLegend ? chartData.map((d: ChartDataPoint, i: number) => {
             const pct = Math.round((d.value / total) * 100);
             const legendY = padding.top + 16 + i * 32;
             return (
@@ -243,7 +244,7 @@ export const ChartRenderer: React.FC<{ ctx: WidgetRenderContext }> = React.memo(
             </defs>
           );
 
-          const slices = chartData.map((d: any, i: number) => {
+          const slices = chartData.map((d: ChartDataPoint, i: number) => {
             const percent = d.value / total;
             const sliceGap = chartData.length > 1 ? gapAngle : 0;
             const startAngle = cumulativeAngle + sliceGap / 2;

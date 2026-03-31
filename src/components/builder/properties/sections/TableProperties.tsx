@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, Trash2, Settings2, Palette, Columns3, Rows3 } from 'lucide-react';
 import { ToggleRow, ColorField, ActionsRow, CompactButton } from '../ui/layout';
 import { LazyInput } from '../ui/LazyInput';
-import { WidgetPropertySectionProps, DEFAULT_TABLE_COLUMNS, DEFAULT_TABLE_ROWS } from '../widget-properties-shared';
+import { WidgetPropertySectionProps, DEFAULT_TABLE_COLUMNS, DEFAULT_TABLE_ROWS, type TableColumn } from '../widget-properties-shared';
 
 export const TableProperties: React.FC<WidgetPropertySectionProps> = ({
   properties,
@@ -14,15 +14,15 @@ export const TableProperties: React.FC<WidgetPropertySectionProps> = ({
   handleBatchPropertyChange,
 }) => {
   const columns = Array.isArray(properties.columns) && properties.columns.length > 0
-    ? properties.columns.map((column: any, index: number) => ({
+    ? properties.columns.map((column: TableColumn, index: number) => ({
       id: column?.id || `col${index + 1}`,
       label: column?.label || `Colonne ${index + 1}`,
       width: typeof column?.width === 'number' ? column.width : column?.width || '',
     }))
     : DEFAULT_TABLE_COLUMNS.map((column) => ({ ...column }));
 
-  const normalizeRows = (rowsSource: any[], cols: any[]) =>
-    rowsSource.map((row: any) => {
+  const normalizeRows = (rowsSource: (string[] | Record<string, string>)[], cols: TableColumn[]) =>
+    rowsSource.map((row: string[] | Record<string, string>) => {
       const baseRow = Array.isArray(row)
         ? [...row]
         : cols.map((column) => (row && row[column.id]) ?? '');
@@ -35,7 +35,7 @@ export const TableProperties: React.FC<WidgetPropertySectionProps> = ({
     ? normalizeRows(properties.rows, columns)
     : normalizeRows(DEFAULT_TABLE_ROWS, columns);
 
-  const applyTableUpdate = (nextColumns: any[], nextRows: string[][]) => {
+  const applyTableUpdate = (nextColumns: TableColumn[], nextRows: string[][]) => {
     handleBatchPropertyChange({
       columns: nextColumns,
       rows: normalizeRows(nextRows, nextColumns),
@@ -43,7 +43,7 @@ export const TableProperties: React.FC<WidgetPropertySectionProps> = ({
   };
 
   const updateColumn = (index: number, key: 'id' | 'label' | 'width', value: string) => {
-    const nextColumns = columns.map((column: any, idx: number) =>
+    const nextColumns = columns.map((column: TableColumn, idx: number) =>
       idx === index ? { ...column, [key]: key === 'width' ? (value === '' ? '' : Number(value)) : value } : column
     );
     applyTableUpdate(nextColumns, rows);
@@ -62,7 +62,7 @@ export const TableProperties: React.FC<WidgetPropertySectionProps> = ({
 
   const removeColumn = (index: number) => {
     if (columns.length <= 1) return;
-    const nextColumns = columns.filter((_: any, idx: number) => idx !== index);
+    const nextColumns = columns.filter((_: TableColumn, idx: number) => idx !== index);
     const nextRows = rows.map((row: string[]) => row.filter((_: string, cellIndex: number) => cellIndex !== index));
     applyTableUpdate(nextColumns, nextRows);
   };
@@ -172,7 +172,7 @@ export const TableProperties: React.FC<WidgetPropertySectionProps> = ({
                 <Plus className="h-4 w-4 mr-1" /> Ajouter Colonne
               </CompactButton>
             </ActionsRow>
-            {columns.map((column: any, index: number) => (
+            {columns.map((column: TableColumn, index: number) => (
               <div key={`col-${index}`} className="border border-border/70 rounded-lg p-4 space-y-3.5 bg-background/60 shadow-sm">
                 <ActionsRow>
                   <span className="text-sm font-semibold text-foreground">Colonne {index + 1}</span>
@@ -244,7 +244,7 @@ export const TableProperties: React.FC<WidgetPropertySectionProps> = ({
                   </Button>
                 </ActionsRow>
                 <div className="space-y-3">
-                  {columns.map((column: any, colIndex: number) => (
+                  {columns.map((column: TableColumn, colIndex: number) => (
                     <div key={`${rowIndex}-${colIndex}`} className="space-y-1.5">
                       <Label className="text-sm font-medium text-foreground flex items-center gap-2">
                         <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold">

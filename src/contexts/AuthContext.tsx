@@ -1,5 +1,6 @@
 import React, { useEffect, useState, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
+import { devWarn } from '@/lib/logger';
 import type { User, Session } from '@supabase/supabase-js';
 import { flushPendingCanvasWrites } from '@/lib/canvasSyncService';
 import { AuthContext } from '@/contexts/auth-context';
@@ -34,7 +35,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 new Promise<void>((resolve) => setTimeout(resolve, 5000)),
             ]);
         } catch (error) {
-            console.warn('[Auth] Flush pending canvas writes before sign-out failed:', error);
+            devWarn('[Auth] Flush pending canvas writes before sign-out failed:', error);
         }
         try { localStorage.removeItem('ctk-active-project'); } catch { /* ignore */ }
         await supabase.auth.signOut();

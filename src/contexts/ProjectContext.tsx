@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
+import { devError } from '@/lib/logger';
 import { useAuth } from '@/contexts/useAuth';
 import { ProjectContext, ProjectMetadata } from '@/contexts/project-context';
 
@@ -161,21 +162,21 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         setProjects(prev => prev.filter(p => p.id !== id));
         setActiveProjectId(prev => (prev === id ? null : prev));
         supabase.from('projects').delete().eq('id', id).then(({ error }) => {
-            if (error) console.error('[ProjectContext] Failed to delete project:', error);
+            if (error) devError('[ProjectContext] Failed to delete project:', error);
         });
     }, []);
 
     const renameProject = useCallback((id: string, newName: string) => {
         setProjects(prev => prev.map(p => p.id === id ? { ...p, name: newName, updatedAt: Date.now() } : p));
         supabase.from('projects').update({ name: newName, updated_at: new Date().toISOString() }).eq('id', id).then(({ error }) => {
-            if (error) console.error('[ProjectContext] Failed to rename project:', error);
+            if (error) devError('[ProjectContext] Failed to rename project:', error);
         });
     }, []);
 
     const updateProjectThumbnail = useCallback((id: string, thumbnail: string) => {
         setProjects(prev => prev.map(p => p.id === id ? { ...p, thumbnail, updatedAt: Date.now() } : p));
         supabase.from('projects').update({ thumbnail, updated_at: new Date().toISOString() }).eq('id', id).then(({ error }) => {
-            if (error) console.error('[ProjectContext] Failed to update thumbnail:', error);
+            if (error) devError('[ProjectContext] Failed to update thumbnail:', error);
         });
     }, []);
 

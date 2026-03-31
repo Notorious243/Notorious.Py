@@ -93,7 +93,7 @@ export const useExportPython = () => {
       [w.style?.fontFamily, w.properties?.font?.[0], w.properties?.nameFont, w.properties?.fontFamily,
        w.properties?.titleFont, w.properties?.valueFont, w.properties?.captionFont]
         .filter(Boolean)
-        .forEach((f: any) => { if (!STANDARD_FONTS.has(f)) customFonts.add(f); });
+        .forEach((f: string) => { if (!STANDARD_FONTS.has(f)) customFonts.add(f); });
     });
     const hasCustomFonts = customFonts.size > 0;
 
@@ -318,7 +318,7 @@ export const useExportPython = () => {
     const widgetName = idToVarName[widget.id] || widget.type;
     const contentHeight = canvasSettings.height - 40; // Hauteur contenu (sans barre de titre décorative)
 
-    const sanitize = (value: any) => {
+    const sanitize = (value: unknown) => {
       if (value === null || value === undefined) return '';
       return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '');
     };
@@ -338,13 +338,13 @@ export const useExportPython = () => {
       }
     }
 
-    const parseNumeric = (raw: any, fallback: number) => {
+    const parseNumeric = (raw: unknown, fallback: number) => {
       if (raw === undefined || raw === null || raw === '') return fallback;
       const num = Number(raw);
       return Number.isFinite(num) ? num : fallback;
     };
 
-    const safeInt = (val: any, fallback: number): number => {
+    const safeInt = (val: unknown, fallback: number): number => {
       const n = Number(val);
       return Number.isFinite(n) ? Math.round(n) : fallback;
     };
@@ -1274,9 +1274,9 @@ export const useExportPython = () => {
             { id: 'nom', label: 'Nom', width: 160 },
             { id: 'statut', label: 'Statut', width: 140 },
           ];
-        const idsColonnes = colonnes.map((col: any, idx: number) => sanitize(col.id || `col${idx + 1}`));
-        const labelsColonnes = colonnes.map((col: any, idx: number) => sanitize(col.label || idsColonnes[idx]));
-        const largeursColonnes = colonnes.map((col: any) => col.width || 140);
+        const idsColonnes = colonnes.map((col: { id?: string; label?: string; width?: number }, idx: number) => sanitize(col.id || `col${idx + 1}`));
+        const labelsColonnes = colonnes.map((col: { id?: string; label?: string; width?: number }, idx: number) => sanitize(col.label || idsColonnes[idx]));
+        const largeursColonnes = colonnes.map((col: { id?: string; label?: string; width?: number }) => col.width || 140);
         const lignesTableau = Array.isArray(properties.rows) && properties.rows.length > 0
           ? properties.rows
           : [
@@ -1284,7 +1284,7 @@ export const useExportPython = () => {
             ['2', 'Bob Dupont', 'En cours'],
             ['3', 'Chloé Leroy', 'Livré'],
           ];
-        const lignesNettoyees = lignesTableau.map((ligne: any) => {
+        const lignesNettoyees = lignesTableau.map((ligne: string[] | Record<string, string>) => {
           if (Array.isArray(ligne)) {
             const norm = [...ligne];
             while (norm.length < idsColonnes.length) norm.push('');
@@ -1360,8 +1360,8 @@ export const useExportPython = () => {
           { label: 'B', value: 40 },
           { label: 'C', value: 25 },
         ];
-        const labelsGraphe = donneesGraphe.map((d: any) => sanitize(d.label || ''));
-        const valeursGraphe = donneesGraphe.map((d: any) => d.value || 0);
+        const labelsGraphe = donneesGraphe.map((d: { label?: string; value?: number }) => sanitize(d.label || ''));
+        const valeursGraphe = donneesGraphe.map((d: { label?: string; value?: number }) => d.value || 0);
         const couleurLigne = properties.lineColor || '#22C55E';
         const remplissage = properties.showFill !== false;
         const grille = properties.showGrid !== false;

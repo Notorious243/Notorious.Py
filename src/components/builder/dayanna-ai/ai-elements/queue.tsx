@@ -29,7 +29,7 @@ export function QueueSection({ children, className }: { children: React.ReactNod
     <div className={cn("flex flex-col gap-2", className)}>
       {React.Children.map(children, child => {
         if (React.isValidElement(child)) {
-          return React.cloneElement(child as any, { isOpen, setIsOpen });
+          return React.cloneElement(child as React.ReactElement<{ isOpen: boolean; setIsOpen: (v: boolean) => void }>, { isOpen, setIsOpen });
         }
         return child;
       })}
@@ -37,10 +37,10 @@ export function QueueSection({ children, className }: { children: React.ReactNod
   );
 }
 
-export function QueueSectionTrigger({ children, isOpen, setIsOpen }: any) {
+export function QueueSectionTrigger({ children, isOpen, setIsOpen }: { children: React.ReactNode; isOpen?: boolean; setIsOpen?: (v: boolean) => void }) {
   return (
     <button 
-      onClick={() => setIsOpen(!isOpen)}
+      onClick={() => setIsOpen?.(!isOpen)}
       className="flex items-center gap-2 w-full text-left"
     >
       {isOpen ? <ChevronDown className="w-3 h-3 text-zinc-500" /> : <ChevronRight className="w-3 h-3 text-zinc-500" />}
@@ -58,7 +58,7 @@ export function QueueSectionLabel({ count, label }: { count: number; label: stri
   );
 }
 
-export function QueueSectionContent({ children, isOpen }: any) {
+export function QueueSectionContent({ children, isOpen }: { children: React.ReactNode; isOpen?: boolean }) {
   return (
     <AnimatePresence>
       {isOpen && (
@@ -129,7 +129,7 @@ export function QueueItemActions({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function QueueItemAction({ children, onClick, title }: any) {
+export function QueueItemAction({ children, onClick, title }: { children: React.ReactNode; onClick?: () => void; title?: string }) {
   return (
     <button 
       onClick={onClick}

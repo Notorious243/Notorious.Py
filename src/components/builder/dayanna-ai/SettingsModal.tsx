@@ -1,16 +1,18 @@
 import { motion, AnimatePresence } from "motion/react";
 import { X, Save, Shield, Eye, EyeOff, ExternalLink, Copy } from "lucide-react";
-import { ApiKeys, Provider } from "./types";
+import { ApiKeys, Provider, ProviderToggleMap } from "./types";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ProviderBrandIcon } from "./provider-brand-icons";
+import { Switch } from "@/components/ui/switch";
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   apiKeys: ApiKeys;
-  onSave: (keys: ApiKeys) => void;
+  providerToggles: ProviderToggleMap;
+  onSave: (keys: ApiKeys, providerToggles: ProviderToggleMap) => void;
 }
 
 const KEY_FIELDS: {
@@ -32,15 +34,17 @@ const KEY_FIELDS: {
   { key: 'huggingface', provider: 'huggingface', label: 'Hugging Face', placeholder: 'hf_...', url: 'https://huggingface.co/settings/tokens', free: true, credentialLabel: "Token d'accès", learnActionLabel: 'Obtenir un token' },
 ];
 
-export function SettingsModal({ isOpen, onClose, apiKeys, onSave }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, apiKeys, providerToggles, onSave }: SettingsModalProps) {
   const [keys, setKeys] = useState<ApiKeys>(apiKeys);
+  const [toggles, setToggles] = useState<ProviderToggleMap>(providerToggles);
   const [visibleKeys, setVisibleKeys] = useState<Partial<Record<keyof ApiKeys, boolean>>>({});
 
   useEffect(() => {
     if (!isOpen) return;
     setKeys(apiKeys);
+    setToggles(providerToggles);
     setVisibleKeys({});
-  }, [apiKeys, isOpen]);
+  }, [apiKeys, isOpen, providerToggles]);
 
   const sortedFields = useMemo(
     () =>
@@ -118,6 +122,7 @@ export function SettingsModal({ isOpen, onClose, apiKeys, onSave }: SettingsModa
                   const value = keys[key] || '';
                   const isConfigured = Boolean(value.trim());
                   const isVisible = Boolean(visibleKeys[key]);
+                  const isEnabled = toggles[provider] ?? true;
 
                   return (
                     <div
@@ -147,19 +152,37 @@ export function SettingsModal({ isOpen, onClose, apiKeys, onSave }: SettingsModa
                               )}>
                                 {isConfigured ? 'Configuree' : 'Non configuree'}
                               </span>
+                              {!isEnabled && (
+                                <span className="ml-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-amber-600">
+                                  Desactive
+                                </span>
+                              )}
                             </div>
                             <p className="mt-1 text-[10px] text-muted-foreground">{credentialLabel}</p>
                           </div>
                         </div>
 
-                        <a
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex shrink-0 items-center gap-1 text-[10px] text-primary/90 hover:text-primary hover:underline"
-                        >
-                          {learnActionLabel} <ExternalLink className="h-2.5 w-2.5" />
-                        </a>
+                        <div className="flex shrink-0 flex-col items-end gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-medium text-muted-foreground">
+                              {isEnabled ? "Actif" : "Off"}
+                            </span>
+                            <Switch
+                              checked={isEnabled}
+                              onCheckedChange={(checked) =>
+                                setToggles((prev) => ({ ...prev, [provider]: checked }))
+                              }
+                            />
+                          </div>
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-[10px] text-primary/90 hover:text-primary hover:underline"
+                          >
+                            {learnActionLabel} <ExternalLink className="h-2.5 w-2.5" />
+                          </a>
+                        </div>
                       </div>
 
                       <div className="relative">
@@ -205,7 +228,7 @@ export function SettingsModal({ isOpen, onClose, apiKeys, onSave }: SettingsModa
             {/* Footer */}
             <div className="flex justify-end border-t border-border/60 bg-primary/10 p-4">
               <button
-                onClick={() => { onSave(keys); onClose(); }}
+                onClick={() => { onSave(keys, toggles); onClose(); }}
                 className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-primary-foreground shadow-md shadow-primary/20 transition-colors hover:bg-primary/90"
               >
                 <Save className="h-4 w-4" />

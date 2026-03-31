@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { devWarn } from '@/lib/logger';
 import type { CanvasSettings } from '@/types/widget';
 
 export type CanvasSyncState = 'ok' | 'syncing' | 'degraded' | 'error';
@@ -54,7 +55,7 @@ const persistQueuedWrites = () => {
     }
     window.localStorage.setItem(PENDING_QUEUE_STORAGE_KEY, JSON.stringify(Array.from(queuedByProject.entries())));
   } catch (error) {
-    console.warn(`${telemetryTag} Impossible de persister la queue locale`, error);
+    devWarn(`${telemetryTag} Impossible de persister la queue locale`, error);
   }
 };
 
@@ -88,7 +89,7 @@ const hydrateQueuedWrites = () => {
       });
     });
   } catch (error) {
-    console.warn(`${telemetryTag} Impossible de restaurer la queue locale`, error);
+    devWarn(`${telemetryTag} Impossible de restaurer la queue locale`, error);
     if (canUseStorage()) {
       window.localStorage.removeItem(PENDING_QUEUE_STORAGE_KEY);
     }
@@ -253,7 +254,7 @@ const flushProjectWrites = async (projectId: string): Promise<void> => {
           reason: classified.reason,
           lastErrorCode: classified.code,
         });
-        console.warn(`${telemetryTag} Echec write`, { projectId, code: classified.code, reason: classified.reason });
+        devWarn(`${telemetryTag} Echec write`, { projectId, code: classified.code, reason: classified.reason });
         emitTelemetry({
           level: status === 'error' ? 'error' : 'warn',
           action: 'canvas_write_failed',

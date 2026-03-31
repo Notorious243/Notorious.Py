@@ -112,7 +112,7 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
   }
 
   const commitImageLabelUpdates = (
-    propertyUpdates: Record<string, any>,
+    propertyUpdates: Partial<WidgetData['properties']>,
     sizeOverride?: [number, number]
   ) => {
     const widgetUpdates: Partial<WidgetData> = {
@@ -227,15 +227,15 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
     handlePropertyChange(prop, safe);
   };
 
-  const handleStyleChange = (prop: keyof WidgetData['style'], value: any) => {
+  const handleStyleChange = (prop: keyof WidgetData['style'], value: string | number | boolean) => {
     updateWidgetStyle(selectedWidget.id, { [prop]: value });
   };
 
-  const handlePropertyChange = (prop: keyof WidgetData['properties'], value: any) => {
+  const handlePropertyChange = (prop: string, value: WidgetData['properties'][string]) => {
     updateWidget(selectedWidget.id, { properties: { ...selectedWidget.properties, [prop]: value } });
   };
 
-  const handleBatchPropertyChange = (updates: Record<string, any>) => {
+  const handleBatchPropertyChange = (updates: Record<string, WidgetData['properties'][string]>) => {
     updateWidget(selectedWidget.id, {
       properties: {
         ...selectedWidget.properties,
@@ -348,7 +348,7 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
                 ].map(({ h, v, pos }) => (
                   <button
                     key={`${h}-${v}`}
-                    onClick={() => alignPosition(h as any, v as any)}
+                    onClick={() => alignPosition(h as 'left' | 'center' | 'right', v as 'top' | 'center' | 'bottom')}
                     className="h-8 flex items-center justify-center rounded-md border border-border/40 bg-background/50 hover:bg-primary/10 hover:border-primary/30 transition-all"
                   >
                     <div className="w-5 h-5 border border-border/60 rounded-sm relative">

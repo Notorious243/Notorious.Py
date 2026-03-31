@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { devWarn } from '@/lib/logger';
 import { WidgetData, CanvasSettings } from '@/types/widget';
 
 // ==================== PROJECTS ====================
@@ -114,7 +115,8 @@ export async function fetchSharedProject(shareToken: string): Promise<SharedProj
 
   // Extract widgets from file_tree (each file node stores {widgets, canvasSettings} in its content)
   let widgets: WidgetData[] = [];
-  const fileTree = (project.file_tree ?? []) as { id: string; type: string; content?: string; children?: any[] }[];
+  interface FileTreeNode { id: string; type: string; content?: string; children?: FileTreeNode[] }
+  const fileTree = (project.file_tree ?? []) as FileTreeNode[];
 
   const extractWidgetsFromTree = (nodes: typeof fileTree): void => {
     for (const node of nodes) {
@@ -123,7 +125,8 @@ export async function fetchSharedProject(shareToken: string): Promise<SharedProj
           const parsed = JSON.parse(node.content);
           if (Array.isArray(parsed.widgets)) {
             widgets = widgets.concat(
-              parsed.widgets.map((w: any) => ({
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              parsed.widgets.map((w: Record<string, any>) => ({
                 id: w.id,
                 type: w.type,
                 name: w.name ?? undefined,
@@ -276,7 +279,8 @@ export async function deleteVersion(versionId: string): Promise<void> {
 }
 
 function versionWidgetsToWidgetData(widgets: unknown[]): WidgetData[] {
-  return (widgets ?? []).map((w: any) => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((widgets ?? []) as Record<string, any>[]).map((w) => ({
     id: w.widget_id,
     type: w.type,
     name: w.name ?? undefined,
@@ -424,7 +428,7 @@ export async function fetchGalleryProjects(
 
   if (error) throw error;
   return {
-    projects: (data ?? []).map((r: any) => rowToGalleryProject(r as GalleryProjectRow)),
+    projects: (data ?? []).map((r: GalleryProjectRow) => rowToGalleryProject(r)),
     total: count ?? 0,
   };
 }
@@ -457,7 +461,7 @@ export async function getUserLikes(userId: string): Promise<Set<string>> {
     .eq('user_id', userId);
 
   if (error) return new Set();
-  return new Set((data ?? []).map((r: any) => r.gallery_project_id));
+  return new Set((data ?? []).map((r: { gallery_project_id: string }) => r.gallery_project_id));
 }
 
 export async function cloneGalleryProject(
@@ -541,7 +545,7 @@ export async function fetchConversations(projectId: string): Promise<SupabaseCon
     .order('updated_at', { ascending: false });
 
   if (error) {
-    console.warn('[AI] ai_conversations fetch failed:', error.message);
+    devWarn('[AI] ai_conversations fetch failed:', error.message);
     throw error;
   }
   return data ?? [];
@@ -570,7 +574,7 @@ export async function upsertConversation(conversation: {
     }, { onConflict: 'id' });
 
   if (error) {
-    console.warn('[AI] Failed to save conversation to Supabase:', error.message);
+    devWarn('[AI] Failed to save conversation to Supabase:', error.message);
     throw error;
   }
 }
@@ -586,7 +590,7 @@ export async function deleteConversation(conversationId: string): Promise<void> 
     .eq('user_id', user.id);
 
   if (error) {
-    console.warn('[AI] Failed to delete conversation from Supabase:', error.message);
+    devWarn('[AI] Failed to delete conversation from Supabase:', error.message);
     throw error;
   }
 }
@@ -602,7 +606,7 @@ export async function touchConversation(conversationId: string): Promise<void> {
     .eq('user_id', user.id);
 
   if (error) {
-    console.warn('[AI] Failed to touch conversation timestamp:', error.message);
+    devWarn('[AI] Failed to touch conversation timestamp:', error.message);
     throw error;
   }
 }
@@ -658,41 +662,11 @@ export async function flushPendingConversationWrites(writes: PendingConversation
     .upsert(payload, { onConflict: 'id' });
 
   if (error) {
-    console.warn('[AI] Failed to flush pending conversations:', error.message);
+    devWarn('[AI] Failed to flush pending conversations:', error.message);
     throw error;
   }
 }
 
-export async function deleteLegacyUnscopedConversations(): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-
-  const { error } = await supabase
-    .from('ai_conversations')
-    .delete()
-    .eq('user_id', user.id)
-    .is('project_id', null);
-
-  if (error) {
-    console.warn('[AI] Failed to purge legacy unscoped conversations:', error.message);
-    throw error;
-  }
-}
-
-export async function resetAllConversationsForUser(): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-
-  const { error } = await supabase
-    .from('ai_conversations')
-    .delete()
-    .eq('user_id', user.id);
-
-  if (error) {
-    console.warn('[AI] Failed to reset all conversations for user:', error.message);
-    throw error;
-  }
-}
 
 export async function saveApiKeysToSupabase(keys: Record<string, string | undefined>): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -707,7 +681,7 @@ export async function saveApiKeysToSupabase(keys: Record<string, string | undefi
     }, { onConflict: 'user_id' });
 
   if (error) {
-    console.warn('[AI] Failed to save API keys:', error.message);
+    devWarn('[AI] Failed to save API keys:', error.message);
   }
 }
 
@@ -738,7 +712,7 @@ export async function saveAIGenerationHistoryToSupabase(history: unknown[]): Pro
     }, { onConflict: 'user_id' });
 
   if (error) {
-    console.warn('[AI] Failed to save generation history:', error.message);
+    devWarn('[AI] Failed to save generation history:', error.message);
   }
 }
 

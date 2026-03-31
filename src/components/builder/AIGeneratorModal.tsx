@@ -20,6 +20,7 @@ import {
     PREMIUM_PROVIDERS,
     type AIProvider,
 } from '@/lib/aiPrompts';
+import type { WidgetData, CanvasSettings } from '@/types/widget';
 import { useAuth } from '@/contexts/useAuth';
 import { useWidgets } from '@/contexts/useWidgets';
 import { useFileSystem } from '@/hooks/useFileSystemContext';
@@ -190,7 +191,7 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({ isOpen, onOp
         };
     }, [dbReady, user]);
 
-    const preGenSnapshotRef = useRef<{ widgets: any[]; settings: any } | null>(null);
+    const preGenSnapshotRef = useRef<{ widgets: WidgetData[]; settings: CanvasSettings } | null>(null);
     const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
     const fileInputRef = useRef<HTMLInputElement>(null);

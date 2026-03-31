@@ -672,15 +672,6 @@ export const FONT_FAMILIES = [
   'Courier New', 'Lucida Console', 'Consolas',
 ];
 
-// Polices monospace recommandées pour les tickets
-export const MONOSPACE_FONTS = [
-  'Roboto Mono',
-  'Courier New',
-  'Lucida Console',
-  'Consolas',
-  'Source Code Pro',
-  'Fira Code',
-];
 
 /**
  * NOTE IMPORTANTE SUR LES WIDGETS SUPPRIMÉS:

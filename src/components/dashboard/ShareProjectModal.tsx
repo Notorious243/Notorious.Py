@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { devError } from '@/lib/logger';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,7 +42,7 @@ export const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
             setShareToken(token);
             setIsPublic(!!token);
         } catch (e) {
-            console.error('[Share] Failed to fetch share status:', e);
+            devError('[Share] Failed to fetch share status:', e);
         } finally {
             setLoading(false);
         }
@@ -68,8 +69,8 @@ export const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
                 setIsPublic(false);
                 toast.success('Partage désactivé');
             }
-        } catch (e: any) {
-            toast.error(e.message || 'Erreur lors du partage');
+        } catch (e: unknown) {
+            toast.error(e instanceof Error ? e.message : 'Erreur lors du partage');
         } finally {
             setLoading(false);
         }

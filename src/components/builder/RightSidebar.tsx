@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WidgetProperties } from './properties/WidgetProperties';
 import { WidgetList } from './properties/WidgetList';
 import { CanvasProperties } from './properties/CanvasProperties';
-import { AIAssistantPanel } from './AIAssistantPanel';
+import { DayannaAIPanel } from './dayanna-ai/DayannaAIPanel';
 import { cn } from '@/lib/utils';
 import {
   OPEN_AI_SIDEBAR_EVENT,
@@ -119,7 +119,7 @@ export const RightSidebar: React.FC = () => {
         </TabsContent>
         <TabsContent value="ai" className="m-0 flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
           <div className="min-h-0 flex-1">
-            <AIAssistantPanel />
+            <DayannaAIPanel />
           </div>
         </TabsContent>
       </Tabs>

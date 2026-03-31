@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, Trash2, BarChart3, Database, Settings2, Palette } from 'lucide-react';
 import { ToggleRow, ColorField, ActionsRow, CompactButton } from '../ui/layout';
 import { LazyInput } from '../ui/LazyInput';
-import { WidgetPropertySectionProps } from '../widget-properties-shared';
+import { WidgetPropertySectionProps, type ChartDataPoint } from '../widget-properties-shared';
 
 export const ChartProperties: React.FC<WidgetPropertySectionProps> = ({
   selectedWidget,
@@ -23,7 +23,7 @@ export const ChartProperties: React.FC<WidgetPropertySectionProps> = ({
   ];
 
   const updateDataPoint = (index: number, field: 'label' | 'value', rawValue: string) => {
-    const newData = chartData.map((d: any, i: number) =>
+    const newData = chartData.map((d: ChartDataPoint, i: number) =>
       i === index
         ? { ...d, [field]: field === 'value' ? (rawValue === '' ? 0 : Number(rawValue)) : rawValue }
         : d
@@ -38,7 +38,7 @@ export const ChartProperties: React.FC<WidgetPropertySectionProps> = ({
 
   const removeDataPoint = (index: number) => {
     if (chartData.length <= 2) return;
-    const newData = chartData.filter((_: any, i: number) => i !== index);
+    const newData = chartData.filter((_: ChartDataPoint, i: number) => i !== index);
     handlePropertyChange('data', newData);
   };
 
@@ -85,7 +85,7 @@ export const ChartProperties: React.FC<WidgetPropertySectionProps> = ({
               </CompactButton>
             </ActionsRow>
             <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-              {chartData.map((point: any, index: number) => (
+              {chartData.map((point: ChartDataPoint, index: number) => (
                 <div key={index} className="flex items-center gap-2 p-2 border border-border/60 rounded-md bg-background/40 hover:bg-background/80 transition-colors">
                   <span className="text-xs font-mono text-muted-foreground w-4">{index + 1}</span>
                   <Input

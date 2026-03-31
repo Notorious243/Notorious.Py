@@ -91,8 +91,8 @@ export const PublishToGalleryModal: React.FC<PublishToGalleryModalProps> = ({
             );
             toast.success(publishedId ? 'Publication mise à jour !' : 'Projet publié dans la galerie !');
             onOpenChange(false);
-        } catch (e: any) {
-            toast.error(e.message || 'Erreur lors de la publication');
+        } catch (e: unknown) {
+            toast.error(e instanceof Error ? e.message : 'Erreur lors de la publication');
         } finally {
             setLoading(false);
         }
@@ -105,8 +105,8 @@ export const PublishToGalleryModal: React.FC<PublishToGalleryModalProps> = ({
             toast.success('Projet retiré de la galerie');
             setPublishedId(null);
             onOpenChange(false);
-        } catch (e: any) {
-            toast.error(e.message || 'Erreur');
+        } catch (e: unknown) {
+            toast.error(e instanceof Error ? e.message : 'Erreur');
         } finally {
             setLoading(false);
         }

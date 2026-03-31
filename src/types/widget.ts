@@ -76,6 +76,10 @@ export const DEFAULT_CONSTRAINTS: WidgetConstraints = {
   right: false,
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type WidgetPropertyValue = any;
+export type WidgetProperties = Record<string, WidgetPropertyValue>;
+
 export interface WidgetData {
   id: string;
   type: string;
@@ -83,7 +87,7 @@ export interface WidgetData {
   position: Position;
   size: Size;
   style: Partial<WidgetStyle>;
-  properties: Record<string, any>;
+  properties: WidgetProperties;
   children?: string[];
   parentId?: string | null;
   parentSlot?: string | null;
@@ -105,7 +109,7 @@ export interface WidgetType {
   icon: React.ElementType;
   popular?: boolean;
   defaultSize: Size;
-  defaultProperties: Record<string, any>;
+  defaultProperties: WidgetProperties;
   category: string;
 }
 

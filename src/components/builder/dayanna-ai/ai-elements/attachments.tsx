@@ -48,7 +48,7 @@ export function Attachment({
       {/* Provide data to children via context if needed, but for now we'll just render */}
       {React.Children.map(children, child => {
         if (React.isValidElement(child)) {
-          return React.cloneElement(child as React.ReactElement<any>, { data });
+          return React.cloneElement(child as React.ReactElement<{ data: AttachmentData }>, { data });
         }
         return child;
       })}
@@ -56,7 +56,17 @@ export function Attachment({
   );
 }
 
-export function AttachmentPreview({ data }: { data?: any }) {
+interface AttachmentData {
+  mediaType?: string;
+  mimeType?: string;
+  type?: string;
+  filename?: string;
+  name?: string;
+  url?: string;
+  data?: string;
+}
+
+export function AttachmentPreview({ data }: { data?: AttachmentData }) {
   if (!data) return null;
   
   const isImage = data.mediaType?.startsWith("image/") || data.mimeType?.startsWith("image/") || data.type === "image";

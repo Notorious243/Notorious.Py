@@ -147,7 +147,7 @@ export function ContextContentBody({ children }: { children: React.ReactNode }) 
   );
 }
 
-function UsageItem({ icon: Icon, label, value, color }: { icon: any, label: string, value: number, color: string }) {
+function UsageItem({ icon: Icon, label, value, color }: { icon: React.ElementType, label: string, value: number, color: string }) {
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-2">

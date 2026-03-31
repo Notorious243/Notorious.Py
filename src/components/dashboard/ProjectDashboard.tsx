@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { devError } from '@/lib/logger';
 import { useProjects } from '@/contexts/useProjects';
 import { Button } from '@/components/ui/button';
 import { Plus, FolderOpen, Trash2, Rocket, Search, Share2, Globe, Layers, Pencil, ImagePlus } from 'lucide-react';
@@ -42,7 +43,7 @@ export const ProjectDashboard: React.FC = () => {
             setNewProjectName('');
             setCreateModalMode('manual');
         } catch (error) {
-            console.error('Erreur creation projet:', error);
+            devError('Erreur creation projet:', error);
         }
     };
 

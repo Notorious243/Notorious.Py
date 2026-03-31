@@ -1,4 +1,6 @@
 import React, { useState, useRef } from 'react';
+import type { FileSystemItem } from '@/hooks/useFileSystem';
+import { devError } from '@/lib/logger';
 import { useProjects } from '@/contexts/useProjects';
 import { useAuth } from '@/contexts/useAuth';
 import { Button } from '@/components/ui/button';
@@ -51,7 +53,7 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
   const processZipFile = async (file: File) => {
     try {
       const zip = await JSZip.loadAsync(file);
-      const tree: any[] = [];
+      const tree: FileSystemItem[] = [];
       const entries = Object.entries(zip.files).filter(([, f]) => !f.dir);
       const paths = entries.map(([p]) => p);
       const commonPrefix = paths.length > 0 && paths.every(p => p.includes('/'))
@@ -70,7 +72,7 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
       await supabase.from('projects').update({ file_tree: tree, updated_at: new Date().toISOString() }).eq('id', newId);
       onClose?.();
     } catch (err) {
-      console.error('Import ZIP error:', err);
+      devError('Import ZIP error:', err);
     }
   };
 
@@ -91,7 +93,7 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
       setCreateModalMode('manual');
       onClose?.();
     } catch (error) {
-      console.error('Erreur creation projet:', error);
+      devError('Erreur creation projet:', error);
     }
   };
 

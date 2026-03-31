@@ -61,6 +61,7 @@ export interface ApiKeys {
 }
 
 export type Provider = 'google' | 'huggingface' | 'openai' | 'anthropic' | 'openrouter' | 'groq' | 'deepseek';
+export type ProviderToggleMap = Record<Provider, boolean>;
 
 export interface ModelInfo {
   id: string;

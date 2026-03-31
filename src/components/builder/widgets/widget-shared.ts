@@ -1,5 +1,5 @@
 import React from 'react';
-import { WidgetData } from '@/types/widget';
+import { WidgetData, type WidgetProperties } from '@/types/widget';
 import { ContainerMetrics } from '@/lib/widgetLayout';
 
 export interface WidgetRenderContext {
@@ -14,8 +14,8 @@ export interface WidgetRenderContext {
   effectiveBorderWidth: number;
   effectiveBorderColor: string;
   cornerRadius: number;
-  properties: Record<string, any>;
-  style: Record<string, any>;
+  properties: WidgetProperties;
+  style: Partial<WidgetData['style']>;
   fontSize: number;
   fontFamily: string;
   fontWeight: string;
@@ -72,7 +72,7 @@ export const CTK_COLORS = {
   }
 };
 
-export const toNumber = (value: any, fallback: number) => {
+export const toNumber = (value: unknown, fallback: number) => {
   if (value === undefined || value === null || value === '') return fallback;
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;

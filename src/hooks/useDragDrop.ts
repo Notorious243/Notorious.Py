@@ -6,8 +6,10 @@ export const DRAG_TYPES = {
   EXISTING_WIDGET: 'existing-widget', // Widget existant sur canvas
 };
 
-interface WidgetTypeDragItem {
+export interface WidgetTypeDragItem {
   widgetType: string;
+  transactionId?: string;
+  [key: string]: unknown;
 }
 
 export const useWidgetTypeDrag = (widgetType: string) => {
@@ -23,13 +25,13 @@ export const useWidgetTypeDrag = (widgetType: string) => {
 };
 
 interface UseCanvasDropOptions {
-  onDrop: (item: any, monitor: DropTargetMonitor) => void;
-  onHover?: (item: any, monitor: DropTargetMonitor) => void;
+  onDrop: (item: WidgetTypeDragItem, monitor: DropTargetMonitor) => void;
+  onHover?: (item: WidgetTypeDragItem, monitor: DropTargetMonitor) => void;
   canvasRef: MutableRefObject<HTMLDivElement | null>;
 }
 
 export const useCanvasDrop = ({ onDrop, onHover, canvasRef }: UseCanvasDropOptions) => {
-  const [{ isOver }, drop] = useDrop(() => ({
+  const [{ isOver }, drop] = useDrop<WidgetTypeDragItem, void, { isOver: boolean }>(() => ({
     accept: [DRAG_TYPES.WIDGET_TYPE],
     drop: (item, monitor) => {
       // Ne traiter que si le drop est directement sur cette zone (pas sur un enfant)
@@ -60,12 +62,12 @@ export const useCanvasDrop = ({ onDrop, onHover, canvasRef }: UseCanvasDropOptio
 // Hook pour les zones de drop des conteneurs (Frame, ScrollableFrame, TabView)
 interface UseContainerDropOptions {
   containerId: string;
-  onDrop: (item: any, monitor: DropTargetMonitor) => void;
+  onDrop: (item: WidgetTypeDragItem, monitor: DropTargetMonitor) => void;
   containerRef: MutableRefObject<HTMLDivElement | null>;
 }
 
 export const useContainerDrop = ({ containerId, onDrop, containerRef }: UseContainerDropOptions) => {
-  const [{ isOver, canDrop }, drop] = useDrop(() => ({
+  const [{ isOver, canDrop }, drop] = useDrop<WidgetTypeDragItem, { dropped: boolean }, { isOver: boolean; canDrop: boolean }>(() => ({
     accept: [DRAG_TYPES.WIDGET_TYPE],
     drop: (item, monitor) => {
       // Ne traiter que si c'est directement dans CE conteneur (pas ses enfants)

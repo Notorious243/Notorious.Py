@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { WidgetData, CanvasSettings, WidgetStyle } from '@/types/widget';
+import { devWarn, devError } from '@/lib/logger';
 import { isContainerWidget, getParentContentBounds, collectDescendantIds, isDescendant, getDefaultTabSlot, getTabSlots } from '@/lib/widgetLayout';
 import { computeAutoLayout, hasAutoLayout } from '@/lib/autoLayoutEngine';
 import { WidgetContext } from '@/contexts/widget-context';
@@ -114,7 +115,7 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const clampWidgetToBounds = useCallback((list: WidgetData[], widget: WidgetData, parentIdOverride?: string | null): WidgetData => {
     try {
       if (!widget || !widget.position || !widget.size) {
-        console.error('[WidgetContext] Invalid widget structure:', widget);
+        devError('[WidgetContext] Invalid widget structure:', widget);
         return widget;
       }
 
@@ -156,7 +157,7 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         position: { x: clampedX, y: clampedY },
       };
     } catch (error) {
-      console.error('[WidgetContext] Error in clampWidgetToBounds:', error, widget);
+      devError('[WidgetContext] Error in clampWidgetToBounds:', error, widget);
       return widget;
     }
   }, [computeParentBounds]);
@@ -199,14 +200,14 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const addWidget = useCallback((widget: WidgetData) => {
     try {
       if (!widget || !widget.id) {
-        console.error('[WidgetContext] Invalid widget in addWidget:', widget);
+        devError('[WidgetContext] Invalid widget in addWidget:', widget);
         return;
       }
 
       setWidgets(prev => {
         // Vérifier si le widget existe déjà (évite duplication)
         if (prev.some(w => w.id === widget.id)) {
-          console.warn('[WidgetContext] Widget already exists, skipping:', widget.id);
+          devWarn('[WidgetContext] Widget already exists, skipping:', widget.id);
           return prev;
         }
 
@@ -217,7 +218,7 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return newWidgets;
       });
     } catch (error) {
-      console.error('[WidgetContext] Error in addWidget:', error, widget);
+      devError('[WidgetContext] Error in addWidget:', error, widget);
     }
   }, [clampWidgetToBounds, saveToHistory, applyAutoLayoutToWidgets]);
 
@@ -674,7 +675,7 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const deduped = newWidgets.filter(w => {
       if (!w || !w.id) return false;
       if (seenIds.has(w.id)) {
-        console.warn('[WidgetContext] Duplicate widget ID removed:', w.id);
+        devWarn('[WidgetContext] Duplicate widget ID removed:', w.id);
         return false;
       }
       seenIds.add(w.id);

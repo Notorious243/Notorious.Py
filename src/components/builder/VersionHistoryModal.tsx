@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { devError } from '@/lib/logger';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -55,7 +56,7 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({
             const data = await listVersions(projectId, fileFilter);
             setVersions(data);
         } catch (e) {
-            console.error('[Versions] Failed to fetch:', e);
+            devError('[Versions] Failed to fetch:', e);
         } finally {
             setLoading(false);
         }
@@ -78,8 +79,8 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({
             setNewLabel('');
             setShowCreateForm(false);
             fetchVersions();
-        } catch (e: any) {
-            toast.error(e.message || 'Erreur lors de la sauvegarde');
+        } catch (e: unknown) {
+            toast.error(e instanceof Error ? e.message : 'Erreur lors de la sauvegarde');
         } finally {
             setSaving(false);
         }
@@ -97,8 +98,8 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({
             onRestore(version.widgets, version.canvas_settings);
             toast.success('Version restaurée avec succès', { id: loadingToastId });
             onOpenChange(false);
-        } catch (e: any) {
-            toast.error(e.message || 'Erreur lors de la restauration', { id: loadingToastId });
+        } catch (e: unknown) {
+            toast.error(e instanceof Error ? e.message : 'Erreur lors de la restauration', { id: loadingToastId });
         } finally {
             setRestoringId(null);
             setRestoreTarget(null);
@@ -111,8 +112,8 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({
             await deleteVersion(deleteTargetId);
             setVersions(prev => prev.filter(v => v.id !== deleteTargetId));
             toast.success('Version supprimée');
-        } catch (e: any) {
-            toast.error(e.message || 'Erreur');
+        } catch (e: unknown) {
+            toast.error(e instanceof Error ? e.message : 'Erreur');
         } finally {
             setDeleteTargetId(null);
         }

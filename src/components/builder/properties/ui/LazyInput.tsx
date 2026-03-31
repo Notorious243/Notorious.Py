@@ -36,7 +36,7 @@ const playTick = () => {
   if (typeof window === 'undefined') return;
   try {
     if (!tickAudioContext) {
-      const WebAudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      const WebAudioContext = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!WebAudioContext) return;
       tickAudioContext = new WebAudioContext();
       tickAudioBuffer = tickAudioContext.createBuffer(1, Math.floor(tickAudioContext.sampleRate * 0.003), tickAudioContext.sampleRate);

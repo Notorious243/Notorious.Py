@@ -2,9 +2,9 @@ import { motion, AnimatePresence } from "motion/react";
 import { X, History, Settings, Plus, Search as SearchIcon, Trash2, ChevronLeft, Edit2, Check, Loader2 } from "lucide-react";
 import { ChatArea } from "./ChatArea";
 import { InputArea } from "./InputArea";
-import { Message, Model, InputStatus, Conversation, ApiKeys, Provider, Attachment, AIMode, TaggedFile } from "./types";
+import { Message, Model, InputStatus, Conversation, ApiKeys, Provider, Attachment, AIMode, TaggedFile, ProviderToggleMap } from "./types";
 import { cn } from "@/lib/utils";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -32,11 +32,8 @@ interface SidebarProps {
   onStopGeneration?: () => void;
   onOpenSettings: () => void;
   apiKeys: ApiKeys;
+  providerToggles: ProviderToggleMap;
   availableFiles?: AvailableFile[];
-  dbSyncState?: 'ok' | 'syncing' | 'degraded' | 'error';
-  dbSyncReason?: string | null;
-  onRetrySync?: () => void;
-  onHardResetSync?: () => void;
   deletingConversationIds?: string[];
 }
 
@@ -58,11 +55,8 @@ export function Sidebar({
   onStopGeneration,
   onOpenSettings,
   apiKeys,
+  providerToggles,
   availableFiles,
-  dbSyncState = 'ok',
-  dbSyncReason,
-  onRetrySync,
-  onHardResetSync,
   deletingConversationIds = [],
 }: SidebarProps) {
   const [view, setView] = useState<'chat' | 'history'>('chat');
@@ -70,7 +64,6 @@ export function Sidebar({
   const [filter, setFilter] = useState<'all' | 'latest'>('all');
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [editTitleValue, setEditTitleValue] = useState('');
-  const [showSyncingBanner, setShowSyncingBanner] = useState(false);
 
   const filteredConversations = useMemo(() => {
     let result = conversations.filter(c => 
@@ -87,24 +80,6 @@ export function Sidebar({
     return result;
   }, [conversations, searchQuery, filter]);
   const deletingSet = useMemo(() => new Set(deletingConversationIds), [deletingConversationIds]);
-  const isSyncing = dbSyncState === 'syncing';
-
-  useEffect(() => {
-    if (!isSyncing) {
-      setShowSyncingBanner(false);
-      return;
-    }
-    const timer = window.setTimeout(() => setShowSyncingBanner(true), 1100);
-    return () => window.clearTimeout(timer);
-  }, [isSyncing, dbSyncReason]);
-
-  const shouldShowSyncBanner = isSyncing && showSyncingBanner;
-  const syncTitle = isSyncing
-    ? 'Connexion base en cours...'
-    : 'Synchronisation Dayanna en attente';
-  const syncDescription = dbSyncReason || (isSyncing
-    ? 'Chargement des conversations du projet actif.'
-    : 'Les changements restent visibles et seront resynchronises automatiquement.');
 
   const handleStartEdit = (e: React.MouseEvent, conv: Conversation) => {
     e.stopPropagation();
@@ -236,36 +211,6 @@ export function Sidebar({
               )}
             </div>
 
-            {shouldShowSyncBanner && (
-              <div className="border-b border-white/20 bg-[#0b2a4d] px-3 py-2 text-white">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 flex items-start gap-2">
-                    <div className="mt-0.5 shrink-0">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin text-white/95" />
-                    </div>
-                    <div className="min-w-0">
-                    <p className="truncate text-[11px] font-semibold uppercase tracking-wider">
-                      {syncTitle}
-                    </p>
-                    <p className="mt-0.5 truncate text-[10px] text-white/85">
-                      {syncDescription}
-                    </p>
-                    </div>
-                  </div>
-                  <div className="shrink-0 flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={onRetrySync}
-                      title={onHardResetSync ? 'Reessayer la synchronisation (reset disponible dans les options admin).' : 'Reessayer la synchronisation'}
-                      className="rounded-md border border-white/55 px-2 py-1 text-[10px] font-semibold text-white transition-colors hover:bg-white/10"
-                    >
-                      Reessayer
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-            
             {/* Main Content Area */}
             <div className="flex-1 overflow-hidden flex flex-col">
               {view === 'chat' ? (
@@ -303,6 +248,7 @@ export function Sidebar({
                     onStopGeneration={onStopGeneration}
                     onOpenSettings={onOpenSettings}
                     apiKeys={apiKeys}
+                    providerToggles={providerToggles}
                     availableFiles={availableFiles}
                     conversationMessages={messages}
                   />

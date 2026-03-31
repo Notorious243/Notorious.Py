@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { devError } from '@/lib/logger';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -39,7 +40,7 @@ export const GalleryPage: React.FC<GalleryPageProps> = ({ onBack, onProjectClone
             setProjects(result.projects);
             setTotal(result.total);
         } catch (e) {
-            console.error('[Gallery] Failed to fetch:', e);
+            devError('[Gallery] Failed to fetch:', e);
         } finally {
             setLoading(false);
         }
@@ -70,8 +71,8 @@ export const GalleryPage: React.FC<GalleryPageProps> = ({ onBack, onProjectClone
                     ? { ...p, likes_count: p.likes_count + (liked ? 1 : -1) }
                     : p
             ));
-        } catch (e: any) {
-            toast.error(e.message || 'Erreur');
+        } catch (e: unknown) {
+            toast.error(e instanceof Error ? e.message : 'Erreur');
         } finally {
             setLikingId(null);
         }
@@ -87,8 +88,8 @@ export const GalleryPage: React.FC<GalleryPageProps> = ({ onBack, onProjectClone
                 p.id === project.id ? { ...p, clones_count: p.clones_count + 1 } : p
             ));
             onProjectCloned?.(newId);
-        } catch (e: any) {
-            toast.error(e.message || 'Erreur lors du clonage');
+        } catch (e: unknown) {
+            toast.error(e instanceof Error ? e.message : 'Erreur lors du clonage');
         } finally {
             setCloningId(null);
         }

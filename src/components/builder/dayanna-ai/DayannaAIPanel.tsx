@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { nanoid } from 'nanoid';
 import { toast } from 'sonner';
+import { devWarn } from '@/lib/logger';
 
-import type { ApiKeys, Attachment, Conversation, InputStatus, Message, Model, Provider, AIMode, TaggedFile, GenerationStage } from './types';
+import type { ApiKeys, Attachment, Conversation, InputStatus, Message, Model, Provider, AIMode, TaggedFile, GenerationStage, ProviderToggleMap } from './types';
 import { SettingsModal } from './SettingsModal';
 import { Sidebar } from './Sidebar';
 import { useWidgets } from '@/contexts/useWidgets';
@@ -31,7 +32,6 @@ import {
   saveApiKeysToSupabase,
   checkConversationSyncHealth,
   flushPendingConversationWrites,
-  resetAllConversationsForUser,
   type PendingConversationWrite,
 } from '@/lib/supabaseService';
 import { OPEN_AI_SIDEBAR_EVENT, consumeForceNewConversationOnLoadFlag } from '@/lib/aiSidebar';
@@ -52,6 +52,19 @@ const PROVIDER_MAP: Record<string, AIProvider> = {
   groq: 'groq',
   deepseek: 'deepseek',
 };
+
+const DEFAULT_PROVIDER_TOGGLES: ProviderToggleMap = {
+  google: true,
+  openai: true,
+  anthropic: true,
+  huggingface: true,
+  openrouter: true,
+  groq: true,
+  deepseek: true,
+};
+
+const getProviderToggleStorageKey = (userId: string | null | undefined) =>
+  `dayanna:provider-toggles:${userId || 'guest'}`;
 
 function resolveProvider(modelId: string, selectedProvider: Provider): AIProvider {
   const modelDef = ALL_MODELS.find(m => m.id === modelId);
@@ -126,15 +139,45 @@ interface VisionExecutionContext {
 }
 
 const PREMIUM_DESIGN_BASELINE = `
-STYLE VISUEL OBLIGATOIRE (premium Notorious auth):
-- Interface professionnelle, lisible, moderne, cohérente.
-- Utiliser une structure claire: en-tête, zones de contenu, alignements nets.
-- Espacement régulier (8/12/16/24), proportions harmonieuses, aucun chevauchement.
-- Palette cohérente inspirée Notorious: bleus profonds et tons neutres élégants.
-- Typographie lisible, hiérarchie claire (titres, sous-titres, contenu, actions).
-- Les widgets doivent être utilisés intelligemment pour construire une vraie interface exploitable.
-- Interdit: empiler des widgets sans composition; chaque élément doit appartenir à un bloc de layout clair.
-- En demande "créer/générer", repartir d'une structure propre et cohérente, sans répliquer des blocs identiques.
+EXIGENCES DESIGN PREMIUM (Notorious.PY — OBLIGATOIRE):
+
+ARCHITECTURE DE LAYOUT:
+- Toujours commencer par des frames conteneurs qui couvrent 100% du canvas.
+- Dashboard/Admin: sidebar (220-280px, pleine hauteur, fond sombre) + header (56-64px) + zone contenu (fond clair).
+- Formulaire/Login: 2 frames cote a cote (contenu + branding) couvrant tout le canvas.
+- Les frames DOIVENT avoir un backgroundColor. Aucun frame transparent.
+
+STRUCTURE OBLIGATOIRE POUR DASHBOARDS:
+1. Sidebar sombre (#0F172A, #1E293B, #0C4A6E, #064E3B) avec:
+   - Logo/nom app en haut (label, fontSize 18-20, blanc).
+   - 5-8 menuItem de navigation empiles verticalement.
+   - Un menuItem avec selected:true.
+2. Header blanc/clair avec titre de page (fontSize 22-26) + barre de recherche optionnelle.
+3. Zone KPI: 3-5 statCard en ligne horizontale, espaces regulierement.
+4. Zone contenu: table + chart cote a cote ou empiles. Pas plus de 2 de chaque.
+5. Labels contextuels en francais (ex: "Ventes du jour", "Stock critique", pas "Label 1").
+
+PALETTE — Choisir UNE et rester coherent:
+- Dark Sidebar: sidebar #0F172A, header #FFFFFF, contenu #F8FAFC, accent #3B82F6
+- Teal Pro: sidebar #0C4A6E, header #FFFFFF, contenu #F0F9FF, accent #0EA5E9
+- Emerald: sidebar #064E3B, header #FFFFFF, contenu #ECFDF5, accent #10B981
+- Indigo: sidebar #312E81, header #FFFFFF, contenu #EEF2FF, accent #6366F1
+
+TYPOGRAPHIE:
+- Titre page: fontSize 24-28. Sous-titre: 16-18. Corps: 13-14. Caption: 10-12.
+- Valeur KPI: fontSize 28-36, bold.
+
+ESPACEMENT:
+- Padding frames: 16-24px. Gap vertical widgets: 12-20px. Gap horizontal: 16-24px.
+- borderRadius coherent: 8 ou 12 partout.
+
+INTERDIT:
+- Empiler des widgets sans frames conteneurs.
+- Utiliser des labels generiques ("Label 1", "Button 1").
+- Laisser des zones vides >200px.
+- Creer un dashboard sans sidebar.
+- Dupliquer des blocs identiques.
+- Superposer des widgets (meme x,y).
 `;
 
 const PLAN_SCHEMA = `{
@@ -321,16 +364,23 @@ const detectAgentIntent = (text: string): 'create' | 'edit' | 'ask' | 'multi' =>
   if (isMultiInterfaceRequest(text)) return 'multi';
 
   const normalized = text.toLowerCase();
-  const editPatterns = [
-    /ameliore|améliore|modifier|modifie|corrige|ajuste|optimise|it[eé]ration|iteration/,
-    /change|remplace|refait|restructure/,
-  ];
-  if (editPatterns.some((pattern) => pattern.test(normalized))) return 'edit';
 
   const createPatterns = [
-    /cree|cr[eé]e|genere|g[eé]n[eé]re|construis|fabrique|nouveau|dashboard|page|interface|ecran|écran/,
+    /\b(cree|cr[eé]e|genere|g[eé]n[eé]re|construis|fabrique|fais[ -]moi|dessine|conc[oç]ois|produis)\b/,
+    /\b(nouveau|nouvelle|creer|créer|generation|générer)\b/,
+    /\b(dashboard|tableau de bord|page d[e']|interface de|ecran d[e']|écran d[e'])\b/,
+    /\b(pharmacie|gestion|inventaire|e-commerce|boutique|crm|erp|admin|backoffice|back-office)\b/,
+    /\b(login|connexion|inscription|register|signup|sign-up)\b/,
+    /\b(application|app|logiciel|plateforme|systeme de|système de)\b/,
   ];
   if (createPatterns.some((pattern) => pattern.test(normalized))) return 'create';
+
+  const editPatterns = [
+    /\b(ameliore|améliore|modifier|modifie|corrige|ajuste|optimise|it[eé]ration|iteration)\b/,
+    /\b(change|remplace|refait|restructure|deplace|déplace|redimensionne|supprime)\b/,
+    /\b(ajoute un|ajoute une|rajoute|met a jour|mets a jour)\b/,
+  ];
+  if (editPatterns.some((pattern) => pattern.test(normalized))) return 'edit';
 
   return 'ask';
 };
@@ -614,6 +664,7 @@ interface DbConversationRow {
 export const DayannaAIPanel = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [apiKeys, setApiKeys] = useState<ApiKeys>({});
+  const [providerToggles, setProviderToggles] = useState<ProviderToggleMap>(DEFAULT_PROVIDER_TOGGLES);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [pendingPlans, setPendingPlans] = useState<Record<string, PendingPlanExecution>>({});
@@ -664,6 +715,33 @@ export const DayannaAIPanel = () => {
     activeProjectIdRef.current = activeProjectId;
   }, [activeProjectId]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const storageKey = getProviderToggleStorageKey(user?.id);
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) {
+      setProviderToggles(DEFAULT_PROVIDER_TOGGLES);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as Partial<ProviderToggleMap>;
+      setProviderToggles({
+        ...DEFAULT_PROVIDER_TOGGLES,
+        ...Object.fromEntries(
+          Object.entries(parsed).map(([provider, enabled]) => [provider, Boolean(enabled)])
+        ),
+      } as ProviderToggleMap);
+    } catch {
+      setProviderToggles(DEFAULT_PROVIDER_TOGGLES);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const storageKey = getProviderToggleStorageKey(user?.id);
+    window.localStorage.setItem(storageKey, JSON.stringify(providerToggles));
+  }, [providerToggles, user?.id]);
+
   const mapDbConversation = useCallback((row: DbConversationRow): Conversation => ({
     id: row.id,
     title: row.title,
@@ -701,7 +779,7 @@ export const DayannaAIPanel = () => {
       setDbSyncReason(null);
       setDbSyncError(null);
     } catch (error) {
-      console.warn('[AI] Echec flush conversations en attente:', error);
+      devWarn('[AI] Echec flush conversations en attente:', error);
       setDbSyncState('degraded');
       setDbSyncReason('Resynchronisation automatique en cours.');
     }
@@ -780,7 +858,7 @@ export const DayannaAIPanel = () => {
         setDbSyncReason(null);
         loadedProjectIdRef.current = activeProjectId;
       } catch (error) {
-        console.warn('[AI] Chargement initial depuis Supabase impossible:', error);
+        devWarn('[AI] Chargement initial depuis Supabase impossible:', error);
         // Keep Dayanna usable for brand-new accounts even when the first DB handshake is flaky.
         setDbReady(true);
         setDbSyncError(null);
@@ -841,7 +919,7 @@ export const DayannaAIPanel = () => {
         setDbSyncReason(null);
       }
     } catch (error) {
-      console.warn('[AI] Echec persistance conversation:', error);
+      devWarn('[AI] Echec persistance conversation:', error);
       enqueueConversationWrite(payload);
       setDbSyncError("Mode degrade actif: conversation en file d'attente locale.");
       setDbSyncState('degraded');
@@ -898,7 +976,7 @@ export const DayannaAIPanel = () => {
           setDbSyncReason(null);
         }
       } catch (error) {
-        console.warn('[AI] Chargement conversations projet impossible:', error);
+        devWarn('[AI] Chargement conversations projet impossible:', error);
         if (!cancelled) {
           setDbSyncError(null);
           setDbSyncState((prev) => (pendingConversationWritesRef.current.size > 0 ? 'degraded' : prev));
@@ -1092,7 +1170,7 @@ export const DayannaAIPanel = () => {
   const buildCanvasContext = useCallback((taggedFiles?: TaggedFile[], autoDetectedFiles?: { name: string; content?: string }[]) => {
     const pyFiles = getPyFiles();
     const widgetSummary = widgets.map(w =>
-      `- ${w.type}(id:${w.id}) "${(w as any).properties?.text || w.type}" at (${w.position.x},${w.position.y})${w.parentId ? ` inside ${w.parentId}` : ''}`
+      `- ${w.type}(id:${w.id}) "${w.properties?.text || w.type}" at (${w.position.x},${w.position.y})${w.parentId ? ` inside ${w.parentId}` : ''}`
     ).join('\n');
 
     const fileSummaries = pyFiles.map(f =>
@@ -1248,7 +1326,7 @@ MODE DISCUSSION:
         }
 
         const data = await response.json();
-        const content = data.content?.find((b: any) => b.type === 'text')?.text || '';
+        const content = data.content?.find((b: { type: string; text?: string }) => b.type === 'text')?.text || '';
         if (!content) throw new Error(withErrorCode('EMPTY_CONTENT', `${config.label} a renvoye une reponse vide.`));
         return content;
       }
@@ -1358,11 +1436,11 @@ MODE DISCUSSION:
     for (let attempt = 1; attempt <= MAX_PROVIDER_ATTEMPTS; attempt += 1) {
       try {
         return await runAttempt();
-      } catch (attemptError: any) {
-        if (attemptError?.name === 'AbortError') throw attemptError;
-        const raw = String(attemptError?.message || 'Erreur IA');
+      } catch (attemptError: unknown) {
+        if (attemptError instanceof Error && attemptError.name === 'AbortError') throw attemptError;
+        const raw = attemptError instanceof Error ? attemptError.message : String(attemptError);
         const { code: parsedCode, detail } = parseErrorCode(raw);
-        const isNetworkLike = attemptError?.name === 'TypeError' || /failed to fetch|networkerror|load failed/i.test(raw);
+        const isNetworkLike = (attemptError instanceof Error && attemptError.name === 'TypeError') || /failed to fetch|networkerror|load failed/i.test(raw);
         const code = isNetworkLike ? 'NETWORK' : parsedCode;
         lastError = new Error(withErrorCode(code, detail));
         if (!isRetryableCode(code) || attempt >= MAX_PROVIDER_ATTEMPTS) {
@@ -2889,7 +2967,7 @@ ${PREMIUM_DESIGN_BASELINE}
           setDbSyncReason(null);
         }
       } catch (error) {
-        console.warn('[AI] Suppression conversation echouee:', error);
+        devWarn('[AI] Suppression conversation echouee:', error);
         setDbSyncError(null);
         setDbSyncState('degraded');
         setDbSyncReason('La conversation a ete conservee localement.');
@@ -2904,54 +2982,13 @@ ${PREMIUM_DESIGN_BASELINE}
     })();
   }, [activeProjectId, createBlankConversation, persistConversationToDb]);
 
-  const handleHardResetSync = useCallback(() => {
-    if (!user) {
-      toast.error('Connectez-vous pour reinitialiser Dayanna.');
-      return;
-    }
-
-    void (async () => {
-      try {
-        setIsLoadingDb(true);
-        setDbSyncError(null);
-        setDbSyncState('syncing');
-        setDbSyncReason('Reinitialisation complete Dayanna...');
-        setPendingPlans({});
-        pendingConversationWritesRef.current.clear();
-
-        await resetAllConversationsForUser();
-
-        setConversations([]);
-        setCurrentConversationId(null);
-
-        if (activeProjectId) {
-          const freshConversation = createBlankConversation();
-          setConversations([freshConversation]);
-          setCurrentConversationId(freshConversation.id);
-          await persistConversationToDb(freshConversation, activeProjectId);
-        }
-
-        setDbSyncState('ok');
-        setDbSyncReason(null);
-        toast.success('Dayanna reinitialisee. Nouvelle conversation creee.');
-      } catch (error) {
-        console.warn('[AI] Reinitialisation complete impossible:', error);
-        setDbSyncState('error');
-        setDbSyncError('Reinitialisation impossible. Verifiez Supabase et vos permissions.');
-        setDbSyncReason('La base refuse la suppression. Reessayez ou verifiez la migration.');
-        toast.error('Echec de la reinitialisation Dayanna.');
-      } finally {
-        setIsLoadingDb(false);
-      }
-    })();
-  }, [activeProjectId, createBlankConversation, persistConversationToDb, user]);
-
   const handleUpdateTitle = useCallback((id: string, title: string) => {
     applyConversationTitle(id, title.trim() || 'Sans titre');
   }, [applyConversationTitle]);
 
-  const handleSaveApiKeys = useCallback((keys: ApiKeys) => {
+  const handleSaveSettings = useCallback((keys: ApiKeys, toggles: ProviderToggleMap) => {
     setApiKeys(keys);
+    setProviderToggles(toggles);
     aiRef.current = null;
 
     if (!dbReady || !user) {
@@ -2980,7 +3017,11 @@ ${PREMIUM_DESIGN_BASELINE}
   }, [getPyFiles]);
 
   return (
-    <div className="dayanna-theme-dark relative h-full min-h-0 w-full overflow-hidden bg-background text-foreground">
+    <div
+      className="dayanna-theme-dark relative h-full min-h-0 w-full overflow-hidden bg-background text-foreground"
+      data-sync-state={dbSyncState}
+      data-sync-issue={dbSyncError || dbSyncReason ? "true" : "false"}
+    >
       <Sidebar
         messages={messages}
         isTyping={isTyping}
@@ -2999,26 +3040,17 @@ ${PREMIUM_DESIGN_BASELINE}
         onStopGeneration={handleStopGeneration}
         onOpenSettings={() => setIsSettingsOpen(true)}
         apiKeys={apiKeys}
+        providerToggles={providerToggles}
         availableFiles={availableFiles}
-        dbSyncState={isLoadingDb ? 'syncing' : dbSyncState}
-        dbSyncReason={dbSyncError || dbSyncReason}
         deletingConversationIds={Array.from(deletingConversationIds)}
-        onRetrySync={() => {
-          setDbSyncError(null);
-          setDbSyncState('syncing');
-          setDbSyncReason('Nouvelle tentative de synchronisation...');
-          setIsLoadingDb(true);
-          setDbReloadNonce((prev) => prev + 1);
-          void flushConversationWriteQueue();
-        }}
-        onHardResetSync={handleHardResetSync}
       />
 
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         apiKeys={apiKeys}
-        onSave={handleSaveApiKeys}
+        providerToggles={providerToggles}
+        onSave={handleSaveSettings}
       />
     </div>
   );

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, ReactNode } from 'react';
+import { devWarn } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 import type { CanvasSettings } from '@/types/widget';
 import {
@@ -32,7 +33,7 @@ const dedupeTree = (nodes: FileSystemItem[]): FileSystemItem[] => {
     const seen = new Set<string>();
     return nodes.filter(n => {
         if (seen.has(n.id)) {
-            console.warn('[FileSystem] Duplicate node ID removed:', n.id);
+            devWarn('[FileSystem] Duplicate node ID removed:', n.id);
             return false;
         }
         seen.add(n.id);
@@ -104,7 +105,7 @@ const useFileSystemLogic = (projectId: string | null) => {
 
         // SAFETY: NEVER overwrite file_tree with [] unless explicitly allowed (only explicit delete flow)
         if (tree.length === 0 && !allowEmpty) {
-            console.warn('[FileSystem] Blocked saving empty file_tree. pid=', pid);
+            devWarn('[FileSystem] Blocked saving empty file_tree. pid=', pid);
             return;
         }
 
@@ -139,7 +140,7 @@ const useFileSystemLogic = (projectId: string | null) => {
             try {
                 await flushPendingCanvasWrites(projectId);
             } catch (error) {
-                console.warn('[FileSystem] Flush pending writes before loading tree failed:', error);
+                devWarn('[FileSystem] Flush pending writes before loading tree failed:', error);
             }
 
             const { data: row, error } = await supabase

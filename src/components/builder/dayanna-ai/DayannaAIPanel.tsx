@@ -343,7 +343,7 @@ const normalizeGeneratedTitle = (raw: string): string => {
     .replace(/^["'`]+|["'`]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
-  const withoutPrefix = singleLine.replace(/^(titre|title)\s*[:\-]\s*/i, '').trim();
+  const withoutPrefix = singleLine.replace(/^(titre|title)\s*[:-]\s*/i, '').trim();
   return withoutPrefix.slice(0, 64).trim();
 };
 

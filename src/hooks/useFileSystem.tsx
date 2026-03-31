@@ -1,5 +1,14 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
+import type { CanvasSettings } from '@/types/widget';
+import {
+    enqueueCanvasWrite,
+    flushPendingCanvasWrites,
+    retryCanvasSync,
+    checkCanvasSyncHealth,
+    subscribeCanvasSyncState,
+    type CanvasSyncState,
+} from '@/lib/canvasSyncService';
 
 export type FileSystemItem = {
     id: string;
@@ -8,6 +17,14 @@ export type FileSystemItem = {
     children?: FileSystemItem[];
     isOpen?: boolean;
     content?: string;
+};
+
+type SaveNowOptions = {
+    canvasSettings?: CanvasSettings;
+    immediate?: boolean;
+    debounceMs?: number;
+    allowEmpty?: boolean;
+    force?: boolean;
 };
 
 const dedupeTree = (nodes: FileSystemItem[]): FileSystemItem[] => {
@@ -32,6 +49,12 @@ const useFileSystemLogic = (projectId: string | null) => {
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const currentProjectId = useRef(projectId);
     const hasPendingSaveRef = useRef(false);
+    const lastQueuedSignatureRef = useRef<string | null>(null);
+    const [canvasSyncState, setCanvasSyncState] = useState<CanvasSyncState>('ok');
+    const [canvasSyncReason, setCanvasSyncReason] = useState<string | null>(null);
+    const [pendingWritesCount, setPendingWritesCount] = useState(0);
+    const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+    const [lastErrorCode, setLastErrorCode] = useState<string | null>(null);
 
     // Keep dataRef in sync with data
     useEffect(() => { dataRef.current = data; }, [data]);
@@ -39,45 +62,106 @@ const useFileSystemLogic = (projectId: string | null) => {
     // Keep ref in sync with projectId
     useEffect(() => { currentProjectId.current = projectId; }, [projectId]);
 
-    // Helper: persist file_tree to Supabase immediately
-    const saveToSupabase = useCallback((tree: FileSystemItem[], { allowEmpty = false } = {}) => {
+    useEffect(() => {
+        if (!projectId || projectId.startsWith('temp-')) {
+            setCanvasSyncState('ok');
+            setCanvasSyncReason(null);
+            setPendingWritesCount(0);
+            setLastSyncedAt(null);
+            setLastErrorCode(null);
+            return;
+        }
+
+        const unsubscribe = subscribeCanvasSyncState(projectId, (snapshot) => {
+            setCanvasSyncState(snapshot.status);
+            setCanvasSyncReason(snapshot.reason);
+            setPendingWritesCount(snapshot.pendingWritesCount);
+            setLastSyncedAt(snapshot.lastSyncedAt);
+            setLastErrorCode(snapshot.lastErrorCode);
+        });
+
+        let cancelled = false;
+        void (async () => {
+            const health = await checkCanvasSyncHealth(projectId);
+            if (cancelled || health.ok) return;
+            setCanvasSyncState('degraded');
+            setCanvasSyncReason(health.reason ?? 'Synchronisation canvas indisponible.');
+        })();
+
+        return () => {
+            cancelled = true;
+            unsubscribe();
+        };
+    }, [projectId]);
+
+    // Helper: enqueue file_tree/canvas_settings write through the unified canvas sync queue
+    const saveToSupabase = useCallback((tree: FileSystemItem[], options: SaveNowOptions = {}) => {
         const pid = currentProjectId.current;
         if (!pid || pid.startsWith('temp-')) return;
-        // SAFETY: NEVER overwrite file_tree with [] unless explicitly allowed (only deleteNode)
+
+        const { allowEmpty = false, immediate = false, debounceMs = 450, canvasSettings, force = false } = options;
+
+        // SAFETY: NEVER overwrite file_tree with [] unless explicitly allowed (only explicit delete flow)
         if (tree.length === 0 && !allowEmpty) {
             console.warn('[FileSystem] Blocked saving empty file_tree. pid=', pid);
             return;
         }
-        console.log('[FileSystem] Saving file_tree:', tree.length, 'nodes, pid=', pid);
-        supabase
-            .from('projects')
-            .update({ file_tree: tree, updated_at: new Date().toISOString() })
-            .eq('id', pid)
-            .then(({ error }) => {
-                if (error) console.error('[FileSystem] Supabase save FAILED:', error);
-            });
+
+        const signature = JSON.stringify({
+            tree,
+            canvasSettings: canvasSettings ?? null,
+        });
+        if (!force && lastQueuedSignatureRef.current === signature) {
+            return;
+        }
+        lastQueuedSignatureRef.current = signature;
+
+        enqueueCanvasWrite(
+            pid,
+            {
+                fileTree: tree,
+                canvasSettings,
+            },
+            {
+                immediate,
+                debounceMs,
+            },
+        );
     }, []);
 
     // Load file_tree from Supabase when project changes
     useEffect(() => {
         if (!isValidId || !projectId) { setData([]); return; }
         isInitialLoad.current = true;
-        supabase
-            .from('projects')
-            .select('file_tree')
-            .eq('id', projectId)
-            .single()
-            .then(({ data: row, error }) => {
-                if (!error && row && Array.isArray(row.file_tree)) {
-                    const loaded = dedupeTree(row.file_tree as FileSystemItem[]);
-                    console.log('[FileSystem] Loaded file_tree:', loaded.length, 'nodes');
-                    setData(loaded);
-                    dataRef.current = loaded;
-                } else {
-                    setData([]);
-                }
-                isInitialLoad.current = false;
-            });
+        let cancelled = false;
+        void (async () => {
+            try {
+                await flushPendingCanvasWrites(projectId);
+            } catch (error) {
+                console.warn('[FileSystem] Flush pending writes before loading tree failed:', error);
+            }
+
+            const { data: row, error } = await supabase
+                .from('projects')
+                .select('file_tree')
+                .eq('id', projectId)
+                .single();
+
+            if (cancelled) return;
+
+            if (!error && row && Array.isArray(row.file_tree)) {
+                const loaded = dedupeTree(row.file_tree as FileSystemItem[]);
+                console.log('[FileSystem] Loaded file_tree:', loaded.length, 'nodes');
+                setData(loaded);
+                dataRef.current = loaded;
+            } else {
+                setData([]);
+            }
+            isInitialLoad.current = false;
+        })();
+        return () => {
+            cancelled = true;
+        };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [projectId]);
 
@@ -97,7 +181,12 @@ const useFileSystemLogic = (projectId: string | null) => {
     // Flush pending save on unmount
     useEffect(() => {
         return () => {
-            if (hasPendingSaveRef.current) saveToSupabase(dataRef.current);
+            if (hasPendingSaveRef.current) {
+                saveToSupabase(dataRef.current, { immediate: true, force: true });
+                if (currentProjectId.current) {
+                    void flushPendingCanvasWrites(currentProjectId.current);
+                }
+            }
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -106,11 +195,13 @@ const useFileSystemLogic = (projectId: string | null) => {
     useEffect(() => {
         const handlePreSignout = () => {
             if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-            saveToSupabase(dataRef.current);
+            saveToSupabase(dataRef.current, { immediate: true, force: true });
+            if (currentProjectId.current) {
+                void flushPendingCanvasWrites(currentProjectId.current);
+            }
         };
         window.addEventListener('app-pre-signout', handlePreSignout);
         return () => window.removeEventListener('app-pre-signout', handlePreSignout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [saveToSupabase]);
 
     const findNode = useCallback((nodes: FileSystemItem[], id: string): FileSystemItem | null => {
@@ -185,8 +276,8 @@ const useFileSystemLogic = (projectId: string | null) => {
         setData(newData);
         dataRef.current = newData;
 
-        // Immediately persist to Supabase — do not wait for the debounced effect
-        saveToSupabase(newData);
+        // Immediately enqueue save for user-driven create
+        saveToSupabase(newData, { immediate: true });
 
         return newId;
     }, [saveToSupabase]);
@@ -224,13 +315,13 @@ const useFileSystemLogic = (projectId: string | null) => {
         dataRef.current = newData;
 
         // Allow saving empty tree here (user explicitly deleted)
-        saveToSupabase(newData, { allowEmpty: true });
+        saveToSupabase(newData, { allowEmpty: true, immediate: true });
     }, [saveToSupabase]);
 
     const renameNode = useCallback((id: string, name: string) => {
         updateNode(id, { name });
         // Immediate save for rename (user-initiated action)
-        saveToSupabase(dataRef.current);
+        saveToSupabase(dataRef.current, { immediate: true });
     }, [updateNode, saveToSupabase]);
 
     const hasFiles = data.length > 0;
@@ -307,10 +398,22 @@ const useFileSystemLogic = (projectId: string | null) => {
         return files;
     }, [data]);
 
-    const saveNow = useCallback((overrideData?: FileSystemItem[]) => {
+    const saveNow = useCallback((overrideData?: FileSystemItem[], options: SaveNowOptions = {}) => {
         const treeToSave = overrideData ?? dataRef.current;
-        saveToSupabase(treeToSave);
+        saveToSupabase(treeToSave, options);
     }, [saveToSupabase]);
+
+    const flushPendingWrites = useCallback(async () => {
+        const pid = currentProjectId.current;
+        if (!pid || pid.startsWith('temp-')) return;
+        await flushPendingCanvasWrites(pid);
+    }, []);
+
+    const retrySyncNow = useCallback(async () => {
+        const pid = currentProjectId.current;
+        if (!pid || pid.startsWith('temp-')) return;
+        await retryCanvasSync(pid);
+    }, []);
 
     return {
         data,
@@ -326,7 +429,14 @@ const useFileSystemLogic = (projectId: string | null) => {
         getNode,
         getAllFiles,
         getPyFiles,
-        saveNow
+        saveNow,
+        flushPendingWrites,
+        retrySyncNow,
+        canvasSyncState,
+        canvasSyncReason,
+        pendingWritesCount,
+        lastSyncedAt,
+        lastErrorCode,
     };
 };
 

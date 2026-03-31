@@ -350,7 +350,7 @@ export const useExportPython = () => {
     };
 
     let code = `\n        # ── ${type.charAt(0).toUpperCase() + type.slice(1)} : ${widgetName} ──\n`;
-    let skipPositioning = false;
+    const skipPositioning = false;
 
     // Helper : récupère la police définie dans le panneau de styles
     const getFont = (): { family: string; size: number; weight: string } => {

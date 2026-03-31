@@ -400,7 +400,10 @@ export function Sidebar({
                                   value={editTitleValue}
                                   onChange={(e) => setEditTitleValue(e.target.value)}
                                   onKeyDown={(e) => {
-                                    if (e.key === 'Enter') onUpdateTitle(conv.id, editTitleValue), setEditingTitleId(null);
+                                    if (e.key === 'Enter') {
+                                      onUpdateTitle(conv.id, editTitleValue);
+                                      setEditingTitleId(null);
+                                    }
                                     if (e.key === 'Escape') setEditingTitleId(null);
                                   }}
                                   className="h-7 flex-1 text-xs"

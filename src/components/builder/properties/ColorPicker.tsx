@@ -75,12 +75,15 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({ color, onChange, allow
   const handleEyeDropper = async () => {
     if (!eyedropperSupported) return;
     try {
-      // @ts-ignore
-      const eyeDropper = new window.EyeDropper();
+      const EyeDropperCtor = (window as Window & {
+        EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> };
+      }).EyeDropper;
+      if (!EyeDropperCtor) return;
+      const eyeDropper = new EyeDropperCtor();
       const result = await eyeDropper.open();
       onChange(result.sRGBHex);
     } catch (err) {
-      console.log('EyeDropper cancelled or failed:', err);
+      console.warn('EyeDropper cancelled or failed:', err);
     }
   };
 

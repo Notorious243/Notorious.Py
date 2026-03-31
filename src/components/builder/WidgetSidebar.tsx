@@ -16,7 +16,6 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { AuthPromptDialog } from '@/components/AuthPromptDialog';
 
@@ -77,7 +76,21 @@ export const WidgetSidebar: React.FC = () => {
   const isGuest = !user;
   const [searchQuery, setSearchQuery] = useState('');
   const [authPromptOpen, setAuthPromptOpen] = useState(false);
-  const { data, dataRef, addNode, deleteNode, renameNode, hasFiles, updateNode, getNode, saveNow } = useFileSystem();
+  const {
+    data,
+    dataRef,
+    addNode,
+    deleteNode,
+    renameNode,
+    hasFiles,
+    updateNode,
+    getNode,
+    saveNow,
+    canvasSyncState,
+    canvasSyncReason,
+    pendingWritesCount,
+    lastSyncedAt,
+  } = useFileSystem();
 
   // Widget Context used for synchronization
   const {
@@ -190,21 +203,18 @@ export const WidgetSidebar: React.FC = () => {
 
   // Auto-save: save current workspace state every 1 second (Figma-like)
   const lastSavedRef = useRef<string>('');
-  const lastCanvasSettingsSavedRef = useRef<string>('');
   const widgetsRef = useRef(widgets);
   const canvasSettingsRef = useRef(canvasSettings);
   const activeFileIdRef = useRef(activeFileId);
-  const activeProjectIdRef = useRef(activeProjectId);
   const saveNowRef = useRef(saveNow);
 
   useEffect(() => { widgetsRef.current = widgets; }, [widgets]);
   useEffect(() => { canvasSettingsRef.current = canvasSettings; }, [canvasSettings]);
   useEffect(() => { activeFileIdRef.current = activeFileId; }, [activeFileId]);
-  useEffect(() => { activeProjectIdRef.current = activeProjectId; }, [activeProjectId]);
   useEffect(() => { saveNowRef.current = saveNow; }, [saveNow]);
 
   // Save current file content into the tree node + push to Supabase
-  const persistCurrentFile = useCallback(() => {
+  const persistCurrentFile = useCallback((options?: { immediate?: boolean; force?: boolean }) => {
     const fid = activeFileIdRef.current;
     if (!fid) return;
     const state = JSON.stringify({ widgets: widgetsRef.current, canvasSettings: canvasSettingsRef.current });
@@ -215,22 +225,12 @@ export const WidgetSidebar: React.FC = () => {
       if (n.children) return { ...n, children: n.children.map(patchNode) };
       return n;
     });
-    saveNowRef.current(updatedTree);
+    saveNowRef.current(updatedTree, {
+      canvasSettings: canvasSettingsRef.current,
+      immediate: options?.immediate,
+      force: options?.force,
+    });
     lastSavedRef.current = state;
-
-    // Also persist canvas_settings directly to the projects table
-    const pid = activeProjectIdRef.current;
-    const csJson = JSON.stringify(canvasSettingsRef.current);
-    if (pid && csJson !== lastCanvasSettingsSavedRef.current) {
-      lastCanvasSettingsSavedRef.current = csJson;
-      supabase
-        .from('projects')
-        .update({ canvas_settings: canvasSettingsRef.current, updated_at: new Date().toISOString() })
-        .eq('id', pid)
-        .then(({ error }) => {
-          if (error) console.error('[AutoSave] canvas_settings save failed:', error);
-        });
-    }
   }, [updateNode, dataRef]);
 
   useEffect(() => {
@@ -244,11 +244,11 @@ export const WidgetSidebar: React.FC = () => {
     }, 800);
 
     // Save on page unload (direct Supabase call, bypasses React state)
-    const handleBeforeUnload = () => persistCurrentFile();
+    const handleBeforeUnload = () => persistCurrentFile({ immediate: true, force: true });
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     // Flush save before sign-out (session still valid at this point)
-    const handlePreSignout = () => persistCurrentFile();
+    const handlePreSignout = () => persistCurrentFile({ immediate: true, force: true });
     window.addEventListener('app-pre-signout', handlePreSignout);
 
     return () => {
@@ -256,9 +256,20 @@ export const WidgetSidebar: React.FC = () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('app-pre-signout', handlePreSignout);
       // Save immediately when switching files or unmounting
-      persistCurrentFile();
+      persistCurrentFile({ immediate: true, force: true });
     };
   }, [activeFileId, persistCurrentFile]);
+
+  const showCanvasSyncInfo = canvasSyncState !== 'ok' || pendingWritesCount > 0;
+  const canvasSyncLabel = canvasSyncState === 'syncing'
+    ? 'Sauvegarde en cours...'
+    : canvasSyncState === 'degraded'
+      ? 'Sauvegarde en attente (réseau)'
+      : canvasSyncState === 'error'
+        ? 'Erreur de synchronisation canvas'
+        : pendingWritesCount > 0
+          ? 'Synchronisation en file'
+          : (lastSyncedAt ? `Synchronisé ${new Date(lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Synchronisé');
 
   const handleNodeSelect = (id: string | undefined) => {
     setSelectedNodeId(id ?? null);
@@ -772,6 +783,14 @@ export const WidgetSidebar: React.FC = () => {
               </Button>
             </div>
           </div>
+          {showCanvasSyncInfo && (
+            <div className="border-b border-border/60 bg-muted/35 px-4 py-1.5">
+              <p className="truncate text-[10px] text-muted-foreground">
+                {canvasSyncLabel}
+                {canvasSyncReason ? ` · ${canvasSyncReason}` : ''}
+              </p>
+            </div>
+          )}
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <div className="flex-1 px-1 py-1.5 overflow-hidden flex flex-col">
               <div className="relative h-full flex-1 rounded-xl border border-border bg-background p-1.5">

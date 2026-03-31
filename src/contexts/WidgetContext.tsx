@@ -175,8 +175,8 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const availableWidth = bounds.width > 0 ? bounds.width : widget.size.width;
       const availableHeight = bounds.height > 0 ? bounds.height : widget.size.height;
 
-      let width = Math.max(minSize, Math.min(widget.size.width, Math.max(minSize, availableWidth)));
-      let height = Math.max(minSize, Math.min(widget.size.height, Math.max(minSize, availableHeight)));
+      const width = Math.max(minSize, Math.min(widget.size.width, Math.max(minSize, availableWidth)));
+      const height = Math.max(minSize, Math.min(widget.size.height, Math.max(minSize, availableHeight)));
 
       const maxX = bounds.left + Math.max(0, bounds.width - width);
       const maxY = bounds.top + Math.max(0, bounds.height - height);
@@ -212,7 +212,7 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [computeParentBounds]);
 
   const applyAutoLayoutToWidgets = useCallback((widgetList: WidgetData[]): WidgetData[] => {
-    let updated = [...widgetList];
+    const updated = [...widgetList];
     let changed = false;
 
     // Find all containers with auto-layout enabled
@@ -278,7 +278,7 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (w.id !== id) return w;
 
         const { style, properties, size, position, parentId, parentSlot, ...rest } = updates;
-        let next: WidgetData = { ...w, ...rest };
+        const next: WidgetData = { ...w, ...rest };
 
         if (style) {
           next.style = { ...w.style, ...style };
@@ -306,7 +306,7 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
 
       if (!hasChanged) return prev;
-      let finalWidgets = applyAutoLayoutToWidgets(newWidgets);
+      const finalWidgets = applyAutoLayoutToWidgets(newWidgets);
       if (saveHistory) {
         saveToHistory(finalWidgets);
       }

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { User, Session } from '@supabase/supabase-js';
+import { flushPendingCanvasWrites } from '@/lib/canvasSyncService';
 
 interface AuthContextType {
     user: User | null;
@@ -40,7 +41,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const signOut = async () => {
         // Flush all pending saves BEFORE invalidating the session (RLS needs a valid token)
         window.dispatchEvent(new Event('app-pre-signout'));
-        await new Promise(resolve => setTimeout(resolve, 600));
+        try {
+            await Promise.race([
+                flushPendingCanvasWrites(),
+                new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+            ]);
+        } catch (error) {
+            console.warn('[Auth] Flush pending canvas writes before sign-out failed:', error);
+        }
         try { localStorage.removeItem('ctk-active-project'); } catch { /* ignore */ }
         await supabase.auth.signOut();
     };

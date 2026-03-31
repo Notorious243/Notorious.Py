@@ -1,3 +1,4 @@
+/* eslint-disable no-case-declarations */
 import React, { useState, useEffect } from 'react';
 import { WidgetData } from '@/types/widget';
 import { useTheme } from 'next-themes';
@@ -53,6 +54,7 @@ export const InteractiveWidget: React.FC<InteractiveWidgetProps> = React.memo(({
   const [optionMenuSelected, setOptionMenuSelected] = useState(0);
   const [segmentedSelected, setSegmentedSelected] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
+  const [sbHovered, setSbHovered] = useState(false);
 
   // Fermer les dropdowns (ComboBox/OptionMenu) au clic extérieur
   useEffect(() => {
@@ -70,6 +72,21 @@ export const InteractiveWidget: React.FC<InteractiveWidgetProps> = React.memo(({
       window.removeEventListener('mousedown', handleClickOutside);
     };
   }, [comboboxOpen, optionMenuOpen]);
+
+  useEffect(() => {
+    if (widget.type !== 'radiobutton') return;
+    const radioGroupId = widget.parentId || 'root';
+
+    const handler = (e: Event) => {
+      const { groupId, selectedWidgetId: selId } = (e as CustomEvent).detail;
+      if (groupId === radioGroupId && selId !== widget.id) {
+        setRadioState(false);
+      }
+    };
+
+    window.addEventListener('radio-group-select', handler);
+    return () => window.removeEventListener('radio-group-select', handler);
+  }, [widget.type, widget.parentId, widget.id]);
 
   const properties = widget.properties || {};
   const style = widget.style || {};
@@ -458,17 +475,6 @@ export const InteractiveWidget: React.FC<InteractiveWidgetProps> = React.memo(({
           }
         }
       };
-
-      useEffect(() => {
-        const handler = (e: Event) => {
-          const { groupId, selectedWidgetId: selId } = (e as CustomEvent).detail;
-          if (groupId === radioGroupId && selId !== widget.id) {
-            setRadioState(false);
-          }
-        };
-        window.addEventListener('radio-group-select', handler);
-        return () => window.removeEventListener('radio-group-select', handler);
-      }, [radioGroupId, widget.id]);
 
       const radioWidth = properties.radiobutton_width || 24;
       const radioHeight = properties.radiobutton_height || 24;
@@ -1056,8 +1062,6 @@ export const InteractiveWidget: React.FC<InteractiveWidgetProps> = React.memo(({
       const sbCornerRadius = properties.corner_radius !== undefined ? properties.corner_radius : 1000;
       const sbBorderSpacing = properties.border_spacing !== undefined ? properties.border_spacing : 2;
       const sbThumbRatio = 0.35; // proportion visible du thumb (simule un contenu)
-
-      const [sbHovered, setSbHovered] = useState(false);
 
       if (isVerticalSb) {
         return (

@@ -101,6 +101,7 @@ type AIErrorCode =
 
 const MAX_PROVIDER_ATTEMPTS = 3;
 const QUALITY_GATE_MIN_SCORE = 85;
+const SYNC_HEALTH_FAILURE_THRESHOLD = 3;
 const DEFAULT_FIDELITY_NOTES = [
   "Polices exactes: reproduction proche, selon les polices disponibles dans l'application.",
   "Assets/images/logo: import manuel requis si les fichiers source ne sont pas fournis.",
@@ -636,6 +637,7 @@ export const DayannaAIPanel = () => {
   const loadedProjectIdRef = useRef<string | null>(null);
   const pendingConversationWritesRef = useRef<Map<string, PendingConversationWrite>>(new Map());
   const fileRenameMigrationDoneByProjectRef = useRef<Set<string>>(new Set());
+  const syncHealthFailureCountRef = useRef(0);
   const [forceNewConversationRequested, setForceNewConversationRequested] = useState(false);
 
   const { user } = useAuth();
@@ -685,7 +687,7 @@ export const DayannaAIPanel = () => {
   const enqueueConversationWrite = useCallback((write: PendingConversationWrite) => {
     pendingConversationWritesRef.current.set(write.id, write);
     setDbSyncState((prev) => (prev === 'error' ? prev : 'degraded'));
-    setDbSyncReason('Synchronisation differee. Les modifications seront envoyees automatiquement.');
+    setDbSyncReason('Synchronisation en arriere-plan active.');
   }, []);
 
   const flushConversationWriteQueue = useCallback(async () => {
@@ -701,7 +703,7 @@ export const DayannaAIPanel = () => {
     } catch (error) {
       console.warn('[AI] Echec flush conversations en attente:', error);
       setDbSyncState('degraded');
-      setDbSyncReason('Synchronisation en attente. Verification de la connexion...');
+      setDbSyncReason('Resynchronisation automatique en cours.');
     }
   }, [dbReady, user]);
 
@@ -773,15 +775,17 @@ export const DayannaAIPanel = () => {
         setApiKeys((dbKeys ?? {}) as ApiKeys);
         aiRef.current = null;
         setDbReady(true);
+        syncHealthFailureCountRef.current = 0;
         setDbSyncState('ok');
         setDbSyncReason(null);
         loadedProjectIdRef.current = activeProjectId;
       } catch (error) {
         console.warn('[AI] Chargement initial depuis Supabase impossible:', error);
-        setDbReady(false);
-        setDbSyncError("Synchronisation IA indisponible. Verifiez la migration 'ai_conversations.project_id' et la connexion Supabase.");
-        setDbSyncState('error');
-        setDbSyncReason("Connexion base indisponible. Mode degrade active.");
+        // Keep Dayanna usable for brand-new accounts even when the first DB handshake is flaky.
+        setDbReady(true);
+        setDbSyncError(null);
+        setDbSyncState('degraded');
+        setDbSyncReason('Mode local temporaire. Resynchronisation automatique en cours.');
       } finally {
         if (!cancelled) setIsLoadingDb(false);
       }
@@ -888,14 +892,19 @@ export const DayannaAIPanel = () => {
             return sorted[0]?.id ?? null;
           });
         }
-        setDbSyncState('ok');
-        setDbSyncReason(null);
+        syncHealthFailureCountRef.current = 0;
+        if (pendingConversationWritesRef.current.size === 0) {
+          setDbSyncState('ok');
+          setDbSyncReason(null);
+        }
       } catch (error) {
         console.warn('[AI] Chargement conversations projet impossible:', error);
         if (!cancelled) {
-          setDbSyncError("Echec synchronisation conversations. Mode degrade active.");
-          setDbSyncState('degraded');
-          setDbSyncReason("Le chargement DB a echoue. Vous pouvez continuer, resynchronisation automatique active.");
+          setDbSyncError(null);
+          setDbSyncState((prev) => (pendingConversationWritesRef.current.size > 0 ? 'degraded' : prev));
+          if (pendingConversationWritesRef.current.size > 0) {
+            setDbSyncReason('Mode degrade: ecritures en attente de synchronisation.');
+          }
         }
       } finally {
         if (!cancelled) {
@@ -984,26 +993,40 @@ export const DayannaAIPanel = () => {
   }, [user, dbReady, mapDbConversation, activeProjectId, sortConversationsByLatest]);
 
   useEffect(() => {
-    if (!user || !activeProjectId) return;
+    if (!user || !activeProjectId || !dbReady) return;
 
     let cancelled = false;
-    void (async () => {
+    const runHealthCheck = async () => {
       const health = await checkConversationSyncHealth(activeProjectId);
       if (cancelled) return;
       if (health.ok) {
+        syncHealthFailureCountRef.current = 0;
         setDbSyncState((prev) => (prev === 'degraded' && pendingConversationWritesRef.current.size > 0 ? prev : 'ok'));
         if (pendingConversationWritesRef.current.size === 0) {
           setDbSyncReason(null);
           setDbSyncError(null);
         }
       } else {
-        setDbSyncState('degraded');
-        setDbSyncReason(health.reason || 'Synchronisation indisponible temporairement.');
+        syncHealthFailureCountRef.current += 1;
+        const shouldPromoteDegraded =
+          pendingConversationWritesRef.current.size > 0 ||
+          syncHealthFailureCountRef.current >= SYNC_HEALTH_FAILURE_THRESHOLD;
+        if (shouldPromoteDegraded) {
+          setDbSyncState('degraded');
+          setDbSyncReason(health.reason || 'Synchronisation indisponible temporairement.');
+        }
       }
-    })();
+    };
+    void runHealthCheck();
+    const timer = window.setInterval(() => {
+      void runHealthCheck();
+    }, 12000);
 
-    return () => { cancelled = true; };
-  }, [activeProjectId, dbReloadNonce, user]);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [activeProjectId, dbReady, dbReloadNonce, user]);
 
   useEffect(() => {
     if (!user || dbReady) return;
@@ -2791,9 +2814,9 @@ ${PREMIUM_DESIGN_BASELINE}
         }
       })
       .catch(() => {
-        setDbSyncError("Impossible de mettre a jour la conversation active en base.");
+        setDbSyncError(null);
         setDbSyncState('degraded');
-        setDbSyncReason('Synchronisation differee. La selection locale est conservee.');
+        setDbSyncReason('Synchronisation differee. Selection locale conservee.');
       });
   }, [sortConversationsByLatest]);
 
@@ -2851,7 +2874,7 @@ ${PREMIUM_DESIGN_BASELINE}
 
         if (fallbackConversationId && !createdFallback) {
           void touchConversationInDb(fallbackConversationId).catch(() => {
-            setDbSyncError("Impossible de mettre a jour la conversation active apres suppression.");
+            setDbSyncError(null);
             setDbSyncState('degraded');
             setDbSyncReason('Synchronisation differee apres suppression.');
           });
@@ -2867,7 +2890,7 @@ ${PREMIUM_DESIGN_BASELINE}
         }
       } catch (error) {
         console.warn('[AI] Suppression conversation echouee:', error);
-        setDbSyncError("Impossible de supprimer la conversation en base.");
+        setDbSyncError(null);
         setDbSyncState('degraded');
         setDbSyncReason('La conversation a ete conservee localement.');
         toast.error('Suppression echouee: la conversation est conservee.');

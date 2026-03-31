@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
-import { X, History, Settings, Plus, Search as SearchIcon, Trash2, ChevronLeft, Edit2, Check, Loader2, AlertTriangle } from "lucide-react";
+import { X, History, Settings, Plus, Search as SearchIcon, Trash2, ChevronLeft, Edit2, Check, Loader2 } from "lucide-react";
 import { ChatArea } from "./ChatArea";
 import { InputArea } from "./InputArea";
 import { Message, Model, InputStatus, Conversation, ApiKeys, Provider, Attachment, AIMode, TaggedFile } from "./types";
@@ -88,7 +88,6 @@ export function Sidebar({
   }, [conversations, searchQuery, filter]);
   const deletingSet = useMemo(() => new Set(deletingConversationIds), [deletingConversationIds]);
   const isSyncing = dbSyncState === 'syncing';
-  const hasSyncIssue = dbSyncState === 'degraded' || dbSyncState === 'error';
 
   useEffect(() => {
     if (!isSyncing) {
@@ -99,12 +98,10 @@ export function Sidebar({
     return () => window.clearTimeout(timer);
   }, [isSyncing, dbSyncReason]);
 
-  const shouldShowSyncBanner = hasSyncIssue || showSyncingBanner;
+  const shouldShowSyncBanner = isSyncing && showSyncingBanner;
   const syncTitle = isSyncing
     ? 'Connexion base en cours...'
-    : dbSyncState === 'error'
-      ? 'Synchronisation Dayanna indisponible'
-      : 'Synchronisation Dayanna en attente';
+    : 'Synchronisation Dayanna en attente';
   const syncDescription = dbSyncReason || (isSyncing
     ? 'Chargement des conversations du projet actif.'
     : 'Les changements restent visibles et seront resynchronises automatiquement.');
@@ -244,11 +241,7 @@ export function Sidebar({
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0 flex items-start gap-2">
                     <div className="mt-0.5 shrink-0">
-                      {isSyncing ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin text-white/95" />
-                      ) : (
-                        <AlertTriangle className="h-3.5 w-3.5 text-amber-200" />
-                      )}
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-white/95" />
                     </div>
                     <div className="min-w-0">
                     <p className="truncate text-[11px] font-semibold uppercase tracking-wider">
@@ -259,31 +252,16 @@ export function Sidebar({
                     </p>
                     </div>
                   </div>
-                  {hasSyncIssue && (
-                    <div className="shrink-0 flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={onRetrySync}
-                        className="rounded-md border border-white/55 px-2 py-1 text-[10px] font-semibold text-white transition-colors hover:bg-white/10"
-                      >
-                        Reessayer
-                      </button>
-                      {onHardResetSync ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const ok = window.confirm(
-                              "Reinitialiser Dayanna va supprimer l'historique IA en base pour votre compte. Continuer ?"
-                            );
-                            if (ok) onHardResetSync();
-                          }}
-                          className="rounded-md border border-amber-200/70 px-2 py-1 text-[10px] font-semibold text-amber-100 transition-colors hover:bg-amber-300/10"
-                        >
-                          Reinitialiser
-                        </button>
-                      ) : null}
-                    </div>
-                  )}
+                  <div className="shrink-0 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={onRetrySync}
+                      title={onHardResetSync ? 'Reessayer la synchronisation (reset disponible dans les options admin).' : 'Reessayer la synchronisation'}
+                      className="rounded-md border border-white/55 px-2 py-1 text-[10px] font-semibold text-white transition-colors hover:bg-white/10"
+                    >
+                      Reessayer
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

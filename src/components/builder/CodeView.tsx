@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { useWidgets } from '@/contexts/WidgetContext';
+import { useWidgets } from '@/contexts/useWidgets';
 import { useExportPython } from '@/hooks/useExportPython';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Code, Copy, Check, Download, Package, FileCode2, Zap } from 'lucide-react';

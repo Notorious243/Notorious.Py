@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { WidgetData, CanvasSettings } from '@/types/widget';
 import {
     SYSTEM_PROMPT_TEXT,
@@ -32,11 +32,18 @@ export interface GenerationQualitySummary {
     notes: string[];
 }
 
+export interface GenerationQualityGate {
+    status: 'passed' | 'failed';
+    minScore: number;
+    reason?: string;
+}
+
 interface AIGenerationResult {
     widgets: WidgetData[];
     canvasSettings?: Partial<CanvasSettings>;
     qualityChecks?: GenerationQualityCheck[];
     qualitySummary?: GenerationQualitySummary;
+    qualityGate?: GenerationQualityGate;
     selfHealApplied?: boolean;
 }
 
@@ -63,6 +70,7 @@ type AIErrorCode =
     | 'UNKNOWN';
 
 const MAX_RETRY_ATTEMPTS = 3;
+const QUALITY_GATE_MIN_SCORE = 85;
 const RETRYABLE_ERROR_CODES = new Set<AIErrorCode>([
     'NETWORK',
     'TIMEOUT',
@@ -70,6 +78,11 @@ const RETRYABLE_ERROR_CODES = new Set<AIErrorCode>([
     'SERVER_ERROR',
     'EMPTY_CONTENT',
 ]);
+
+const devDebug = (...args: unknown[]) => {
+    if (!import.meta.env.DEV) return;
+    console.warn('[AI Debug]', ...args);
+};
 
 const withErrorCode = (code: AIErrorCode, message: string): string => `${code}:${message}`;
 
@@ -104,6 +117,29 @@ const shouldMarkPaidModel = (message: string): boolean => {
 
 const shouldMarkQuotaExceeded = (message: string): boolean => {
     return /(quota|credit|insufficient|exceeded|limit reached|balance|tokens? exhausted)/i.test(message);
+};
+
+const buildQualityGate = (summary: GenerationQualitySummary): GenerationQualityGate => {
+    if (summary.hasBlockingIssues) {
+        return {
+            status: 'failed',
+            minScore: QUALITY_GATE_MIN_SCORE,
+            reason: `Issues structurelles detectees (${summary.remainingIssues} restante(s)).`,
+        };
+    }
+
+    if (summary.score < QUALITY_GATE_MIN_SCORE) {
+        return {
+            status: 'failed',
+            minScore: QUALITY_GATE_MIN_SCORE,
+            reason: `Score qualite ${summary.score}% inferieur au seuil ${QUALITY_GATE_MIN_SCORE}%.`,
+        };
+    }
+
+    return {
+        status: 'passed',
+        minScore: QUALITY_GATE_MIN_SCORE,
+    };
 };
 
 const formatErrorForUi = (rawMessage: string): string => {
@@ -193,7 +229,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
             process(w);
         }
 
-        console.log('[AI] Converted relative positions to absolute for', result.filter(w => w.parentId).length, 'child widgets');
+        devDebug('Converted relative positions to absolute for', result.filter(w => w.parentId).length, 'child widgets');
         return result;
     };
 
@@ -270,7 +306,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
         });
 
         if (filtered.length < widgets.length) {
-            console.log(`[AI-Validate] ${widgets.length - filtered.length} widget(s) supprimé(s) (types invalides)`);
+            devDebug(`${widgets.length - filtered.length} widget(s) supprimé(s) (types invalides)`);
         }
 
         return filtered;
@@ -555,7 +591,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
      */
     const parseAIResponse = (responseText: string, skipConversion = false): AIGenerationResult | null => {
         try {
-            console.log('[AI] Raw response length:', responseText.length);
+            devDebug('Raw response length:', responseText.length);
 
             let jsonStr = '';
 
@@ -563,7 +599,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
             const codeBlockMatch = responseText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
             if (codeBlockMatch) {
                 jsonStr = codeBlockMatch[1].trim();
-                console.log('[AI] Extracted JSON from code block');
+                devDebug('Extracted JSON from code block');
             }
 
             // Strategy 2: Find the outermost { ... } containing "widgets"
@@ -572,7 +608,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
                 const lastBrace = responseText.lastIndexOf('}');
                 if (firstBrace !== -1 && lastBrace > firstBrace) {
                     jsonStr = responseText.substring(firstBrace, lastBrace + 1);
-                    console.log('[AI] Extracted JSON from brace matching');
+                    devDebug('Extracted JSON from brace matching');
                 }
             }
 
@@ -613,14 +649,16 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
             // Skip in iterate mode: existing widgets are already absolute
             const finalWidgets = skipConversion ? validatedWidgets : convertRelativeToAbsolute(validatedWidgets);
 
-            console.log(`[AI] Parsed ${finalWidgets.length} widgets successfully (conversion: ${skipConversion ? 'skipped' : 'applied'})`);
+            devDebug(`Parsed ${finalWidgets.length} widgets successfully (conversion: ${skipConversion ? 'skipped' : 'applied'})`);
 
             const quality = runQualityPass(finalWidgets, parsed.canvasSettings);
+            const qualityGate = buildQualityGate(quality.summary);
             return {
                 widgets: quality.widgets,
                 canvasSettings: parsed.canvasSettings,
                 qualityChecks: quality.checks,
                 qualitySummary: quality.summary,
+                qualityGate,
                 selfHealApplied: quality.selfHealApplied,
             };
         } catch (e: any) {
@@ -708,7 +746,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
             throw new Error(withErrorCode('INVALID_KEY', "Token Hugging Face invalide. Utilisez un token 'hf_...'."));
         }
 
-        console.log(`[AI] Calling ${providerName} — model: ${requestModel}`);
+        devDebug(`Calling ${providerName} — model: ${requestModel}`);
 
         // Build request body based on API format
         let requestBody: string;
@@ -810,7 +848,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
 
         const data = await response.json();
         const actualModel = data.model || requestModel;
-        console.log(`[AI] Response OK — actual model: ${actualModel}`);
+        devDebug(`Response OK — actual model: ${actualModel}`);
 
         // Extract content based on API format
         const content = config.apiFormat === 'anthropic'
@@ -851,7 +889,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
         throw lastError || new Error(withErrorCode('UNKNOWN', 'Erreur IA inconnue.'));
     };
 
-    const generateFromPrompt = useCallback(async (
+    const generateFromPrompt = async (
         apiKey: string,
         prompt: string,
         modelId: string,
@@ -886,9 +924,9 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
         } finally {
             setIsGenerating(false);
         }
-    }, []);
+    };
 
-    const generateFromImage = useCallback(async (
+    const generateFromImage = async (
         apiKey: string,
         imageBase64: string,
         additionalPrompt?: string,
@@ -932,9 +970,9 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
         } finally {
             setIsGenerating(false);
         }
-    }, []);
+    };
 
-    const generateIteration = useCallback(async (
+    const generateIteration = async (
         apiKey: string,
         prompt: string,
         currentWidgets: WidgetData[],
@@ -975,7 +1013,7 @@ USER INSTRUCTION: ${prompt}${contextPrompt}`;
         } finally {
             setIsGenerating(false);
         }
-    }, []);
+    };
 
     return {
         isGenerating,

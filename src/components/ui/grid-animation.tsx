@@ -153,7 +153,7 @@ export function GridAnimation({
   }
 
   useEffect(() => {
-    if (canvasRef.current && ballRef.current) {
+    if (canvasRef.current) {
       requestAnimationFrame(animateCanvas)
     }
 

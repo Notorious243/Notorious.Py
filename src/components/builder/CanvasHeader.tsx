@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useWidgets } from '@/contexts/WidgetContext';
+import { useWidgets } from '@/contexts/useWidgets';
 import { Grid2X2 } from 'lucide-react';
 import { Toggle } from '@/components/ui/toggle';
 

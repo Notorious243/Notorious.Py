@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { useProjects } from '@/contexts/ProjectContext';
-import { useAuth } from '@/contexts/AuthContext';
+import { useProjects } from '@/contexts/useProjects';
+import { useAuth } from '@/contexts/useAuth';
 import { Button } from '@/components/ui/button';
 import { Plus, Sparkles, Trash2, Search, Calendar, Rocket, ArrowLeft, Upload, Pencil } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';

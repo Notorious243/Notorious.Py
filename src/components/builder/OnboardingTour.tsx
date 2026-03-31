@@ -8,6 +8,8 @@ interface OnboardingTourProps {
   onComplete: () => void;
 }
 
+const START_ONBOARDING_TOUR_EVENT = 'dayanna:start-onboarding-tour';
+
 // SVG Icons as strings for driver.js HTML content - Modern Software Style
 const Icons = {
   Sparkles: `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="url(#sparkle-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="sparkle-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#0F3460"/><stop offset="100%" stop-color="#1F5AA0"/></linearGradient></defs><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>`,
@@ -326,13 +328,16 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ isFirstTime, onC
     return () => clearTimeout(timer);
   }, [isFirstTime, onComplete, resolvedTheme]);
 
+  useEffect(() => {
+    const handleStartTour = () => {
+      launchTour(resolvedTheme === 'dark', onComplete);
+    };
+
+    window.addEventListener(START_ONBOARDING_TOUR_EVENT, handleStartTour);
+    return () => window.removeEventListener(START_ONBOARDING_TOUR_EVENT, handleStartTour);
+  }, [onComplete, resolvedTheme]);
+
   return null;
 };
 
 export default OnboardingTour;
-
-// Fonction helper pour lancer manuellement le tour (sans hook React)
-export const startOnboardingTour = (onComplete?: () => void) => {
-  const isDark = document.documentElement.classList.contains('dark');
-  launchTour(isDark, onComplete);
-};

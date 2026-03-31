@@ -5,16 +5,17 @@ import { toast } from 'sonner';
 import type { ApiKeys, Attachment, Conversation, InputStatus, Message, Model, Provider, AIMode, TaggedFile, GenerationStage } from './types';
 import { SettingsModal } from './SettingsModal';
 import { Sidebar } from './Sidebar';
-import { useWidgets } from '@/contexts/WidgetContext';
-import { useProjects } from '@/contexts/ProjectContext';
-import { useFileSystem } from '@/hooks/useFileSystem';
+import { useWidgets } from '@/contexts/useWidgets';
+import { useProjects } from '@/contexts/useProjects';
+import { useFileSystem } from '@/hooks/useFileSystemContext';
 import {
   useAIGeneration,
   type ContextFile,
+  type GenerationQualityGate,
   type GenerationQualityCheck,
   type GenerationQualitySummary,
 } from '@/hooks/useAIGeneration';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/useAuth';
 import { supabase } from '@/lib/supabase';
 import {
   getProviderConfig,
@@ -95,9 +96,11 @@ type AIErrorCode =
   | 'MODEL_UNAVAILABLE'
   | 'EMPTY_CONTENT'
   | 'JSON_INVALID'
+  | 'QUALITY_GATE'
   | 'UNKNOWN';
 
 const MAX_PROVIDER_ATTEMPTS = 3;
+const QUALITY_GATE_MIN_SCORE = 85;
 const DEFAULT_FIDELITY_NOTES = [
   "Polices exactes: reproduction proche, selon les polices disponibles dans l'application.",
   "Assets/images/logo: import manuel requis si les fichiers source ne sont pas fournis.",
@@ -437,6 +440,7 @@ const parseErrorCode = (message: string): { code: AIErrorCode; detail: string } 
     'MODEL_UNAVAILABLE',
     'EMPTY_CONTENT',
     'JSON_INVALID',
+    'QUALITY_GATE',
     'UNKNOWN',
   ]);
   return { code: allowed.has(rawCode) ? rawCode : 'UNKNOWN', detail };
@@ -482,6 +486,8 @@ const formatProviderErrorForUser = (errorMessage: string): { code: AIErrorCode; 
       return { code, text: detail || 'Le modele a renvoye une reponse vide.' };
     case 'JSON_INVALID':
       return { code, text: detail || "Le JSON renvoye par l'IA est invalide." };
+    case 'QUALITY_GATE':
+      return { code, text: detail || `Qualite insuffisante. Seuil minimum ${QUALITY_GATE_MIN_SCORE}% non atteint.` };
     default:
       return { code: 'UNKNOWN', text: detail || 'Erreur IA inconnue.' };
   }
@@ -537,6 +543,62 @@ const mapQualitySummaryToMessageMeta = (summary?: GenerationQualitySummary) => {
     remainingIssues: summary.remainingIssues,
     notes: summary.notes,
   };
+};
+
+type MessageQualityGate = NonNullable<NonNullable<Message['generation']>['qualityGate']>;
+
+const resolveQualityGate = (
+  summary?: GenerationQualitySummary,
+  gate?: GenerationQualityGate
+): MessageQualityGate => {
+  if (gate) {
+    return {
+      status: gate.status,
+      minScore: gate.minScore,
+      reason: gate.reason,
+    };
+  }
+
+  if (!summary) {
+    return {
+      status: 'failed',
+      minScore: QUALITY_GATE_MIN_SCORE,
+      reason: 'Validation qualite indisponible.',
+    };
+  }
+
+  if (summary.hasBlockingIssues) {
+    return {
+      status: 'failed',
+      minScore: QUALITY_GATE_MIN_SCORE,
+      reason: `Issues structurelles detectees (${summary.remainingIssues} restante(s)).`,
+    };
+  }
+
+  if (summary.score < QUALITY_GATE_MIN_SCORE) {
+    return {
+      status: 'failed',
+      minScore: QUALITY_GATE_MIN_SCORE,
+      reason: `Score qualite ${summary.score}% inferieur au seuil ${QUALITY_GATE_MIN_SCORE}%.`,
+    };
+  }
+
+  return {
+    status: 'passed',
+    minScore: QUALITY_GATE_MIN_SCORE,
+  };
+};
+
+const ensureQualityGatePassed = (
+  gate: MessageQualityGate,
+  contextLabel: string
+) => {
+  if (gate.status === 'passed') return;
+
+  const reason = gate.reason
+    ? `${gate.reason} (${contextLabel}).`
+    : `Qualite insuffisante pour ${contextLabel}.`;
+  throw new Error(withErrorCode('QUALITY_GATE', reason));
 };
 
 interface DbConversationRow {
@@ -726,7 +788,7 @@ export const DayannaAIPanel = () => {
     })();
 
     return () => { cancelled = true; };
-  }, [dbReloadNonce, user]);
+  }, [activeProjectId, dbReloadNonce, user]);
 
   useEffect(() => {
     if (consumeForceNewConversationOnLoadFlag()) {
@@ -1045,7 +1107,7 @@ ${widgetSummary || '(Aucun widget)'}`;
     }
 
     return context;
-  }, [widgets, canvasSettings, files, getPyFiles, getFileSummary]);
+  }, [widgets, canvasSettings, getPyFiles, getFileSummary]);
 
   const buildSystemPrompt = useCallback((mode: AIMode, taggedFiles?: TaggedFile[], autoDetectedFiles?: { name: string; content?: string }[]) => {
     const canvasContext = buildCanvasContext(taggedFiles, autoDetectedFiles);
@@ -2085,14 +2147,17 @@ Contraintes:
               setGenerationStage('validating');
 
               const rawTitle = getGeneratedInterfaceTitle(String(createFromEditResult.canvasSettings?.title || ''), trimmed);
-              const fileName = getUniquePyFileName(rawTitle);
-              const newFileId = addNode(null, 'file', fileName);
               const nextSettings = createFromEditResult.canvasSettings
                 ? { ...canvasSettings, ...createFromEditResult.canvasSettings, title: rawTitle }
                 : { ...canvasSettings, title: rawTitle };
               const qualityChecks = mapQualityChecksToMessageMeta(createFromEditResult.qualityChecks);
               const qualitySummary = mapQualitySummaryToMessageMeta(createFromEditResult.qualitySummary);
+              const qualityGate = resolveQualityGate(createFromEditResult.qualitySummary, createFromEditResult.qualityGate);
+              updateGenerationMeta({ qualityChecks, qualitySummary, qualityGate });
+              ensureQualityGatePassed(qualityGate, 'creation initiale');
 
+              const fileName = getUniquePyFileName(rawTitle);
+              const newFileId = addNode(null, 'file', fileName);
               const impact = computeWidgetImpact([], (createFromEditResult.widgets as Array<{ id: string; type: string }>).map((w) => ({ id: w.id, type: w.type })));
               persistActiveWorkspaceToFile();
               setGenerationStage('applying');
@@ -2131,6 +2196,7 @@ Contraintes:
                 widgetImpact: impact,
                 qualityChecks,
                 qualitySummary,
+                qualityGate,
               });
             } else {
               if (shouldUseVision && !primaryVisionImageData) {
@@ -2149,6 +2215,9 @@ Contraintes:
               const impact = computeWidgetImpact(previousWidgets, nextWidgets);
               const qualityChecks = mapQualityChecksToMessageMeta(result.qualityChecks);
               const qualitySummary = mapQualitySummaryToMessageMeta(result.qualitySummary);
+              const qualityGate = resolveQualityGate(result.qualitySummary, result.qualityGate);
+              updateGenerationMeta({ qualityChecks, qualitySummary, qualityGate });
+              ensureQualityGatePassed(qualityGate, 'modification interface');
 
               const nextSettings = result.canvasSettings
                 ? { ...canvasSettings, ...result.canvasSettings }
@@ -2196,6 +2265,7 @@ Contraintes:
                 widgetImpact: impact,
                 qualityChecks,
                 qualitySummary,
+                qualityGate,
               });
             }
           } else {
@@ -2217,6 +2287,9 @@ Contraintes:
               : { ...canvasSettings, title: rawTitle };
             const qualityChecks = mapQualityChecksToMessageMeta(result.qualityChecks);
             const qualitySummary = mapQualitySummaryToMessageMeta(result.qualitySummary);
+            const qualityGate = resolveQualityGate(result.qualitySummary, result.qualityGate);
+            updateGenerationMeta({ qualityChecks, qualitySummary, qualityGate });
+            ensureQualityGatePassed(qualityGate, 'generation interface');
             persistActiveWorkspaceToFile();
             setGenerationStage('applying');
             if (activeFileId) {
@@ -2261,6 +2334,7 @@ Contraintes:
                 widgetImpact: impact,
                 qualityChecks,
                 qualitySummary,
+                qualityGate,
               });
             } else {
               const fileName = getUniquePyFileName(rawTitle);
@@ -2306,6 +2380,7 @@ Contraintes:
                 widgetImpact: impact,
                 qualityChecks,
                 qualitySummary,
+                qualityGate,
               });
             }
           }
@@ -2362,6 +2437,8 @@ ${PREMIUM_DESIGN_BASELINE}
                   planQualityNotes.push(`${spec.name}: ${result.qualitySummary.remainingIssues} issue(s) restante(s)`);
                 }
               }
+              const interfaceQualityGate = resolveQualityGate(result.qualitySummary, result.qualityGate);
+              ensureQualityGatePassed(interfaceQualityGate, `plan ${spec.name}`);
 
               const fileName = getUniquePyFileName(spec.name);
               const newFileId = addNode(null, 'file', fileName);
@@ -2422,6 +2499,10 @@ ${PREMIUM_DESIGN_BASELINE}
               resumeCheckpointId: undefined,
               attempt: Math.max(1, retryCount + 1),
               maxAttempts: 3,
+              qualityGate: {
+                status: 'passed',
+                minScore: QUALITY_GATE_MIN_SCORE,
+              },
               qualitySummary: planQualityScores.length > 0
                 ? {
                   score: Math.round(planQualityScores.reduce((sum, value) => sum + value, 0) / planQualityScores.length),
@@ -2600,6 +2681,7 @@ ${PREMIUM_DESIGN_BASELINE}
       getUniquePyFileName,
       isAuditRequest,
       isTyping,
+      loadWorkspaceState,
       normalizeModelForGeneration,
       pendingPlans,
       persistActiveWorkspaceToFile,

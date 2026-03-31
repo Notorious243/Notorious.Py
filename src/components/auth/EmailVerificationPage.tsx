@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/useAuth';
 import { motion } from 'framer-motion';
 import { MailCheck, RefreshCw, LogOut, Loader2 } from 'lucide-react';
 

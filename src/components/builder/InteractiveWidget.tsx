@@ -248,7 +248,6 @@ export const InteractiveWidget: React.FC<InteractiveWidgetProps> = React.memo(({
       const handleButtonClick = () => {
         if (isPreviewMode && properties.state !== 'disabled') {
           setClickedButton(true);
-          console.log('Button clicked:', properties.text || 'Bouton');
           setTimeout(() => setClickedButton(false), 200);
         }
       };
@@ -405,7 +404,6 @@ export const InteractiveWidget: React.FC<InteractiveWidgetProps> = React.memo(({
       const handleCheckboxClick = () => {
         if (isPreviewMode && properties.state !== 'disabled') {
           setCheckboxState(!checkboxState);
-          console.log('Checkbox toggled:', !checkboxState);
         }
       };
 
@@ -539,7 +537,6 @@ export const InteractiveWidget: React.FC<InteractiveWidgetProps> = React.memo(({
       const handleSwitchClick = () => {
         if (isPreviewMode && properties.state !== 'disabled') {
           setSwitchState(!switchState);
-          console.log('Switch toggled:', !switchState);
         }
       };
 
@@ -782,7 +779,6 @@ export const InteractiveWidget: React.FC<InteractiveWidgetProps> = React.memo(({
               onClick={() => {
                 if (isPreviewMode && properties.state !== 'disabled') {
                   setSegmentedSelected(i);
-                  console.log('Segment selected:', seg, i);
                 }
               }}
               style={{

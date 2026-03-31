@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { WidgetRenderContext } from './widget-shared';
 import { FrameInternalGrid } from '../FrameInternalGrid';
 
@@ -70,7 +70,10 @@ export const TabviewRenderer: React.FC<{ ctx: WidgetRenderContext }> = React.mem
   const properties = widget.properties || {};
   const style = widget.style || {};
 
-  const tabs = Array.isArray(properties.tabs) && properties.tabs.length > 0 ? properties.tabs : ['Tab 1'];
+  const tabs = useMemo(
+    () => (Array.isArray(properties.tabs) && properties.tabs.length > 0 ? properties.tabs : ['Tab 1']),
+    [properties.tabs]
+  );
   const paddingValue = typeof style.padding === 'number' ? style.padding : 0;
   const tabViewBgColor = style.backgroundColor || properties.fg_color || colors.fg;
   const innerHeight = containerMetrics ? Math.max(containerMetrics.innerHeight, 0) : undefined;
@@ -85,7 +88,7 @@ export const TabviewRenderer: React.FC<{ ctx: WidgetRenderContext }> = React.mem
       const fallback = tabList[0];
       setLocalActiveTab((prev) => (prev === fallback ? prev : fallback));
     }
-  }, [properties.tabs, activeTab]);
+  }, [tabs, activeTab]);
 
   const fallbackTab = tabs[0];
   const resolvedActive = (activeTab && tabs.includes(activeTab) && activeTab) || (localActiveTab && tabs.includes(localActiveTab) && localActiveTab) || fallbackTab;

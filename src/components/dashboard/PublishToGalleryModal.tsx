@@ -6,8 +6,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Globe, Loader2, Tag, Layers } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAuth } from '@/contexts/AuthContext';
-import { useWidgets } from '@/contexts/WidgetContext';
+import { useAuth } from '@/contexts/useAuth';
+import { useWidgets } from '@/contexts/useWidgets';
 import {
     publishToGallery,
     unpublishFromGallery,

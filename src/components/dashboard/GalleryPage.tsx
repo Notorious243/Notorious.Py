@@ -6,7 +6,7 @@ import {
     Layers, User, Tag,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/useAuth';
 import {
     fetchGalleryProjects,
     toggleGalleryLike,

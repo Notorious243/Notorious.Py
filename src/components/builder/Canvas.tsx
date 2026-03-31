@@ -1,12 +1,12 @@
 import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetData } from '@/types/widget';
-import { useWidgets } from '@/contexts/WidgetContext';
+import { useWidgets } from '@/contexts/useWidgets';
 import { useCanvasDrop } from '@/hooks/useDragDrop';
 import { ALL_WIDGET_DEFINITIONS } from '@/constants/widgets';
 import { isContainerWidget, getParentContentBounds, getWidgetDepth, getActiveTabSlot, getDefaultTabSlot } from '@/lib/widgetLayout';
 import { CanvasGrid } from './CanvasGrid';
-import { useProjects } from '@/contexts/ProjectContext';
+import { useProjects } from '@/contexts/useProjects';
 import { RenderedWidget } from './RenderedWidget';
 import { SmartGuides } from './SmartGuides';
 import { DropTargetMonitor } from 'react-dnd';
@@ -19,11 +19,11 @@ import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { openAIAssistantForPrompt } from '@/lib/aiSidebar';
-import { useFileSystem } from '@/hooks/useFileSystem';
+import { useFileSystem } from '@/hooks/useFileSystemContext';
 
 export const Canvas: React.FC = () => {
   const { widgets, canvasSettings, addWidget, selectWidget, selectedWidgetId, copyWidget, cutWidget, pasteWidget, deleteWidget, toggleWidgetLock, clipboard, undo, redo, updateWidget, moveWidget, previewMode, updateCanvasSettings } = useWidgets();
-  const { getPyFiles, data: fileTree } = useFileSystem();
+  const { getPyFiles } = useFileSystem();
   const { activeProjectId, createProject, projects, openProject } = useProjects();
   const canvasRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; widgetId: string | null } | null>(null);
@@ -74,7 +74,7 @@ export const Canvas: React.FC = () => {
   const [zoomInputValue, setZoomInputValue] = useState('');
   const zoomInputRef = useRef<HTMLInputElement>(null);
   const zoomIndicatorTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasPyFiles = useMemo(() => getPyFiles().length > 0, [fileTree, getPyFiles]);
+  const hasPyFiles = useMemo(() => getPyFiles().length > 0, [getPyFiles]);
 
   useEffect(() => {
     const container = containerRef.current;

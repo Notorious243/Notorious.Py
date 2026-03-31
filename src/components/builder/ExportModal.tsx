@@ -8,9 +8,9 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { useWidgets } from '@/contexts/WidgetContext';
-import { useProjects } from '@/contexts/ProjectContext';
-import { useFileSystem } from '@/hooks/useFileSystem';
+import { useWidgets } from '@/contexts/useWidgets';
+import { useProjects } from '@/contexts/useProjects';
+import { useFileSystem } from '@/hooks/useFileSystemContext';
 import { useExportPython, buildWidgetVarNameMap } from '@/hooks/useExportPython';
 import {
   Copy,

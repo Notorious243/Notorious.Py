@@ -1,21 +1,8 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { useEffect, useState, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { User, Session } from '@supabase/supabase-js';
 import { flushPendingCanvasWrites } from '@/lib/canvasSyncService';
-
-interface AuthContextType {
-    user: User | null;
-    session: Session | null;
-    loading: boolean;
-    signOut: () => Promise<void>;
-}
-
-const AuthContext = createContext<AuthContextType>({
-    user: null,
-    session: null,
-    loading: true,
-    signOut: async () => {},
-});
+import { AuthContext } from '@/contexts/auth-context';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
@@ -59,5 +46,3 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         </AuthContext.Provider>
     );
 };
-
-export const useAuth = () => useContext(AuthContext);

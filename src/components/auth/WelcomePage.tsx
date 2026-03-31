@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/useAuth';
 import { useTheme } from 'next-themes';
 import { ArrowRight, Sparkles, Code2, Layers, MousePointerClick } from 'lucide-react';
 

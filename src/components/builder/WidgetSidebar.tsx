@@ -9,14 +9,15 @@ import { useDrag } from 'react-dnd';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { useFileSystem, FileSystemItem } from '@/hooks/useFileSystem';
-import { useWidgets } from '@/contexts/WidgetContext';
-import { useProjects } from '@/contexts/ProjectContext';
+import { type FileSystemItem } from '@/hooks/useFileSystem';
+import { useFileSystem } from '@/hooks/useFileSystemContext';
+import { useWidgets } from '@/contexts/useWidgets';
+import { useProjects } from '@/contexts/useProjects';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/useAuth';
 import { AuthPromptDialog } from '@/components/AuthPromptDialog';
 
 const PythonIcon = ({ className }: { className?: string }) => (

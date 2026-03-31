@@ -20,9 +20,9 @@ import {
     PREMIUM_PROVIDERS,
     type AIProvider,
 } from '@/lib/aiPrompts';
-import { useAuth } from '@/contexts/AuthContext';
-import { useWidgets } from '@/contexts/WidgetContext';
-import { useFileSystem } from '@/hooks/useFileSystem';
+import { useAuth } from '@/contexts/useAuth';
+import { useWidgets } from '@/contexts/useWidgets';
+import { useFileSystem } from '@/hooks/useFileSystemContext';
 import {
     fetchApiKeysFromSupabase,
     saveApiKeysToSupabase,
@@ -210,7 +210,7 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({ isOpen, onOp
     const { widgets, loadWorkspaceState, canvasSettings } = useWidgets();
     const { getAllFiles } = useFileSystem();
 
-    const allFiles = useMemo(() => getAllFiles(), [getAllFiles, isOpen]);
+    const allFiles = useMemo(() => getAllFiles(), [getAllFiles]);
 
     const apiKey = apiKeys[activeProvider];
     const providerConfig = PROVIDER_CONFIGS[activeProvider];
@@ -310,6 +310,15 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({ isOpen, onOp
         }
 
         if (result) {
+            const qualityGate = result.qualityGate;
+            if (qualityGate && qualityGate.status === 'failed') {
+                toast.error(
+                    qualityGate.reason ||
+                    `Quality gate bloque: score minimum ${qualityGate.minScore}% non atteint.`
+                );
+                return;
+            }
+
             // Save snapshot for undo
             preGenSnapshotRef.current = {
                 widgets: JSON.parse(JSON.stringify(widgets)),

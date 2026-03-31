@@ -7,7 +7,7 @@ import {
   Menu, SlidersHorizontal, Box, ScrollText, FolderOpen, BarChart3,
   Table, LayoutDashboard, Calendar, ShoppingCart, CircleUser, HelpCircle,
 } from 'lucide-react';
-import { useWidgets } from '@/contexts/WidgetContext';
+import { useWidgets } from '@/contexts/useWidgets';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 

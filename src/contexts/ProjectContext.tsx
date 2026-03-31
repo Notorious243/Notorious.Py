@@ -1,28 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import React, { useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/contexts/AuthContext';
-
-export interface ProjectMetadata {
-    id: string;
-    name: string;
-    createdAt: number;
-    updatedAt: number;
-    thumbnail?: string;
-}
-
-interface ProjectContextType {
-    projects: ProjectMetadata[];
-    activeProjectId: string | null;
-    loading: boolean;
-    createProject: (name: string) => Promise<string>;
-    openProject: (id: string) => void;
-    closeProject: () => void;
-    deleteProject: (id: string) => void;
-    renameProject: (id: string, newName: string) => void;
-    updateProjectThumbnail: (id: string, thumbnail: string) => void;
-}
-
-const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
+import { useAuth } from '@/contexts/useAuth';
+import { ProjectContext, ProjectMetadata } from '@/contexts/project-context';
 
 const ACTIVE_PROJECT_KEY = 'ctk-active-project';
 
@@ -209,10 +188,4 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             {children}
         </ProjectContext.Provider>
     );
-};
-
-export const useProjects = () => {
-    const context = useContext(ProjectContext);
-    if (!context) throw new Error('useProjects must be used within a ProjectProvider');
-    return context;
 };

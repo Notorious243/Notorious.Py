@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
+import { useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { CanvasSettings } from '@/types/widget';
 import {
@@ -9,6 +9,7 @@ import {
     subscribeCanvasSyncState,
     type CanvasSyncState,
 } from '@/lib/canvasSyncService';
+import { FileSystemContext } from '@/hooks/fileSystem-context';
 
 export type FileSystemItem = {
     id: string;
@@ -151,7 +152,6 @@ const useFileSystemLogic = (projectId: string | null) => {
 
             if (!error && row && Array.isArray(row.file_tree)) {
                 const loaded = dedupeTree(row.file_tree as FileSystemItem[]);
-                console.log('[FileSystem] Loaded file_tree:', loaded.length, 'nodes');
                 setData(loaded);
                 dataRef.current = loaded;
             } else {
@@ -440,8 +440,7 @@ const useFileSystemLogic = (projectId: string | null) => {
     };
 };
 
-// Context definition
-const FileSystemContext = createContext<ReturnType<typeof useFileSystemLogic> | null>(null);
+export type FileSystemContextValue = ReturnType<typeof useFileSystemLogic>;
 
 // Provider component
 export const FileSystemProvider = ({ children, projectId }: { children: ReactNode, projectId: string | null }) => {
@@ -451,13 +450,4 @@ export const FileSystemProvider = ({ children, projectId }: { children: ReactNod
             {children}
         </FileSystemContext.Provider>
     );
-};
-
-// Hook export variables
-export const useFileSystem = () => {
-    const context = useContext(FileSystemContext);
-    if (!context) {
-        throw new Error('useFileSystem must be used within a FileSystemProvider');
-    }
-    return context;
 };

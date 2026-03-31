@@ -1,16 +1,16 @@
 import React, { useState, lazy, Suspense } from 'react';
 import { Button } from '@/components/ui/button';
 import { Code, Download, Undo2, Redo2, Keyboard, History, LogIn, Home, Sparkles } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/useAuth';
 import { AuthPromptDialog } from '@/components/AuthPromptDialog';
-import { useWidgets } from '@/contexts/WidgetContext';
+import { useWidgets } from '@/contexts/useWidgets';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import DropdownMenuUserMenu07 from '@/components/shadcn-studio/dropdown-menu/dropdown-menu-07';
 const ExportModal = lazy(() => import('./ExportModal').then(m => ({ default: m.ExportModal })));
 const KeyboardShortcutsDialog = lazy(() => import('./KeyboardShortcutsDialog').then(m => ({ default: m.KeyboardShortcutsDialog })));
 const VersionHistoryModal = lazy(() => import('./VersionHistoryModal').then(m => ({ default: m.VersionHistoryModal })));
-import { useProjects } from '@/contexts/ProjectContext';
-import { useFileSystem } from '@/hooks/useFileSystem';
+import { useProjects } from '@/contexts/useProjects';
+import { useFileSystem } from '@/hooks/useFileSystemContext';
 
 export const TopBar: React.FC<{ minimal?: boolean }> = ({ minimal }) => {
   const { user, signOut } = useAuth();
@@ -181,7 +181,7 @@ export const TopBar: React.FC<{ minimal?: boolean }> = ({ minimal }) => {
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => {
-                  import('./OnboardingTour').then(m => m.startOnboardingTour());
+                  window.dispatchEvent(new Event('dayanna:start-onboarding-tour'));
                 }}
                 className="h-8 w-8 rounded-md"
                 title="Relancer le tour guidé"

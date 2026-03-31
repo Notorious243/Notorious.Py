@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useMotionValue, TapInfo } from 'framer-motion';
 import { WidgetData } from '@/types/widget';
-import { useWidgets } from '@/contexts/WidgetContext';
+import { useWidgets } from '@/contexts/useWidgets';
 import { InteractiveWidget } from './InteractiveWidget';
 import {
   isContainerWidget,
@@ -16,7 +16,8 @@ import {
 import { hasAutoLayout } from '@/lib/autoLayoutEngine';
 import { createSnapEngine, SnapGuide, DistanceMeasure, ResizeSnapResult } from '@/lib/SnapEngine';
 import { calculateFigmaSnap } from '@/lib/figmaSnap';
-import { computeFrameSmartGuides, FrameSmartGuidesDisplay, FrameSmartGuidesData } from './FrameSmartGuides';
+import { FrameSmartGuidesDisplay } from './FrameSmartGuides';
+import { computeFrameSmartGuides, type FrameSmartGuidesData } from './frameSmartGuidesUtils';
 
 const ResizeHandle: React.FC<{
   onMouseDown: (e: React.MouseEvent) => void;

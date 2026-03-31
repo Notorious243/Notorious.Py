@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useProjects } from '@/contexts/ProjectContext';
+import { useProjects } from '@/contexts/useProjects';
 import { Button } from '@/components/ui/button';
 import { Plus, FolderOpen, Trash2, Rocket, Search, Share2, Globe, Layers, Pencil, ImagePlus } from 'lucide-react';
 import { useTheme } from 'next-themes';

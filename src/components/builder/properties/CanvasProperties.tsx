@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Toggle } from '@/components/ui/toggle';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
-import { useWidgets } from '@/contexts/WidgetContext';
+import { useWidgets } from '@/contexts/useWidgets';
 import { Square, Bold, Trash2, Upload, Link, MapPin, Target, Smartphone, Image as ImageIcon, ChevronRight, Ruler, Palette, Settings2 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ColorPicker } from './ColorPicker';

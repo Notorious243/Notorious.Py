@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Accordion } from '@/components/ui/accordion';
 import { SlidersHorizontal, Sparkles } from 'lucide-react';
-import { useWidgets } from '@/contexts/WidgetContext';
+import { useWidgets } from '@/contexts/useWidgets';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WidgetProperties } from './properties/WidgetProperties';
 import { WidgetList } from './properties/WidgetList';

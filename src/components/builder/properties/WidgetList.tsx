@@ -2,7 +2,7 @@ import React from 'react';
 import { AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useWidgets } from '@/contexts/WidgetContext';
+import { useWidgets } from '@/contexts/useWidgets';
 import { Layers, Trash2, Type, MousePointerClick, TextCursor, FileText, Gauge, CheckSquare, Circle, ToggleRight, ListFilter, ChevronDown, Menu, SlidersHorizontal, GripVertical, Box, ScrollText, FolderOpen, Image as ImageIcon, BarChart3, Table2, LayoutDashboard, ShoppingCart, CircleUser, Calendar } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { WidgetData } from '@/types/widget';

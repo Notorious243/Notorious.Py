@@ -130,6 +130,11 @@ export interface MessageGenerationMeta {
     remainingIssues: number;
     notes: string[];
   };
+  qualityGate?: {
+    status: 'passed' | 'failed';
+    minScore: number;
+    reason?: string;
+  };
   streaming?: {
     enabled: boolean;
     source: 'sse' | 'fallback';

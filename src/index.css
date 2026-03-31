@@ -402,3 +402,171 @@
     font-size: 13px;
   }
 }
+
+/* ============================================
+   PYTHON LOADING SCREEN
+   ============================================ */
+.python-loader-screen {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(160deg, #eef3f9 0%, #e7edf6 45%, #edf2f9 100%);
+}
+
+.python-loader-lines {
+  position: absolute;
+  inset: 0;
+  opacity: 0.3;
+  background-image:
+    linear-gradient(118deg, transparent 0%, transparent 38%, rgba(36, 74, 130, 0.09) 39%, transparent 41%),
+    repeating-linear-gradient(-24deg, rgba(75, 109, 162, 0.12) 0 2px, transparent 2px 16px);
+  background-size: 140% 140%, 800px 380px;
+  animation: pythonLoaderSweep 14s linear infinite;
+}
+
+.python-loader-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.34;
+  background-image: radial-gradient(circle, rgba(47, 77, 123, 0.18) 1px, transparent 1px);
+  background-size: 26px 26px;
+  animation: pythonLoaderDrift 18s linear infinite;
+}
+
+.python-loader-sigil {
+  position: absolute;
+  font-size: 34px;
+  opacity: 0.16;
+  user-select: none;
+  animation: pythonLoaderFloat 6s ease-in-out infinite;
+}
+
+.python-loader-back {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 52, 96, 0.22);
+  background: rgba(255, 255, 255, 0.88);
+  color: #123a67;
+  font-size: 13px;
+  font-weight: 600;
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.python-loader-back:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.python-loader-card {
+  position: relative;
+  z-index: 2;
+  width: min(92vw, 500px);
+  border-radius: 18px;
+  border: 1px solid rgba(61, 92, 145, 0.24);
+  background: rgba(255, 255, 255, 0.76);
+  backdrop-filter: blur(6px);
+  padding: 24px 24px 20px;
+  text-align: center;
+  box-shadow: 0 16px 42px rgba(27, 51, 91, 0.14);
+  animation: pythonLoaderCardIn 0.38s ease-out;
+}
+
+.python-loader-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #1e4d88;
+  background: rgba(27, 78, 145, 0.12);
+  border: 1px solid rgba(27, 78, 145, 0.22);
+}
+
+.python-loader-spinner-wrap {
+  margin: 0 auto 12px;
+  width: 46px;
+  height: 46px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(30, 77, 136, 0.2);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.python-loader-title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #102744;
+}
+
+.python-loader-subtitle {
+  margin: 8px auto 0;
+  max-width: 360px;
+  font-size: 14px;
+  color: #476280;
+}
+
+@keyframes pythonLoaderSweep {
+  0% {
+    background-position: 0% 0%, 0 0;
+  }
+  100% {
+    background-position: 100% 100%, 260px 100px;
+  }
+}
+
+@keyframes pythonLoaderDrift {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 120px 84px;
+  }
+}
+
+@keyframes pythonLoaderFloat {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-12px) scale(1.04);
+  }
+}
+
+@keyframes pythonLoaderCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .python-loader-lines,
+  .python-loader-grid,
+  .python-loader-sigil,
+  .python-loader-card {
+    animation: none !important;
+  }
+}

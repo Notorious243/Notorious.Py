@@ -17,7 +17,7 @@ export interface ContextFile {
 }
 
 export interface GenerationQualityCheck {
-    id: 'bounds' | 'collisions' | 'readability' | 'contrast' | 'truncation';
+    id: 'bounds' | 'collisions' | 'readability' | 'contrast' | 'truncation' | 'duplicates';
     label: string;
     issueCount: number;
     fixedCount: number;
@@ -382,6 +382,8 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
         let contrastFixed = 0;
         let collisionIssues = 0;
         let collisionFixed = 0;
+        let duplicateIssues = 0;
+        let duplicateFixed = 0;
 
         for (const widget of fixed) {
             widget.position.x = Number.isFinite(widget.position.x) ? widget.position.x : 0;
@@ -441,8 +443,38 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
             }
         }
 
+        // Remove near-duplicate widgets often produced by repetitive generation loops.
+        const duplicateIds = new Set<string>();
+        for (let i = 0; i < fixed.length; i += 1) {
+            if (duplicateIds.has(fixed[i].id)) continue;
+            for (let j = i + 1; j < fixed.length; j += 1) {
+                if (duplicateIds.has(fixed[j].id)) continue;
+                const a = fixed[i];
+                const b = fixed[j];
+                if ((a.parentId || null) !== (b.parentId || null)) continue;
+                if (a.type !== b.type) continue;
+
+                const textA = getWidgetText(a).toLowerCase();
+                const textB = getWidgetText(b).toLowerCase();
+                const sameText = textA === textB;
+                const sameSize = Math.abs(a.size.width - b.size.width) <= 8 && Math.abs(a.size.height - b.size.height) <= 8;
+                const closePosition = Math.abs(a.position.x - b.position.x) <= 10 && Math.abs(a.position.y - b.position.y) <= 10;
+
+                if (sameText && sameSize && closePosition) {
+                    duplicateIssues += 1;
+                    duplicateIds.add(b.id);
+                }
+            }
+        }
+
+        if (duplicateIds.size > 0) {
+            duplicateFixed = duplicateIds.size;
+        }
+
+        const deduped = fixed.filter((widget) => !duplicateIds.has(widget.id));
+
         const groups = new Map<string, any[]>();
-        for (const widget of fixed) {
+        for (const widget of deduped) {
             const groupKey = widget.parentId ? `parent:${widget.parentId}` : 'root';
             const group = groups.get(groupKey) || [];
             group.push(widget);
@@ -488,6 +520,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
         };
 
         const checks: GenerationQualityCheck[] = [
+            toCheck('duplicates', 'Doublons de layout', duplicateIssues, duplicateFixed, 'Controle deduplication widgets'),
             toCheck('bounds', 'Widgets hors canvas', boundsIssues, boundsFixed, 'Controle limites canvas'),
             toCheck('collisions', 'Collisions majeures', collisionIssues, collisionFixed, 'Controle chevauchements'),
             toCheck('readability', 'Lisibilite tailles', readabilityIssues, readabilityFixed, 'Controle tailles minimales'),
@@ -504,7 +537,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
             .map((check) => check.detail);
 
         return {
-            widgets: fixed,
+            widgets: deduped,
             checks,
             summary: {
                 score,

@@ -665,6 +665,14 @@ export interface SupabaseConversation {
   updated_at: string;
 }
 
+export interface PendingConversationWrite {
+  id: string;
+  project_id: string;
+  title: string;
+  first_message?: string | null;
+  messages: unknown[];
+}
+
 export async function fetchConversations(projectId: string): Promise<SupabaseConversation[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user || !projectId) return [];
@@ -677,8 +685,8 @@ export async function fetchConversations(projectId: string): Promise<SupabaseCon
     .order('updated_at', { ascending: false });
 
   if (error) {
-    console.warn('[AI] ai_conversations table/columns not ready (project-scoped conversations disabled until migration is applied):', error.message);
-    return [];
+    console.warn('[AI] ai_conversations fetch failed:', error.message);
+    throw error;
   }
   return data ?? [];
 }
@@ -707,6 +715,7 @@ export async function upsertConversation(conversation: {
 
   if (error) {
     console.warn('[AI] Failed to save conversation to Supabase:', error.message);
+    throw error;
   }
 }
 
@@ -722,6 +731,110 @@ export async function deleteConversation(conversationId: string): Promise<void> 
 
   if (error) {
     console.warn('[AI] Failed to delete conversation from Supabase:', error.message);
+    throw error;
+  }
+}
+
+export async function touchConversation(conversationId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || !conversationId) return;
+
+  const { error } = await supabase
+    .from('ai_conversations')
+    .update({ updated_at: new Date().toISOString() })
+    .eq('id', conversationId)
+    .eq('user_id', user.id);
+
+  if (error) {
+    console.warn('[AI] Failed to touch conversation timestamp:', error.message);
+    throw error;
+  }
+}
+
+export async function checkConversationSyncHealth(projectId: string): Promise<{ ok: boolean; reason?: string }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, reason: 'Utilisateur non authentifie.' };
+  if (!projectId) return { ok: false, reason: 'Aucun projet actif.' };
+
+  const { error } = await supabase
+    .from('ai_conversations')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('project_id', projectId)
+    .limit(1);
+
+  if (error) {
+    const raw = String(error.message || '').toLowerCase();
+    if (raw.includes('project_id') || raw.includes('column') || raw.includes('schema')) {
+      return { ok: false, reason: "Migration manquante: colonne ai_conversations.project_id indisponible." };
+    }
+    if (raw.includes('jwt') || raw.includes('auth') || raw.includes('permission') || raw.includes('forbidden')) {
+      return { ok: false, reason: 'Session invalide ou permission refusee.' };
+    }
+    if (raw.includes('timeout') || raw.includes('timed out')) {
+      return { ok: false, reason: 'Timeout Supabase pendant la synchronisation.' };
+    }
+    if (raw.includes('network') || raw.includes('failed to fetch') || raw.includes('fetch')) {
+      return { ok: false, reason: 'Reseau indisponible. Synchronisation differee.' };
+    }
+    return { ok: false, reason: error.message };
+  }
+
+  return { ok: true };
+}
+
+export async function flushPendingConversationWrites(writes: PendingConversationWrite[]): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || writes.length === 0) return;
+
+  const payload = writes.map((write) => ({
+    id: write.id,
+    user_id: user.id,
+    project_id: write.project_id,
+    title: write.title,
+    first_message: write.first_message ?? null,
+    messages: write.messages,
+    updated_at: new Date().toISOString(),
+  }));
+
+  const { error } = await supabase
+    .from('ai_conversations')
+    .upsert(payload, { onConflict: 'id' });
+
+  if (error) {
+    console.warn('[AI] Failed to flush pending conversations:', error.message);
+    throw error;
+  }
+}
+
+export async function deleteLegacyUnscopedConversations(): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { error } = await supabase
+    .from('ai_conversations')
+    .delete()
+    .eq('user_id', user.id)
+    .is('project_id', null);
+
+  if (error) {
+    console.warn('[AI] Failed to purge legacy unscoped conversations:', error.message);
+    throw error;
+  }
+}
+
+export async function resetAllConversationsForUser(): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { error } = await supabase
+    .from('ai_conversations')
+    .delete()
+    .eq('user_id', user.id);
+
+  if (error) {
+    console.warn('[AI] Failed to reset all conversations for user:', error.message);
+    throw error;
   }
 }
 

@@ -1,41 +1,50 @@
-import React from "react";
 import { motion } from "motion/react";
+import { type CSSProperties, type ElementType, type JSX, memo, useMemo } from "react";
 import { cn } from "@/lib/utils";
 
-export function Shimmer({ 
-  children, 
-  as: Component = "span", 
-  className,
-  duration = 2,
-  spread = 2
-}: { 
-  children: React.ReactNode; 
-  as?: any;
+export interface TextShimmerProps {
+  children: string;
+  as?: ElementType;
   className?: string;
   duration?: number;
   spread?: number;
-}) {
-  return (
-    <Component
-      className={cn(
-        "relative inline-block overflow-hidden text-muted-foreground",
-        className
-      )}
-    >
-      <span className="relative z-10">{children}</span>
-      <motion.div
-        initial={{ x: "-100%" }}
-        animate={{ x: "200%" }}
-        transition={{
-          repeat: Infinity,
-          duration: duration,
-          ease: "linear",
-        }}
-        className="absolute inset-0 z-20 pointer-events-none"
-        style={{
-          background: `linear-gradient(90deg, transparent, rgba(255,255,255,0.1) ${50/spread}%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.1) ${100 - 50/spread}%, transparent)`,
-        }}
-      />
-    </Component>
-  );
 }
+
+const ShimmerComponent = ({
+  children,
+  as: Component = "p",
+  className,
+  duration = 2,
+  spread = 2,
+}: TextShimmerProps) => {
+  const MotionComponent = motion.create(Component as keyof JSX.IntrinsicElements);
+  const dynamicSpread = useMemo(() => (children?.length ?? 0) * spread, [children, spread]);
+
+  return (
+    <MotionComponent
+      animate={{ backgroundPosition: "0% center" }}
+      className={cn(
+        "relative inline-block bg-[length:250%_100%,auto] bg-clip-text text-transparent",
+        "[--bg:linear-gradient(90deg,#0000_calc(50%-var(--spread)),var(--color-background),#0000_calc(50%+var(--spread)))] [background-repeat:no-repeat,padding-box]",
+        className,
+      )}
+      initial={{ backgroundPosition: "100% center" }}
+      style={
+        {
+          "--spread": `${dynamicSpread}px`,
+          backgroundImage:
+            "var(--bg), linear-gradient(var(--color-muted-foreground), var(--color-muted-foreground))",
+        } as CSSProperties
+      }
+      transition={{
+        repeat: Number.POSITIVE_INFINITY,
+        duration,
+        ease: "linear",
+      }}
+    >
+      {children}
+    </MotionComponent>
+  );
+};
+
+export const Shimmer = memo(ShimmerComponent);

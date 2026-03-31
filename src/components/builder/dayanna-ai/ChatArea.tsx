@@ -4,7 +4,8 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Message as MessageType, type GenerationStage } from "./types";
 import { ChainOfThought, ChainOfThoughtHeader, ChainOfThoughtContent, ChainOfThoughtStep } from "./ai-elements/chain-of-thought";
-import { Task, TaskTrigger, TaskContent, TaskItem } from "./ai-elements/task";
+import { Task, TaskTrigger, TaskContent, TaskItem, TaskItemFile } from "./ai-elements/task";
+import { Plan, PlanContent, PlanDescription, PlanHeader, PlanTitle, PlanTrigger } from "./ai-elements/plan";
 import { Conversation, ConversationContent } from "./ai-elements/conversation";
 import { 
   Message, 
@@ -25,6 +26,19 @@ import {
   Attachment, 
   AttachmentPreview 
 } from "./ai-elements/attachments";
+import { FileTree, FileTreeFile, FileTreeFolder } from "./ai-elements/file-tree";
+import {
+  StackTrace,
+  StackTraceActions,
+  StackTraceContent,
+  StackTraceCopyButton,
+  StackTraceError,
+  StackTraceErrorMessage,
+  StackTraceErrorType,
+  StackTraceExpandButton,
+  StackTraceFrames,
+  StackTraceHeader,
+} from "./ai-elements/stack-trace";
 import { Shimmer } from "./ai-elements/shimmer";
 import { 
   Bot,
@@ -43,7 +57,6 @@ import { useState, Fragment, useRef, useEffect } from "react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 
-const STAGE_ORDER: GenerationStage[] = ['queued', 'analyzing', 'composing', 'validating', 'applying', 'completed'];
 const STAGE_LABELS: Record<GenerationStage, string> = {
   queued: 'En file',
   analyzing: 'Analyse',
@@ -63,12 +76,66 @@ const formatDuration = (durationMs?: number) => {
   return `${minutes}m ${seconds}s`;
 };
 
-const getStageProgress = (stage?: GenerationStage) => {
-  if (!stage) return 0;
-  if (stage === 'failed') return 100;
-  const index = STAGE_ORDER.indexOf(stage);
-  if (index < 0) return 0;
-  return Math.round((index / (STAGE_ORDER.length - 1)) * 100);
+const extractPlanTitle = (content: string): string => {
+  const match = content.match(/##\s*Plan de projet:\s*(.+)/i);
+  if (!match?.[1]) return "Plan de projet";
+  return match[1].trim();
+};
+
+type TreeNode = {
+  path: string;
+  name: string;
+  type: 'file' | 'folder';
+  children?: TreeNode[];
+};
+
+const buildPreviewTree = (paths: string[]): TreeNode[] => {
+  const root: TreeNode[] = [];
+
+  const ensureFolder = (nodes: TreeNode[], name: string, path: string): TreeNode => {
+    const existing = nodes.find((node) => node.name === name && node.type === 'folder');
+    if (existing) return existing;
+    const folder: TreeNode = { path, name, type: 'folder', children: [] };
+    nodes.push(folder);
+    return folder;
+  };
+
+  const ensureFile = (nodes: TreeNode[], name: string, path: string) => {
+    const existing = nodes.find((node) => node.name === name && node.type === 'file');
+    if (!existing) nodes.push({ path, name, type: 'file' });
+  };
+
+  paths.forEach((path) => {
+    const parts = path.split('/').filter(Boolean);
+    if (parts.length === 0) return;
+
+    let cursor = root;
+    let currentPath = '';
+    parts.forEach((part, index) => {
+      currentPath = currentPath ? `${currentPath}/${part}` : part;
+      const isLeaf = index === parts.length - 1;
+      if (isLeaf) {
+        ensureFile(cursor, part, currentPath);
+      } else {
+        const folder = ensureFolder(cursor, part, currentPath);
+        if (!folder.children) folder.children = [];
+        cursor = folder.children;
+      }
+    });
+  });
+
+  const normalize = (nodes: TreeNode[]): TreeNode[] =>
+    nodes
+      .map((node) => ({
+        ...node,
+        children: node.children ? normalize(node.children) : undefined,
+      }))
+      .sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
+        return a.name.localeCompare(b.name, 'fr');
+      });
+
+  return normalize(Array.from(root.values()));
 };
 
 interface ChatAreaProps {
@@ -304,7 +371,27 @@ export function ChatArea({
           )}
           
           <AnimatePresence initial={false}>
-            {messages.map((message) => (
+            {messages.map((message) => {
+              const planMessage = message.role === 'assistant' && /##\s*Plan de projet:/i.test(message.content);
+              const fileTreePreview = message.generation?.fileTreePreview;
+              const treePaths = (fileTreePreview?.nodes ?? []).map((node) => node.path);
+              const tree = buildPreviewTree(treePaths);
+
+              const renderTree = (nodes: TreeNode[]) => (
+                <>
+                  {nodes.map((node) =>
+                    node.type === 'folder' ? (
+                      <FileTreeFolder key={node.path} name={node.name} path={node.path}>
+                        {renderTree(node.children ?? [])}
+                      </FileTreeFolder>
+                    ) : (
+                      <FileTreeFile key={node.path} name={node.name} path={node.path} />
+                    ),
+                  )}
+                </>
+              );
+
+              return (
               <Fragment key={message.id}>
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -355,25 +442,18 @@ export function ChatArea({
 
                         {message.role === 'assistant' && message.generation?.stage && (
                           <div className="w-full rounded-xl border border-border/60 bg-card/50 p-2.5">
-                            <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-                              <span>Processus IA</span>
+                            <div className="mb-1.5 flex items-center justify-between gap-2">
+                              <Shimmer className="text-[11px] font-semibold tracking-wide text-foreground" duration={2.2} spread={1.6}>
+                                {`Processus IA · ${STAGE_LABELS[message.generation.stage]}`}
+                              </Shimmer>
                               <span className={cn(
-                                "rounded-md px-1.5 py-0.5",
+                                "rounded-md px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-widest",
                                 message.generation.stage === 'failed'
                                   ? "bg-destructive/15 text-destructive"
                                   : "bg-primary/15 text-primary"
                               )}>
-                                {STAGE_LABELS[message.generation.stage]}
+                                {message.generation.stage}
                               </span>
-                            </div>
-                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                              <div
-                                className={cn(
-                                  "h-full rounded-full transition-all duration-300",
-                                  message.generation.stage === 'failed' ? "bg-destructive" : "bg-primary"
-                                )}
-                                style={{ width: `${getStageProgress(message.generation.stage)}%` }}
-                              />
                             </div>
                             <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
                               <span>
@@ -382,6 +462,11 @@ export function ChatArea({
                                   (message.generation.startedAt ? clockTick - message.generation.startedAt : 0)
                                 )}
                               </span>
+                              {message.generation.streaming?.enabled ? (
+                                <span className="truncate text-primary">
+                                  Streaming · {message.generation.streaming.tokenCount ?? 0} tokens
+                                </span>
+                              ) : null}
                               {message.generation.errorMessage ? (
                                 <span className="max-w-[65%] truncate text-destructive">{message.generation.errorMessage}</span>
                               ) : null}
@@ -411,6 +496,48 @@ export function ChatArea({
                                       {task.detail ? (
                                         <span className="text-[10px] text-muted-foreground/90">{task.detail}</span>
                                       ) : null}
+                                      {(() => {
+                                        const trace = message.generation?.taskTrace?.find((item) => item.id === task.id);
+                                        if (!trace) return null;
+                                        const duration = trace.startedAt
+                                          ? Math.max(0, (trace.endedAt ?? clockTick) - trace.startedAt)
+                                          : 0;
+                                        const filesRead = trace.filesRead ?? [];
+                                        const filesWritten = trace.filesWritten ?? [];
+                                        const artifactFile = trace.artifactFile;
+
+                                        return (
+                                          <div className="mt-1.5 space-y-1">
+                                            {duration > 0 ? (
+                                              <div className="text-[10px] uppercase tracking-wider text-muted-foreground/80">
+                                                {`Duree: ${formatDuration(duration)}`}
+                                              </div>
+                                            ) : null}
+                                            {filesRead.length > 0 ? (
+                                              <div className="flex flex-wrap items-center gap-1">
+                                                <span className="text-[10px] uppercase tracking-wider text-muted-foreground/80">Read</span>
+                                                {filesRead.slice(0, 6).map((file) => (
+                                                  <TaskItemFile key={`${task.id}-read-${file}`}>{file}</TaskItemFile>
+                                                ))}
+                                              </div>
+                                            ) : null}
+                                            {filesWritten.length > 0 ? (
+                                              <div className="flex flex-wrap items-center gap-1">
+                                                <span className="text-[10px] uppercase tracking-wider text-muted-foreground/80">Write</span>
+                                                {filesWritten.slice(0, 6).map((file) => (
+                                                  <TaskItemFile key={`${task.id}-write-${file}`}>{file}</TaskItemFile>
+                                                ))}
+                                              </div>
+                                            ) : null}
+                                            {artifactFile ? (
+                                              <div className="flex flex-wrap items-center gap-1">
+                                                <span className="text-[10px] uppercase tracking-wider text-muted-foreground/80">Artifact</span>
+                                                <TaskItemFile>{artifactFile}</TaskItemFile>
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        );
+                                      })()}
                                     </div>
                                   </TaskItem>
                                 ))}
@@ -440,35 +567,87 @@ export function ChatArea({
                           "flex gap-2 w-full",
                           "flex-col items-start"
                         )}>
-                          <MessageContent className={cn(
-                            "w-full rounded-xl border px-3 py-2.5 text-sm leading-relaxed",
-                            message.role === 'assistant'
-                              ? "border-border/70 bg-card/80 text-foreground"
-                              : "border-border/50 bg-muted/30 text-foreground/95"
-                          )}>
-                            {message.versions && message.versions.length > 1 ? (
-                              <MessageBranch>
-                                <MessageBranchContent>
-                                  {message.versions.map((v) => (
-                                    <MessageResponse key={v.id} className="prose-ai max-w-none">
-                                      <MarkdownContent content={v.content} />
-                                    </MessageResponse>
-                                  ))}
-                                </MessageBranchContent>
-                                <MessageToolbar>
-                                  <MessageBranchSelector>
-                                    <MessageBranchPrevious />
-                                    <MessageBranchPage />
-                                    <MessageBranchNext />
-                                  </MessageBranchSelector>
-                                </MessageToolbar>
-                              </MessageBranch>
-                            ) : (
-                              <MessageResponse className="prose-ai max-w-none">
-                                <MarkdownContent content={message.content} />
-                              </MessageResponse>
-                            )}
-                          </MessageContent>
+                          {message.role === 'assistant' && message.generation?.errorTrace ? (
+                            <StackTrace trace={message.generation.errorTrace} defaultOpen={false} className="w-full border-border/70 bg-card/85">
+                              <StackTraceHeader>
+                                <StackTraceError>
+                                  <StackTraceErrorType />
+                                  <StackTraceErrorMessage />
+                                </StackTraceError>
+                                <StackTraceActions>
+                                  <StackTraceCopyButton />
+                                  <StackTraceExpandButton />
+                                </StackTraceActions>
+                              </StackTraceHeader>
+                              <StackTraceContent>
+                                <StackTraceFrames showInternalFrames={false} />
+                              </StackTraceContent>
+                            </StackTrace>
+                          ) : null}
+
+                          {message.role === 'assistant' && fileTreePreview && treePaths.length > 0 ? (
+                            <div className="w-full rounded-xl border border-border/60 bg-card/60 p-2.5">
+                              <div className="mb-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                                {fileTreePreview.rootLabel || 'File Tree Preview'}
+                              </div>
+                              <FileTree
+                                defaultExpanded={new Set(tree.map((node) => node.path))}
+                                selectedPath={fileTreePreview.highlightedPaths[0]}
+                                className="border-border/60 bg-background/40"
+                              >
+                                {renderTree(tree)}
+                              </FileTree>
+                            </div>
+                          ) : null}
+
+                          {planMessage ? (
+                            <Plan defaultOpen className="w-full border-border/70 bg-card/85">
+                              <PlanHeader className="pb-3">
+                                <div className="min-w-0">
+                                  <PlanTitle>{extractPlanTitle(message.content)}</PlanTitle>
+                                  <PlanDescription>
+                                    Plan multi-interfaces propose par Dayanna
+                                  </PlanDescription>
+                                </div>
+                                <PlanTrigger />
+                              </PlanHeader>
+                              <PlanContent className="pt-0">
+                                <MessageResponse className="prose-ai max-w-none">
+                                  <MarkdownContent content={message.content} />
+                                </MessageResponse>
+                              </PlanContent>
+                            </Plan>
+                          ) : (
+                            <MessageContent className={cn(
+                              "w-full rounded-xl border px-3 py-2.5 text-sm leading-relaxed",
+                              message.role === 'assistant'
+                                ? "border-border/70 bg-card/80 text-foreground"
+                                : "border-border/50 bg-muted/30 text-foreground/95"
+                            )}>
+                              {message.versions && message.versions.length > 1 ? (
+                                <MessageBranch>
+                                  <MessageBranchContent>
+                                    {message.versions.map((v) => (
+                                      <MessageResponse key={v.id} className="prose-ai max-w-none">
+                                        <MarkdownContent content={v.content} />
+                                      </MessageResponse>
+                                    ))}
+                                  </MessageBranchContent>
+                                  <MessageToolbar>
+                                    <MessageBranchSelector>
+                                      <MessageBranchPrevious />
+                                      <MessageBranchPage />
+                                      <MessageBranchNext />
+                                    </MessageBranchSelector>
+                                  </MessageToolbar>
+                                </MessageBranch>
+                              ) : (
+                                <MessageResponse className="prose-ai max-w-none">
+                                  <MarkdownContent content={message.content} />
+                                </MessageResponse>
+                              )}
+                            </MessageContent>
+                          )}
 
                           {/* Actions */}
                           <div className={cn(
@@ -527,7 +706,7 @@ export function ChatArea({
                   </Message>
                 </motion.div>
               </Fragment>
-            ))}
+            )})}
           </AnimatePresence>
           
           {isTyping && messages[messages.length - 1]?.role === 'user' && (

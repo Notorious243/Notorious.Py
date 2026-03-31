@@ -2,6 +2,7 @@ import { useState, useEffect, lazy, Suspense } from 'react';
 import { ThemeProvider } from 'next-themes';
 import { Index } from '@/pages/Index';
 import { Toaster } from '@/components/ui/sonner';
+import { PythonLoadingScreen } from '@/components/ui/PythonLoadingScreen';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -53,17 +54,13 @@ function AppInner() {
   };
 
   if (loading) {
-    return (
-      <div className="h-screen w-screen flex items-center justify-center bg-background">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <PythonLoadingScreen variant="auth" title="Connexion en cours..." subtitle="Verification de votre session securisee" />;
   }
 
   if (shareToken) {
     return (
       <ErrorBoundary>
-        <Suspense fallback={<div className="h-screen w-screen flex items-center justify-center bg-zinc-950"><div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" /></div>}>
+        <Suspense fallback={<PythonLoadingScreen variant="shared" title="Chargement du projet partage..." subtitle="Recuperation des donnees de lecture seule" />}>
           <SharedProjectView shareToken={shareToken} />
         </Suspense>
       </ErrorBoundary>
@@ -73,7 +70,7 @@ function AppInner() {
   return (
     <ErrorBoundary>
         <ThemeProvider attribute="class" defaultTheme="light" forcedTheme="light" disableTransitionOnChange>
-        <Suspense fallback={<div className="h-screen w-screen flex items-center justify-center bg-background"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>}>
+        <Suspense fallback={<PythonLoadingScreen variant="project" title="Chargement de Notorious.PY..." subtitle="Initialisation du workspace et des outils IA" />}>
           {isPasswordRecovery ? (
             <AuthPage onNewUser={() => {}} forceResetPassword onResetComplete={() => setIsPasswordRecovery(false)} />
           ) : user ? (

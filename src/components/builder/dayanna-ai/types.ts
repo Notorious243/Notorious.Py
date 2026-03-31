@@ -86,6 +86,23 @@ export interface MessageQualityCheck {
   detail?: string;
 }
 
+export interface MessageTaskTraceItem {
+  id: string;
+  label: string;
+  status: 'pending' | 'running' | 'completed' | 'error';
+  startedAt?: number;
+  endedAt?: number;
+  detail?: string;
+  filesRead?: string[];
+  filesWritten?: string[];
+  artifactFile?: string;
+}
+
+export interface MessageFileTreePreviewNode {
+  path: string;
+  type: 'file' | 'folder';
+}
+
 export interface MessageGenerationMeta {
   provider?: Provider;
   model?: Model;
@@ -100,6 +117,7 @@ export interface MessageGenerationMeta {
     attachmentNames: string[];
   };
   fidelityNotes?: string[];
+  applyMode?: 'create' | 'update' | 'replace';
   stage?: GenerationStage;
   stageStartedAt?: number;
   startedAt?: number;
@@ -111,6 +129,18 @@ export interface MessageGenerationMeta {
     hasBlockingIssues: boolean;
     remainingIssues: number;
     notes: string[];
+  };
+  streaming?: {
+    enabled: boolean;
+    source: 'sse' | 'fallback';
+    tokenCount?: number;
+  };
+  errorTrace?: string;
+  taskTrace?: MessageTaskTraceItem[];
+  fileTreePreview?: {
+    rootLabel: string;
+    highlightedPaths: string[];
+    nodes: MessageFileTreePreviewNode[];
   };
   attempt?: number;
   maxAttempts?: number;

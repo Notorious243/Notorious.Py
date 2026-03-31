@@ -25,16 +25,21 @@ import {
   fetchConversations as fetchConversationsFromDb,
   upsertConversation,
   deleteConversation as deleteConversationFromDb,
+  touchConversation as touchConversationInDb,
   fetchApiKeysFromSupabase,
   saveApiKeysToSupabase,
+  checkConversationSyncHealth,
+  flushPendingConversationWrites,
+  resetAllConversationsForUser,
+  type PendingConversationWrite,
 } from '@/lib/supabaseService';
 import { OPEN_AI_SIDEBAR_EVENT, consumeForceNewConversationOnLoadFlag } from '@/lib/aiSidebar';
 
 const REASONING_TEXT = [
-  'Analyse de la demande en cours...',
-  '\n\nJe prepare les etapes de resolution.',
-  '\n\nJe lance le workflow et je verifie la coherence.',
-  '\n\nJe finalise la reponse et les actions associees.',
+  'Analyse de la demande.',
+  '\n\nInspection du contexte projet et des fichiers utiles.',
+  '\n\nComposition de la reponse et validation.',
+  '\n\nApplication finale et sauvegarde.',
 ].join('');
 
 const PROVIDER_MAP: Record<string, AIProvider> = {
@@ -105,6 +110,11 @@ interface MultimodalUserPayload {
   images?: Attachment[];
 }
 
+interface OpenAICompatibleCallOptions {
+  stream?: boolean;
+  onDelta?: (fullText: string, delta: string, tokenCount: number) => void;
+}
+
 interface VisionExecutionContext {
   provider: Provider;
   model: string;
@@ -119,6 +129,8 @@ STYLE VISUEL OBLIGATOIRE (premium Notorious auth):
 - Palette cohérente inspirée Notorious: bleus profonds et tons neutres élégants.
 - Typographie lisible, hiérarchie claire (titres, sous-titres, contenu, actions).
 - Les widgets doivent être utilisés intelligemment pour construire une vraie interface exploitable.
+- Interdit: empiler des widgets sans composition; chaque élément doit appartenir à un bloc de layout clair.
+- En demande "créer/générer", repartir d'une structure propre et cohérente, sans répliquer des blocs identiques.
 `;
 
 const PLAN_SCHEMA = `{
@@ -153,16 +165,72 @@ const extractJsonObject = (text: string): Record<string, unknown> | null => {
   }
 };
 
-const sanitizeFileName = (raw: string): string => {
-  const base = raw
-    .trim()
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, '')
-    .replace(/\s+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_+|_+$/g, '');
-  const safe = base || `interface_${Date.now().toString().slice(-6)}`;
-  return safe.endsWith('.py') ? safe : `${safe}.py`;
+const normalizeWordsForPascal = (raw: string): string[] => {
+  const ascii = raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\.py$/i, '')
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .trim();
+  return ascii.split(/\s+/).filter(Boolean);
+};
+
+const toPascalCaseStem = (raw: string): string => {
+  const words = normalizeWordsForPascal(raw);
+  if (words.length === 0) return `Interface${Date.now().toString().slice(-4)}`;
+  return words
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join('');
+};
+
+const toPascalCasePyName = (raw: string): string => {
+  const stem = toPascalCaseStem(raw);
+  return `${stem}.py`;
+};
+
+const looksLikeBuilderJson = (content: string): boolean => {
+  if (!content) return false;
+  try {
+    const parsed = JSON.parse(content);
+    return Boolean(parsed && typeof parsed === 'object' && Array.isArray((parsed as Record<string, unknown>).widgets));
+  } catch {
+    return false;
+  }
+};
+
+const rewritePythonImports = (content: string, moduleRenameMap: Record<string, string>): string => {
+  if (!content || !Object.keys(moduleRenameMap).length || looksLikeBuilderJson(content)) return content;
+
+  const rewriteModule = (moduleName: string): string => {
+    const next = moduleRenameMap[moduleName];
+    return next || moduleName;
+  };
+
+  const rewrittenLines = content.split('\n').map((line) => {
+    const fromMatch = line.match(/^(\s*from\s+)([A-Za-z_][\w]*)(\s+import\s+.+)$/);
+    if (fromMatch) {
+      return `${fromMatch[1]}${rewriteModule(fromMatch[2])}${fromMatch[3]}`;
+    }
+
+    const importMatch = line.match(/^(\s*import\s+)(.+)$/);
+    if (!importMatch) return line;
+
+    const rewrittenTargets = importMatch[2]
+      .split(',')
+      .map((part) => {
+        const segment = part.trim();
+        if (!segment) return segment;
+        const asMatch = segment.match(/^([A-Za-z_][\w]*)(\s+as\s+[A-Za-z_][\w]*)?$/);
+        if (!asMatch) return segment;
+        const rewritten = rewriteModule(asMatch[1]);
+        return `${rewritten}${asMatch[2] ?? ''}`;
+      })
+      .join(', ');
+
+    return `${importMatch[1]}${rewrittenTargets}`;
+  });
+
+  return rewrittenLines.join('\n');
 };
 
 const clampCanvasDimension = (value: unknown, fallback: number): number => {
@@ -286,7 +354,12 @@ const getFallbackConversationTitle = (prompt: string): string => {
     .replace(/\s+/g, ' ')
     .trim();
   if (!cleaned) return 'Nouvelle conversation';
-  const words = cleaned.split(' ').filter(Boolean).slice(0, 7);
+  const stopWords = new Set(['cree', 'crée', 'genere', 'génère', 'moi', 'une', 'un', 'de', 'la', 'le']);
+  const words = cleaned
+    .split(' ')
+    .filter(Boolean)
+    .filter((word) => !stopWords.has(word.toLowerCase()))
+    .slice(0, 6);
   const title = words.join(' ');
   return title.length > 48 ? `${title.slice(0, 48).trim()}...` : title;
 };
@@ -488,17 +561,25 @@ export const DayannaAIPanel = () => {
   const [restoreContent, setRestoreContent] = useState<string | null>(null);
   const [isLoadingDb, setIsLoadingDb] = useState(true);
   const [dbReady, setDbReady] = useState(false);
+  const [dbSyncError, setDbSyncError] = useState<string | null>(null);
+  const [dbSyncState, setDbSyncState] = useState<'ok' | 'syncing' | 'degraded' | 'error'>('syncing');
+  const [dbSyncReason, setDbSyncReason] = useState<string | null>(null);
+  const [dbReloadNonce, setDbReloadNonce] = useState(0);
+  const [deletingConversationIds, setDeletingConversationIds] = useState<Set<string>>(new Set());
 
   const aiRef = useRef<unknown>(null);
   const conversationsRef = useRef<Conversation[]>([]);
   const currentConversationIdRef = useRef<string | null>(null);
   const activeProjectIdRef = useRef<string | null>(null);
+  const loadedProjectIdRef = useRef<string | null>(null);
+  const pendingConversationWritesRef = useRef<Map<string, PendingConversationWrite>>(new Map());
+  const fileRenameMigrationDoneByProjectRef = useRef<Set<string>>(new Set());
   const [forceNewConversationRequested, setForceNewConversationRequested] = useState(false);
 
   const { user } = useAuth();
   const { activeProjectId } = useProjects();
   const { widgets, canvasSettings, loadWorkspaceState, setActiveFile, activeFileId } = useWidgets();
-  const { data: files, getPyFiles, addNode, updateNode } = useFileSystem();
+  const { data: files, getPyFiles, addNode, updateNode, renameNode } = useFileSystem();
   const { generateFromPrompt, generateFromImage, generateIteration, error: generationError, retryCount } = useAIGeneration();
 
   const currentConversation = useMemo(
@@ -539,6 +620,59 @@ export const DayannaAIPanel = () => {
     timestamp: Date.now(),
   }), []);
 
+  const enqueueConversationWrite = useCallback((write: PendingConversationWrite) => {
+    pendingConversationWritesRef.current.set(write.id, write);
+    setDbSyncState((prev) => (prev === 'error' ? prev : 'degraded'));
+    setDbSyncReason('Synchronisation differee. Les modifications seront envoyees automatiquement.');
+  }, []);
+
+  const flushConversationWriteQueue = useCallback(async () => {
+    if (!dbReady || !user) return;
+    const pending = Array.from(pendingConversationWritesRef.current.values());
+    if (pending.length === 0) return;
+    try {
+      await flushPendingConversationWrites(pending);
+      pendingConversationWritesRef.current.clear();
+      setDbSyncState('ok');
+      setDbSyncReason(null);
+      setDbSyncError(null);
+    } catch (error) {
+      console.warn('[AI] Echec flush conversations en attente:', error);
+      setDbSyncState('degraded');
+      setDbSyncReason('Synchronisation en attente. Verification de la connexion...');
+    }
+  }, [dbReady, user]);
+
+  const withTimeout = useCallback(async <T,>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+    });
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  }, []);
+
+  const fetchProjectConversationsWithRetry = useCallback(async (projectId: string) => {
+    let lastError: unknown = null;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        return await withTimeout(
+          fetchConversationsFromDb(projectId),
+          7000,
+          'Timeout synchronisation conversations projet.'
+        );
+      } catch (error) {
+        lastError = error;
+        if (attempt >= 2) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 450 * attempt));
+      }
+    }
+    throw lastError;
+  }, [withTimeout]);
+
   // Load API keys from Supabase on auth change
   useEffect(() => {
     if (!user) {
@@ -548,14 +682,25 @@ export const DayannaAIPanel = () => {
       setPendingPlans({});
       setDbReady(false);
       setIsLoadingDb(false);
+      setDbSyncError(null);
+      setDbSyncState('syncing');
+      setDbSyncReason(null);
+      pendingConversationWritesRef.current.clear();
+      loadedProjectIdRef.current = null;
       return;
     }
 
     let cancelled = false;
+    const projectChanged = loadedProjectIdRef.current !== activeProjectId;
+    if (projectChanged) {
+      setConversations([]);
+      setCurrentConversationId(null);
+    }
     setIsLoadingDb(true);
-    setConversations([]);
-    setCurrentConversationId(null);
     setPendingPlans({});
+    setDbSyncError(null);
+    setDbSyncState('syncing');
+    setDbSyncReason('Synchronisation des conversations...');
 
     (async () => {
       try {
@@ -566,16 +711,22 @@ export const DayannaAIPanel = () => {
         setApiKeys((dbKeys ?? {}) as ApiKeys);
         aiRef.current = null;
         setDbReady(true);
+        setDbSyncState('ok');
+        setDbSyncReason(null);
+        loadedProjectIdRef.current = activeProjectId;
       } catch (error) {
         console.warn('[AI] Chargement initial depuis Supabase impossible:', error);
         setDbReady(false);
+        setDbSyncError("Synchronisation IA indisponible. Verifiez la migration 'ai_conversations.project_id' et la connexion Supabase.");
+        setDbSyncState('error');
+        setDbSyncReason("Connexion base indisponible. Mode degrade active.");
       } finally {
         if (!cancelled) setIsLoadingDb(false);
       }
     })();
 
     return () => { cancelled = true; };
-  }, [user]);
+  }, [dbReloadNonce, user]);
 
   useEffect(() => {
     if (consumeForceNewConversationOnLoadFlag()) {
@@ -595,15 +746,42 @@ export const DayannaAIPanel = () => {
 
   const persistConversationToDb = useCallback(async (conversation: Conversation, projectId?: string | null) => {
     const targetProjectId = projectId ?? activeProjectIdRef.current;
-    if (!dbReady || !user || !targetProjectId) return;
-    await upsertConversation({
+    if (!user || !targetProjectId) return;
+
+    const payload: PendingConversationWrite = {
       id: conversation.id,
       project_id: targetProjectId,
       title: conversation.title,
       first_message: conversation.firstMessage ?? null,
       messages: conversation.messages as unknown[],
-    });
-  }, [dbReady, user]);
+    };
+
+    if (!dbReady) {
+      enqueueConversationWrite(payload);
+      return;
+    }
+    try {
+      await upsertConversation({
+        id: conversation.id,
+        project_id: targetProjectId,
+        title: conversation.title,
+        first_message: conversation.firstMessage ?? null,
+        messages: conversation.messages as unknown[],
+      });
+      pendingConversationWritesRef.current.delete(conversation.id);
+      setDbSyncError(null);
+      if (pendingConversationWritesRef.current.size === 0) {
+        setDbSyncState('ok');
+        setDbSyncReason(null);
+      }
+    } catch (error) {
+      console.warn('[AI] Echec persistance conversation:', error);
+      enqueueConversationWrite(payload);
+      setDbSyncError("Mode degrade actif: conversation en file d'attente locale.");
+      setDbSyncState('degraded');
+      setDbSyncReason("Synchronisation differee. Reconnexion automatique en cours.");
+    }
+  }, [dbReady, enqueueConversationWrite, user]);
 
   // Load project-scoped conversations from DB
   useEffect(() => {
@@ -612,16 +790,23 @@ export const DayannaAIPanel = () => {
       setConversations([]);
       setCurrentConversationId(null);
       setPendingPlans({});
+      setDbSyncError(null);
+      setDbSyncState('ok');
+      setDbSyncReason(null);
+      loadedProjectIdRef.current = null;
       return;
     }
 
     let cancelled = false;
     setIsLoadingDb(true);
     setPendingPlans({});
+    setDbSyncError(null);
+    setDbSyncState('syncing');
+    setDbSyncReason('Synchronisation du projet actif...');
 
     (async () => {
       try {
-        const dbConvos = await fetchConversationsFromDb(activeProjectId);
+        const dbConvos = await fetchProjectConversationsWithRetry(activeProjectId);
         if (cancelled) return;
 
         const mapped: Conversation[] = dbConvos.map((c) => mapDbConversation(c as DbConversationRow));
@@ -641,11 +826,14 @@ export const DayannaAIPanel = () => {
             return sorted[0]?.id ?? null;
           });
         }
+        setDbSyncState('ok');
+        setDbSyncReason(null);
       } catch (error) {
         console.warn('[AI] Chargement conversations projet impossible:', error);
         if (!cancelled) {
-          setConversations([]);
-          setCurrentConversationId(null);
+          setDbSyncError("Echec synchronisation conversations. Mode degrade active.");
+          setDbSyncState('degraded');
+          setDbSyncReason("Le chargement DB a echoue. Vous pouvez continuer, resynchronisation automatique active.");
         }
       } finally {
         if (!cancelled) {
@@ -661,7 +849,9 @@ export const DayannaAIPanel = () => {
   }, [
     activeProjectId,
     createBlankConversation,
+    dbReloadNonce,
     dbReady,
+    fetchProjectConversationsWithRetry,
     forceNewConversationRequested,
     mapDbConversation,
     persistConversationToDb,
@@ -681,7 +871,9 @@ export const DayannaAIPanel = () => {
         (payload) => {
           setConversations((prev) => {
             if (payload.eventType === 'DELETE') {
-              const deletedId = (payload.old as { id?: string })?.id;
+              const deletedRow = payload.old as { id?: string; user_id?: string } | null;
+              if (deletedRow?.user_id && deletedRow.user_id !== user.id) return prev;
+              const deletedId = deletedRow?.id;
               if (!deletedId) return prev;
               const next = prev.filter((c) => c.id !== deletedId);
               if (currentConversationIdRef.current === deletedId) {
@@ -693,6 +885,8 @@ export const DayannaAIPanel = () => {
 
             const row = payload.new as DbConversationRow | null;
             if (!row?.id) return prev;
+            const rowUserId = (payload.new as { user_id?: string } | null)?.user_id;
+            if (rowUserId && rowUserId !== user.id) return prev;
             const mapped = mapDbConversation(row);
             const withoutCurrent = prev.filter((c) => c.id !== mapped.id);
             return sortConversationsByLatest([mapped, ...withoutCurrent]);
@@ -726,6 +920,60 @@ export const DayannaAIPanel = () => {
       void supabase.removeChannel(settingsChannel);
     };
   }, [user, dbReady, mapDbConversation, activeProjectId, sortConversationsByLatest]);
+
+  useEffect(() => {
+    if (!user || !activeProjectId) return;
+
+    let cancelled = false;
+    void (async () => {
+      const health = await checkConversationSyncHealth(activeProjectId);
+      if (cancelled) return;
+      if (health.ok) {
+        setDbSyncState((prev) => (prev === 'degraded' && pendingConversationWritesRef.current.size > 0 ? prev : 'ok'));
+        if (pendingConversationWritesRef.current.size === 0) {
+          setDbSyncReason(null);
+          setDbSyncError(null);
+        }
+      } else {
+        setDbSyncState('degraded');
+        setDbSyncReason(health.reason || 'Synchronisation indisponible temporairement.');
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [activeProjectId, dbReloadNonce, user]);
+
+  useEffect(() => {
+    if (!user || dbReady) return;
+    if (isLoadingDb) return;
+
+    const timer = window.setInterval(() => {
+      setDbSyncState('syncing');
+      setDbSyncReason('Tentative automatique de reconnexion...');
+      setDbReloadNonce((prev) => prev + 1);
+    }, 7000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [dbReady, isLoadingDb, user]);
+
+  useEffect(() => {
+    if (!dbReady || !user) return;
+    let stopped = false;
+    const run = async () => {
+      if (stopped) return;
+      await flushConversationWriteQueue();
+    };
+    void run();
+    const timer = window.setInterval(() => {
+      void run();
+    }, 3500);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [dbReady, flushConversationWriteQueue, user]);
 
   useEffect(() => {
     if (isLoadingDb || !user || !dbReady || !activeProjectId) return;
@@ -847,7 +1095,8 @@ MODE DISCUSSION:
     model: string,
     userInput: string | MultimodalUserPayload,
     signal?: AbortSignal,
-    systemPromptOverride?: string
+    systemPromptOverride?: string,
+    options?: OpenAICompatibleCallOptions
   ): Promise<string> => {
     const config = getProviderConfig(provider);
     const credentialLabel = provider === 'huggingface' ? "token d'acces Hugging Face" : `cle API ${config.label}`;
@@ -919,6 +1168,12 @@ MODE DISCUSSION:
         return content;
       }
 
+      const enableStreaming =
+        Boolean(options?.stream) &&
+        config.apiFormat === 'openai' &&
+        provider !== 'huggingface' &&
+        typeof openAIUserContent === 'string';
+
       const response = await fetch(config.endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...config.authHeader(apiKey) },
@@ -930,6 +1185,7 @@ MODE DISCUSSION:
           ],
           max_tokens: config.maxTokens,
           temperature: 0.7,
+          stream: enableStreaming,
         }),
         signal,
       });
@@ -944,6 +1200,65 @@ MODE DISCUSSION:
         if (response.status === 404 || response.status === 400) throw new Error(withErrorCode('MODEL_UNAVAILABLE', `Modele "${requestModel}" indisponible sur ${config.label}.`));
         if (response.status >= 500) throw new Error(withErrorCode('SERVER_ERROR', `Erreur serveur ${config.label} (${response.status}).`));
         throw new Error(withErrorCode('UNKNOWN', rawMessage || `Erreur ${config.label} (${response.status})`));
+      }
+
+      if (enableStreaming && response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullText = '';
+        let tokenCount = 0;
+
+        const extractDelta = (payload: Record<string, unknown>): string => {
+          const choices = Array.isArray(payload.choices) ? payload.choices : [];
+          const first = (choices[0] ?? {}) as Record<string, unknown>;
+          const delta = (first.delta ?? {}) as Record<string, unknown>;
+          const deltaContent = delta.content;
+
+          if (typeof deltaContent === 'string') return deltaContent;
+          if (Array.isArray(deltaContent)) {
+            return deltaContent
+              .map((part) => (typeof part === 'string'
+                ? part
+                : (part as Record<string, unknown>).text))
+              .filter((part): part is string => typeof part === 'string')
+              .join('');
+          }
+
+          const messageContent = ((first.message ?? {}) as Record<string, unknown>).content;
+          if (typeof messageContent === 'string') return messageContent;
+          return '';
+        };
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line.startsWith('data:')) continue;
+            const payload = line.slice(5).trim();
+            if (!payload || payload === '[DONE]') continue;
+            try {
+              const parsed = JSON.parse(payload) as Record<string, unknown>;
+              const delta = extractDelta(parsed);
+              if (!delta) continue;
+              fullText += delta;
+              tokenCount += 1;
+              options?.onDelta?.(fullText, delta, tokenCount);
+            } catch {
+              // Ignore malformed stream chunks and continue.
+            }
+          }
+        }
+
+        if (fullText.trim()) {
+          return fullText;
+        }
+
+        throw new Error(withErrorCode('EMPTY_CONTENT', `${config.label} a renvoye un flux vide.`));
       }
 
       const data = await response.json();
@@ -1063,18 +1378,96 @@ MODE DISCUSSION:
   }, [activeFileId, updateNode, widgets, canvasSettings]);
 
   const getUniquePyFileName = useCallback((rawBaseName: string): string => {
-    const safeBase = sanitizeFileName(rawBaseName);
+    const safeBase = toPascalCasePyName(rawBaseName);
     const existing = new Set(getPyFiles().map((f) => f.name.toLowerCase()));
     if (!existing.has(safeBase.toLowerCase())) return safeBase;
     const baseNoExt = safeBase.replace(/\.py$/i, '');
     let i = 2;
-    let candidate = `${baseNoExt}_${i}.py`;
+    let candidate = `${baseNoExt}${i}.py`;
     while (existing.has(candidate.toLowerCase())) {
       i += 1;
-      candidate = `${baseNoExt}_${i}.py`;
+      candidate = `${baseNoExt}${i}.py`;
     }
     return candidate;
   }, [getPyFiles]);
+
+  const buildFileTreePreview = useCallback((targetFileName: string, action: 'created' | 'updated' | 'deleted' = 'updated') => {
+    const names = new Set(getPyFiles().map((file) => file.name));
+    if (targetFileName && action !== 'deleted') names.add(targetFileName);
+    const nodes = Array.from(names)
+      .sort((a, b) => a.localeCompare(b, 'fr'))
+      .map((name) => ({ path: name, type: 'file' as const }));
+
+    const actionLabel = action === 'created'
+      ? 'crees/modifies (creation)'
+      : action === 'deleted'
+        ? 'crees/modifies (suppression)'
+        : 'crees/modifies (mise a jour)';
+
+    return {
+      rootLabel: `Fichiers ${actionLabel}`,
+      highlightedPaths: targetFileName ? [targetFileName] : [],
+      nodes,
+    };
+  }, [getPyFiles]);
+
+  const migratePythonFilesToPascalCase = useCallback(() => {
+    if (!activeProjectId) return;
+    if (fileRenameMigrationDoneByProjectRef.current.has(activeProjectId)) return;
+
+    const pyFiles = getPyFiles();
+    fileRenameMigrationDoneByProjectRef.current.add(activeProjectId);
+    if (pyFiles.length === 0) return;
+
+    const reservedNames = new Set(pyFiles.map((file) => file.name.toLowerCase()));
+    const renameById: Record<string, string> = {};
+    const moduleRenameMap: Record<string, string> = {};
+
+    pyFiles.forEach((file) => {
+      const oldName = file.name;
+      const oldModule = oldName.replace(/\.py$/i, '');
+      if (!oldModule.includes('_')) return;
+
+      let nextName = toPascalCasePyName(oldModule);
+      if (nextName.toLowerCase() === oldName.toLowerCase()) return;
+
+      reservedNames.delete(oldName.toLowerCase());
+      if (reservedNames.has(nextName.toLowerCase())) {
+        const baseStem = nextName.replace(/\.py$/i, '');
+        let idx = 2;
+        while (reservedNames.has(`${baseStem}${idx}.py`.toLowerCase())) {
+          idx += 1;
+        }
+        nextName = `${baseStem}${idx}.py`;
+      }
+      reservedNames.add(nextName.toLowerCase());
+
+      renameById[file.id] = nextName;
+      moduleRenameMap[oldModule] = nextName.replace(/\.py$/i, '');
+    });
+
+    const renameEntries = Object.entries(renameById);
+    if (renameEntries.length === 0) return;
+
+    for (const [fileId, nextName] of renameEntries) {
+      renameNode(fileId, nextName);
+    }
+
+    for (const file of pyFiles) {
+      const nextContent = rewritePythonImports(file.content || '', moduleRenameMap);
+      if (nextContent !== (file.content || '')) {
+        updateNode(file.id, { content: nextContent });
+      }
+    }
+
+    toast.success(`${renameEntries.length} fichier(s) .py renommes en PascalCase.`);
+  }, [activeProjectId, getPyFiles, renameNode, updateNode]);
+
+  useEffect(() => {
+    if (!activeProjectId) return;
+    if (files.length === 0) return;
+    migratePythonFilesToPascalCase();
+  }, [activeProjectId, files, migratePythonFilesToPascalCase]);
 
   const applyGeneratedInterface = useCallback((targetFileId: string, title: string, widgetsData: unknown[], nextSettings: Record<string, unknown>) => {
     const normalizedSettings = {
@@ -1190,15 +1583,9 @@ ${contextSnippet}`;
 
   const simulateReasoning = useCallback(
     async (conversationId: string, assistantMessageId: string) => {
-      const tokens = REASONING_TEXT.match(/.{1,5}/g) ?? [REASONING_TEXT];
-      let rolling = '';
-      for (const token of tokens) {
-        rolling += token;
-        updateConversationMessages(conversationId, (prev) =>
-          prev.map((msg) => msg.id === assistantMessageId ? { ...msg, reasoning: rolling, isReasoningStreaming: true } : msg)
-        );
-        await new Promise((r) => setTimeout(r, 30));
-      }
+      updateConversationMessages(conversationId, (prev) =>
+        prev.map((msg) => msg.id === assistantMessageId ? { ...msg, reasoning: REASONING_TEXT, isReasoningStreaming: true } : msg)
+      );
       updateConversationMessages(conversationId, (prev) =>
         prev.map((msg) => msg.id === assistantMessageId ? { ...msg, isReasoningStreaming: false } : msg)
       );
@@ -1236,7 +1623,8 @@ Contraintes:
     try {
       const rawTitle = await callOpenAICompatible(provider, providerKey, model, titlePrompt, undefined, titleSystemPrompt);
       const normalizedTitle = normalizeGeneratedTitle(rawTitle);
-      applyConversationTitle(conversationId, normalizedTitle || fallback, { onlyIfDefault: true });
+      const isWeakTitle = /^(nouvelle conversation|conversation|untitled|new chat)$/i.test(normalizedTitle);
+      applyConversationTitle(conversationId, (!normalizedTitle || isWeakTitle) ? fallback : normalizedTitle, { onlyIfDefault: true });
     } catch {
       applyConversationTitle(conversationId, fallback, { onlyIfDefault: true });
     }
@@ -1290,9 +1678,13 @@ Contraintes:
         toast.error('Aucun projet actif. Creez ou ouvrez un projet avant de lancer Dayanna.');
         return;
       }
-      if (!dbReady || !user) {
-        toast.error('Connexion base de donnees requise pour demarrer la conversation IA.');
+      if (!user) {
+        toast.error('Connexion requise pour demarrer la conversation IA.');
         return;
+      }
+      if (!dbReady) {
+        setDbSyncState('degraded');
+        setDbSyncReason('Mode degrade actif: la conversation est utilisable, synchronisation en attente.');
       }
 
       const activeMode = mode || 'agent';
@@ -1362,6 +1754,13 @@ Contraintes:
       const generationStartedAt = Date.now();
 
       const assistantMessageId = nanoid();
+      const initialTasks = [
+        { id: nanoid(), label: 'Analyse de la demande', status: 'completed' as const },
+        { id: nanoid(), label: 'Preparation du contexte projet', status: 'running' as const, detail: '' },
+        { id: nanoid(), label: 'Generation IA', status: 'pending' as const, detail: '' },
+        { id: nanoid(), label: 'Validation du resultat', status: 'pending' as const, detail: '' },
+        { id: nanoid(), label: 'Application et sauvegarde', status: 'pending' as const, detail: '' },
+      ];
       updateConversationMessages(conversationId, (prev) => [
         ...prev,
         {
@@ -1385,14 +1784,20 @@ Contraintes:
             fidelityNotes,
             attempt: 1,
             maxAttempts: 3,
+            streaming: {
+              enabled: false,
+              source: 'fallback',
+            },
+            taskTrace: initialTasks.map((task) => ({
+              id: task.id,
+              label: String(task.label),
+              status: task.status,
+              startedAt: generationStartedAt,
+              endedAt: task.status === 'completed' ? generationStartedAt : undefined,
+              detail: task.detail,
+            })),
           },
-          tasks: [
-            { id: nanoid(), label: 'Analyse de la demande', status: 'completed' as const },
-            { id: nanoid(), label: 'Preparation du contexte projet', status: 'running' as const, detail: '' },
-            { id: nanoid(), label: 'Generation IA', status: 'pending' as const, detail: '' },
-            { id: nanoid(), label: 'Validation du resultat', status: 'pending' as const, detail: '' },
-            { id: nanoid(), label: 'Application et sauvegarde', status: 'pending' as const, detail: '' },
-          ],
+          tasks: initialTasks,
           timestamp: Date.now(),
         },
       ], { persist: true });
@@ -1410,8 +1815,14 @@ Contraintes:
           index: number,
           status: 'pending' | 'running' | 'completed' | 'error',
           label?: string,
-          detail?: string
+          detail?: string,
+          trace?: {
+            filesRead?: string[];
+            filesWritten?: string[];
+            artifactFile?: string;
+          }
         ) => {
+          const now = Date.now();
           updateConversationMessages(conversationId, (prev) =>
             prev.map((msg) =>
               msg.id === assistantMessageId
@@ -1420,6 +1831,23 @@ Contraintes:
                     tasks: msg.tasks?.map((t, i) =>
                       i === index ? { ...t, status, label: label ?? t.label, detail: detail ?? t.detail } : t
                     ),
+                    generation: {
+                      ...msg.generation,
+                      taskTrace: msg.generation?.taskTrace?.map((task, i) => {
+                        if (i !== index) return task;
+                        return {
+                          ...task,
+                          status,
+                          label: label ?? task.label,
+                          detail: detail ?? task.detail,
+                          filesRead: trace?.filesRead ?? task.filesRead,
+                          filesWritten: trace?.filesWritten ?? task.filesWritten,
+                          artifactFile: trace?.artifactFile ?? task.artifactFile,
+                          startedAt: task.startedAt ?? now,
+                          endedAt: status === 'running' || status === 'pending' ? undefined : now,
+                        };
+                      }),
+                    },
                   }
                 : msg
             )
@@ -1460,12 +1888,37 @@ Contraintes:
         const fidelityReport = shouldUseVision ? buildFidelityReport(fidelityNotes ?? DEFAULT_FIDELITY_NOTES) : '';
         let responseText = '';
         setGenerationStage('analyzing');
-        updateTask(1, 'completed', 'Contexte prepare', `${contextFiles.length} fichier(s) contexte`);
+        updateTask(
+          1,
+          'completed',
+          'Contexte prepare',
+          `${contextFiles.length} fichier(s) contexte`,
+          {
+            filesRead: contextFiles.map((file) => file.name),
+          }
+        );
         setGenerationStage('composing');
-        updateTask(2, 'running', 'Generation IA');
+        updateTask(2, 'running', 'Generation IA', undefined, {
+          filesRead: contextFiles.map((file) => file.name),
+        });
 
         if (effectiveMode === 'discussions') {
-          responseText = await callOpenAICompatible(effectiveProvider as AIProvider, providerKey, effectiveModel, promptWithAttachmentContext, controller.signal, systemPrompt);
+          let streamedTokenCount = 0;
+          responseText = await callOpenAICompatible(
+            effectiveProvider as AIProvider,
+            providerKey,
+            effectiveModel,
+            promptWithAttachmentContext,
+            controller.signal,
+            systemPrompt,
+            {
+              stream: true,
+              onDelta: (fullText, _delta, tokenCount) => {
+                streamedTokenCount = tokenCount;
+                updateAssistant(fullText);
+              },
+            }
+          );
           updateAssistant(responseText);
           setGenerationStage('validating');
           updateTask(2, 'completed', 'Reponse generee');
@@ -1478,6 +1931,11 @@ Contraintes:
             usedVision: false,
             attempt: Math.max(1, retryCount + 1),
             maxAttempts: 3,
+            streaming: {
+              enabled: streamedTokenCount > 0,
+              source: streamedTokenCount > 0 ? 'sse' : 'fallback',
+              tokenCount: streamedTokenCount || undefined,
+            },
           });
         } else if (effectiveMode === 'agent') {
           if (isAuditRequest(trimmed)) {
@@ -1653,18 +2111,23 @@ Contraintes:
               updateAssistant(responseText);
               updateTask(2, 'completed', 'Generation IA terminee', `${createFromEditResult.widgets.length} widgets proposes`);
               updateTask(3, 'completed', 'Validation widgets', `${impact.touchedTypes.slice(0, 6).join(', ') || 'widgets valides'}`);
-              updateTask(4, 'completed', 'Application et sauvegarde', fileName);
+              updateTask(4, 'completed', 'Application et sauvegarde', fileName, {
+                filesWritten: [fileName],
+                artifactFile: fileName,
+              });
               updateGenerationMeta({
                 status: 'completed',
                 resolvedModel: effectiveModel,
                 usedVision: shouldUseVision,
                 attempt: Math.max(1, retryCount + 1),
                 maxAttempts: 3,
+                applyMode: 'create',
                 artifact: {
                   fileId: newFileId,
                   fileName,
                   action: 'created',
                 },
+                fileTreePreview: buildFileTreePreview(fileName, 'created'),
                 widgetImpact: impact,
                 qualityChecks,
                 qualitySummary,
@@ -1713,18 +2176,23 @@ Contraintes:
               updateAssistant(responseText);
               updateTask(2, 'completed', 'Generation IA terminee', `${result.widgets.length} widgets proposes`);
               updateTask(3, 'completed', 'Validation widgets', `+${impact.created} / ~${impact.updated} / -${impact.deleted}`);
-              updateTask(4, 'completed', 'Application et sauvegarde', targetFileName);
+              updateTask(4, 'completed', 'Application et sauvegarde', targetFileName, {
+                filesWritten: [targetFileName],
+                artifactFile: targetFileName,
+              });
               updateGenerationMeta({
                 status: 'completed',
                 resolvedModel: effectiveModel,
                 usedVision: shouldUseVision,
                 attempt: Math.max(1, retryCount + 1),
                 maxAttempts: 3,
+                applyMode: 'update',
                 artifact: {
                   fileId: activeFileId,
                   fileName: targetFileName,
                   action: 'updated',
                 },
+                fileTreePreview: buildFileTreePreview(targetFileName, 'updated'),
                 widgetImpact: impact,
                 qualityChecks,
                 qualitySummary,
@@ -1744,54 +2212,102 @@ Contraintes:
             setGenerationStage('validating');
 
             const rawTitle = getGeneratedInterfaceTitle(String(result.canvasSettings?.title || ''), trimmed);
-            const fileName = getUniquePyFileName(rawTitle);
-            const newFileId = addNode(null, 'file', fileName);
             const nextSettings = result.canvasSettings
               ? { ...canvasSettings, ...result.canvasSettings, title: rawTitle }
               : { ...canvasSettings, title: rawTitle };
             const qualityChecks = mapQualityChecksToMessageMeta(result.qualityChecks);
             const qualitySummary = mapQualitySummaryToMessageMeta(result.qualitySummary);
-
-            const impact = computeWidgetImpact([], (result.widgets as Array<{ id: string; type: string }>).map((w) => ({ id: w.id, type: w.type })));
-
             persistActiveWorkspaceToFile();
             setGenerationStage('applying');
-            applyGeneratedInterface(newFileId, rawTitle, result.widgets, nextSettings);
+            if (activeFileId) {
+              const previousWidgets = widgets.map((w) => ({ id: w.id, type: w.type }));
+              const nextWidgets = (result.widgets as Array<{ id: string; type: string }>).map((w) => ({ id: w.id, type: w.type }));
+              const impact = computeWidgetImpact(previousWidgets, nextWidgets);
+              applyGeneratedInterface(activeFileId, rawTitle, result.widgets, nextSettings);
+              const targetFileName = getPyFiles().find((f) => f.id === activeFileId)?.name || 'fichier actif';
 
-            const createResponseLines = [
-              `Nouvelle interface creee dans **${fileName}**.`,
-              `Widgets touches: +${impact.created} / ~${impact.updated} / -${impact.deleted}.`,
-              'Le canvas a ete ouvert automatiquement.',
-            ];
-            if (shouldCreateFromEmptyWorkspace) {
-              createResponseLines.unshift('Aucun fichier .py actif: creation d\'une premiere interface.');
+              const replaceResponseLines = [
+                `Interface recreee depuis zero dans **${targetFileName}**.`,
+                'Le style precedent a ete remplace completement.',
+                `Widgets touches: +${impact.created} / ~${impact.updated} / -${impact.deleted}.`,
+              ];
+              if (qualitySummary) {
+                replaceResponseLines.push(`Qualite auto: ${qualitySummary.score}% (${qualitySummary.remainingIssues} issue(s) restante(s)).`);
+              }
+              if (fidelityReport) {
+                replaceResponseLines.push('', fidelityReport);
+              }
+              responseText = replaceResponseLines.join('\n');
+              updateAssistant(responseText);
+              updateTask(2, 'completed', 'Generation IA terminee', `${result.widgets.length} widgets proposes`);
+              updateTask(3, 'completed', 'Validation widgets', `${impact.touchedTypes.slice(0, 6).join(', ') || 'widgets valides'}`);
+              updateTask(4, 'completed', 'Application et sauvegarde', targetFileName, {
+                filesWritten: [targetFileName],
+                artifactFile: targetFileName,
+              });
+              updateGenerationMeta({
+                status: 'completed',
+                resolvedModel: effectiveModel,
+                usedVision: shouldUseVision,
+                attempt: Math.max(1, retryCount + 1),
+                maxAttempts: 3,
+                applyMode: 'replace',
+                artifact: {
+                  fileId: activeFileId,
+                  fileName: targetFileName,
+                  action: 'updated',
+                },
+                fileTreePreview: buildFileTreePreview(targetFileName, 'updated'),
+                widgetImpact: impact,
+                qualityChecks,
+                qualitySummary,
+              });
+            } else {
+              const fileName = getUniquePyFileName(rawTitle);
+              const newFileId = addNode(null, 'file', fileName);
+              const impact = computeWidgetImpact([], (result.widgets as Array<{ id: string; type: string }>).map((w) => ({ id: w.id, type: w.type })));
+
+              applyGeneratedInterface(newFileId, rawTitle, result.widgets, nextSettings);
+              const createResponseLines = [
+                `Nouvelle interface creee dans **${fileName}**.`,
+                `Widgets touches: +${impact.created} / ~${impact.updated} / -${impact.deleted}.`,
+                'Le canvas a ete ouvert automatiquement.',
+              ];
+              if (shouldCreateFromEmptyWorkspace) {
+                createResponseLines.unshift('Aucun fichier .py actif: creation d\'une premiere interface.');
+              }
+              if (qualitySummary) {
+                createResponseLines.push(`Qualite auto: ${qualitySummary.score}% (${qualitySummary.remainingIssues} issue(s) restante(s)).`);
+              }
+              if (fidelityReport) {
+                createResponseLines.push('', fidelityReport);
+              }
+              responseText = createResponseLines.join('\n');
+              updateAssistant(responseText);
+              updateTask(2, 'completed', 'Generation IA terminee', `${result.widgets.length} widgets proposes`);
+              updateTask(3, 'completed', 'Validation widgets', `${impact.touchedTypes.slice(0, 6).join(', ') || 'widgets valides'}`);
+              updateTask(4, 'completed', 'Application et sauvegarde', fileName, {
+                filesWritten: [fileName],
+                artifactFile: fileName,
+              });
+              updateGenerationMeta({
+                status: 'completed',
+                resolvedModel: effectiveModel,
+                usedVision: shouldUseVision,
+                attempt: Math.max(1, retryCount + 1),
+                maxAttempts: 3,
+                applyMode: 'create',
+                artifact: {
+                  fileId: newFileId,
+                  fileName,
+                  action: 'created',
+                },
+                fileTreePreview: buildFileTreePreview(fileName, 'created'),
+                widgetImpact: impact,
+                qualityChecks,
+                qualitySummary,
+              });
             }
-            if (qualitySummary) {
-              createResponseLines.push(`Qualite auto: ${qualitySummary.score}% (${qualitySummary.remainingIssues} issue(s) restante(s)).`);
-            }
-            if (fidelityReport) {
-              createResponseLines.push('', fidelityReport);
-            }
-            responseText = createResponseLines.join('\n');
-            updateAssistant(responseText);
-            updateTask(2, 'completed', 'Generation IA terminee', `${result.widgets.length} widgets proposes`);
-            updateTask(3, 'completed', 'Validation widgets', `${impact.touchedTypes.slice(0, 6).join(', ') || 'widgets valides'}`);
-            updateTask(4, 'completed', 'Application et sauvegarde', fileName);
-            updateGenerationMeta({
-              status: 'completed',
-              resolvedModel: effectiveModel,
-              usedVision: shouldUseVision,
-              attempt: Math.max(1, retryCount + 1),
-              maxAttempts: 3,
-              artifact: {
-                fileId: newFileId,
-                fileName,
-                action: 'created',
-              },
-              widgetImpact: impact,
-              qualityChecks,
-              qualitySummary,
-            });
           }
         } else {
           const pending = pendingPlans[conversationId];
@@ -1820,7 +2336,9 @@ Contraintes:
             for (let i = pending.nextInterfaceIndex; i < pending.plan.interfaces.length; i += 1) {
               const spec = pending.plan.interfaces[i];
               setGenerationStage('composing');
-              updateTask(2, 'running', `Generation interface ${i + 1}/${pending.plan.interfaces.length}`, spec.name);
+              updateTask(2, 'running', `Generation interface ${i + 1}/${pending.plan.interfaces.length}`, spec.name, {
+                filesRead: pending.contextFiles.map((file) => file.name),
+              });
               const interfacePrompt = `
 Objectif global du projet: ${pending.plan.objective}
 
@@ -1895,7 +2413,10 @@ ${PREMIUM_DESIGN_BASELINE}
             updateAssistant(responseText);
             updateTask(2, 'completed', 'Generation des interfaces terminee', `${createdFiles.length} fichier(s)`);
             updateTask(3, 'completed', 'Validation du resultat');
-            updateTask(4, 'completed', 'Application et sauvegarde', `${createdFiles.length} fichier(s) crees`);
+            updateTask(4, 'completed', 'Application et sauvegarde', `${createdFiles.length} fichier(s) crees`, {
+              filesWritten: createdFiles,
+              artifactFile: createdFiles[0],
+            });
             updateGenerationMeta({
               status: 'completed',
               resumeCheckpointId: undefined,
@@ -2029,6 +2550,7 @@ ${PREMIUM_DESIGN_BASELINE}
                       stage: 'failed',
                       errorCode: formatted.code,
                       errorMessage: formatted.text,
+                      errorTrace: error instanceof Error ? error.stack : undefined,
                       resumeCheckpointId: conversationId,
                       attempt: Math.max(1, retryCount + 1),
                       maxAttempts: 3,
@@ -2061,6 +2583,7 @@ ${PREMIUM_DESIGN_BASELINE}
       applyGeneratedInterface,
       buildAuditReport,
       buildContextFiles,
+      buildFileTreePreview,
       buildSystemPrompt,
       callOpenAICompatible,
       canvasSettings,
@@ -2169,8 +2692,28 @@ ${PREMIUM_DESIGN_BASELINE}
   }, [activeProjectId, createBlankConversation, persistConversationToDb, sortConversationsByLatest]);
 
   const handleSelectConversation = useCallback((id: string) => {
+    setConversations((prev) => sortConversationsByLatest(
+      prev.map((conversation) => (
+        conversation.id === id
+          ? { ...conversation, timestamp: Date.now() }
+          : conversation
+      ))
+    ));
     setCurrentConversationId(id);
-  }, []);
+    void touchConversationInDb(id)
+      .then(() => {
+        setDbSyncError(null);
+        if (pendingConversationWritesRef.current.size === 0) {
+          setDbSyncState('ok');
+          setDbSyncReason(null);
+        }
+      })
+      .catch(() => {
+        setDbSyncError("Impossible de mettre a jour la conversation active en base.");
+        setDbSyncState('degraded');
+        setDbSyncReason('Synchronisation differee. La selection locale est conservee.');
+      });
+  }, [sortConversationsByLatest]);
 
   const handleRestore = useCallback((messageId: string) => {
     if (!currentConversationId) return;
@@ -2188,35 +2731,115 @@ ${PREMIUM_DESIGN_BASELINE}
   }, [currentConversationId, persistConversationToDb]);
 
   const handleDeleteConversation = useCallback((id: string) => {
-    void deleteConversationFromDb(id);
-    setPendingPlans((prev) => {
-      const next = { ...prev };
-      delete next[id];
+    setDeletingConversationIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
       return next;
     });
-    const filtered = conversationsRef.current.filter((conversation) => conversation.id !== id);
-    let nextConversations = filtered;
-    let fallbackConversationId: string | null = currentConversationIdRef.current;
-    let createdFallback: Conversation | null = null;
 
-    if (currentConversationIdRef.current === id) {
-      if (filtered.length > 0) {
-        fallbackConversationId = filtered[0].id;
-      } else {
-        createdFallback = createBlankConversation();
-        nextConversations = [createdFallback];
-        fallbackConversationId = createdFallback.id;
+    void (async () => {
+      try {
+        await deleteConversationFromDb(id);
+
+        setPendingPlans((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+
+        const filtered = conversationsRef.current.filter((conversation) => conversation.id !== id);
+        let nextConversations = filtered;
+        let fallbackConversationId: string | null = currentConversationIdRef.current;
+        let createdFallback: Conversation | null = null;
+
+        if (currentConversationIdRef.current === id) {
+          if (filtered.length > 0) {
+            fallbackConversationId = filtered[0].id;
+          } else {
+            createdFallback = createBlankConversation();
+            nextConversations = [createdFallback];
+            fallbackConversationId = createdFallback.id;
+          }
+        } else if (fallbackConversationId && !filtered.some((conversation) => conversation.id === fallbackConversationId)) {
+          fallbackConversationId = filtered[0]?.id ?? null;
+        }
+
+        setConversations(nextConversations);
+        setCurrentConversationId(fallbackConversationId);
+
+        if (fallbackConversationId && !createdFallback) {
+          void touchConversationInDb(fallbackConversationId).catch(() => {
+            setDbSyncError("Impossible de mettre a jour la conversation active apres suppression.");
+            setDbSyncState('degraded');
+            setDbSyncReason('Synchronisation differee apres suppression.');
+          });
+        }
+        if (createdFallback && activeProjectId) {
+          void persistConversationToDb(createdFallback, activeProjectId);
+        }
+
+        setDbSyncError(null);
+        if (pendingConversationWritesRef.current.size === 0) {
+          setDbSyncState('ok');
+          setDbSyncReason(null);
+        }
+      } catch (error) {
+        console.warn('[AI] Suppression conversation echouee:', error);
+        setDbSyncError("Impossible de supprimer la conversation en base.");
+        setDbSyncState('degraded');
+        setDbSyncReason('La conversation a ete conservee localement.');
+        toast.error('Suppression echouee: la conversation est conservee.');
+      } finally {
+        setDeletingConversationIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
       }
-    } else if (fallbackConversationId && !filtered.some((conversation) => conversation.id === fallbackConversationId)) {
-      fallbackConversationId = filtered[0]?.id ?? null;
+    })();
+  }, [activeProjectId, createBlankConversation, persistConversationToDb]);
+
+  const handleHardResetSync = useCallback(() => {
+    if (!user) {
+      toast.error('Connectez-vous pour reinitialiser Dayanna.');
+      return;
     }
 
-    setConversations(nextConversations);
-    setCurrentConversationId(fallbackConversationId);
-    if (createdFallback && activeProjectId) {
-      void persistConversationToDb(createdFallback, activeProjectId);
-    }
-  }, [activeProjectId, createBlankConversation, persistConversationToDb]);
+    void (async () => {
+      try {
+        setIsLoadingDb(true);
+        setDbSyncError(null);
+        setDbSyncState('syncing');
+        setDbSyncReason('Reinitialisation complete Dayanna...');
+        setPendingPlans({});
+        pendingConversationWritesRef.current.clear();
+
+        await resetAllConversationsForUser();
+
+        setConversations([]);
+        setCurrentConversationId(null);
+
+        if (activeProjectId) {
+          const freshConversation = createBlankConversation();
+          setConversations([freshConversation]);
+          setCurrentConversationId(freshConversation.id);
+          await persistConversationToDb(freshConversation, activeProjectId);
+        }
+
+        setDbSyncState('ok');
+        setDbSyncReason(null);
+        toast.success('Dayanna reinitialisee. Nouvelle conversation creee.');
+      } catch (error) {
+        console.warn('[AI] Reinitialisation complete impossible:', error);
+        setDbSyncState('error');
+        setDbSyncError('Reinitialisation impossible. Verifiez Supabase et vos permissions.');
+        setDbSyncReason('La base refuse la suppression. Reessayez ou verifiez la migration.');
+        toast.error('Echec de la reinitialisation Dayanna.');
+      } finally {
+        setIsLoadingDb(false);
+      }
+    })();
+  }, [activeProjectId, createBlankConversation, persistConversationToDb, user]);
 
   const handleUpdateTitle = useCallback((id: string, title: string) => {
     applyConversationTitle(id, title.trim() || 'Sans titre');
@@ -2232,7 +2855,14 @@ ${PREMIUM_DESIGN_BASELINE}
     }
 
     void saveApiKeysToSupabase(keys as unknown as Record<string, string | undefined>)
-      .then(() => toast.success('Parametres enregistres'))
+      .then(() => {
+        setDbSyncError(null);
+        if (pendingConversationWritesRef.current.size === 0) {
+          setDbSyncState('ok');
+          setDbSyncReason(null);
+        }
+        toast.success('Parametres enregistres');
+      })
       .catch(() => toast.error('Echec enregistrement des cles API'));
   }, [dbReady, user]);
 
@@ -2243,14 +2873,6 @@ ${PREMIUM_DESIGN_BASELINE}
       content: f.content || '',
     }));
   }, [getPyFiles]);
-
-  if (isLoadingDb) {
-    return (
-      <div className="flex h-full w-full items-center justify-center bg-background text-sm text-muted-foreground">
-        Synchronisation Dayanna...
-      </div>
-    );
-  }
 
   return (
     <div className="dayanna-theme-dark relative h-full min-h-0 w-full overflow-hidden bg-background text-foreground">
@@ -2273,6 +2895,18 @@ ${PREMIUM_DESIGN_BASELINE}
         onOpenSettings={() => setIsSettingsOpen(true)}
         apiKeys={apiKeys}
         availableFiles={availableFiles}
+        dbSyncState={isLoadingDb ? 'syncing' : dbSyncState}
+        dbSyncReason={dbSyncError || dbSyncReason}
+        deletingConversationIds={Array.from(deletingConversationIds)}
+        onRetrySync={() => {
+          setDbSyncError(null);
+          setDbSyncState('syncing');
+          setDbSyncReason('Nouvelle tentative de synchronisation...');
+          setIsLoadingDb(true);
+          setDbReloadNonce((prev) => prev + 1);
+          void flushConversationWriteQueue();
+        }}
+        onHardResetSync={handleHardResetSync}
       />
 
       <SettingsModal

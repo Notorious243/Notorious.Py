@@ -146,7 +146,12 @@ DESIGN RULES (CRITICAL):
    Accents: #1A5C5C, #6C63FF, #4361EE, #E94560
 5. Sizing: titles fontSize 24-32, buttons 200-300 wide × 42-48 tall, entries 250-320 wide × 38-42 tall.
 6. Spacing: 15-25px vertical gap between widgets. Center content horizontally in frames.
-7. Make it look like a REAL professional desktop application.`;
+7. Make it look like a REAL professional desktop application.
+8. For dashboard prompts, compose clear zones: top bar, navigation area, KPI row, primary content blocks (table/chart/cards), and action area.
+9. Never stack duplicated widgets with same label in the same zone. If uncertain, keep one coherent component and improve styling.
+10. Use a deliberate visual system: consistent radius, spacing rhythm, and at most 2 accent colors.
+11. Avoid micro-components floating in corners; every widget must belong to a visible, aligned section.
+12. Prefer fewer but high-quality blocks over many noisy widgets.`;
 
 const QUALITY_RUBRIC = `
 QUALITY RUBRIC (MANDATORY BEFORE OUTPUT):
@@ -155,7 +160,9 @@ QUALITY RUBRIC (MANDATORY BEFORE OUTPUT):
 - Composition: no empty unusable zones and no crowded clusters.
 - Anti-truncation: ensure labels/buttons/inputs are wide enough for their text.
 - Alignment: keep clean left/right edges and consistent vertical rhythm.
-- Professional finish: balanced contrast, coherent typography, polished spacing.`;
+- Professional finish: balanced contrast, coherent typography, polished spacing.
+- Dashboard readiness: structure should look production-ready, not raw widget dumping.
+- Duplicate prevention: verify no repeated component block appears twice unintentionally.`;
 
 const EXAMPLE_LOGIN = `
 EXAMPLE — "page de login" produces:

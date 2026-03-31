@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { ThemeProvider } from 'next-themes';
-import { Loader2, Eye, ArrowLeft } from 'lucide-react';
+import { Eye, ArrowLeft } from 'lucide-react';
 import { fetchSharedProject, SharedProjectData } from '@/lib/supabaseService';
 import { WidgetData } from '@/types/widget';
 import { InteractiveWidget } from '@/components/builder/InteractiveWidget';
 import { isContainerWidget, getContainerMetrics } from '@/lib/widgetLayout';
+import { PythonLoadingScreen } from '@/components/ui/PythonLoadingScreen';
 
 interface SharedProjectViewProps {
     shareToken: string;
@@ -72,12 +73,11 @@ export const SharedProjectView: React.FC<SharedProjectViewProps> = ({ shareToken
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-                <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
-                    <p className="text-zinc-400 text-sm">Chargement du projet...</p>
-                </div>
-            </div>
+            <PythonLoadingScreen
+                variant="shared"
+                title="Chargement du projet partage..."
+                subtitle="Recuperation du canvas en lecture seule"
+            />
         );
     }
 

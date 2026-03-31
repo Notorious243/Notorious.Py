@@ -1,10 +1,10 @@
 import { motion, AnimatePresence } from "motion/react";
-import { X, History, Settings, Plus, Search as SearchIcon, Trash2, ChevronLeft, Edit2, Check } from "lucide-react";
+import { X, History, Settings, Plus, Search as SearchIcon, Trash2, ChevronLeft, Edit2, Check, Loader2, AlertTriangle } from "lucide-react";
 import { ChatArea } from "./ChatArea";
 import { InputArea } from "./InputArea";
 import { Message, Model, InputStatus, Conversation, ApiKeys, Provider, Attachment, AIMode, TaggedFile } from "./types";
 import { cn } from "@/lib/utils";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -33,6 +33,11 @@ interface SidebarProps {
   onOpenSettings: () => void;
   apiKeys: ApiKeys;
   availableFiles?: AvailableFile[];
+  dbSyncState?: 'ok' | 'syncing' | 'degraded' | 'error';
+  dbSyncReason?: string | null;
+  onRetrySync?: () => void;
+  onHardResetSync?: () => void;
+  deletingConversationIds?: string[];
 }
 
 export function Sidebar({ 
@@ -53,13 +58,19 @@ export function Sidebar({
   onStopGeneration,
   onOpenSettings,
   apiKeys,
-  availableFiles
+  availableFiles,
+  dbSyncState = 'ok',
+  dbSyncReason,
+  onRetrySync,
+  onHardResetSync,
+  deletingConversationIds = [],
 }: SidebarProps) {
   const [view, setView] = useState<'chat' | 'history'>('chat');
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'latest'>('all');
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [editTitleValue, setEditTitleValue] = useState('');
+  const [showSyncingBanner, setShowSyncingBanner] = useState(false);
 
   const filteredConversations = useMemo(() => {
     let result = conversations.filter(c => 
@@ -75,6 +86,28 @@ export function Sidebar({
     
     return result;
   }, [conversations, searchQuery, filter]);
+  const deletingSet = useMemo(() => new Set(deletingConversationIds), [deletingConversationIds]);
+  const isSyncing = dbSyncState === 'syncing';
+  const hasSyncIssue = dbSyncState === 'degraded' || dbSyncState === 'error';
+
+  useEffect(() => {
+    if (!isSyncing) {
+      setShowSyncingBanner(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setShowSyncingBanner(true), 1100);
+    return () => window.clearTimeout(timer);
+  }, [isSyncing, dbSyncReason]);
+
+  const shouldShowSyncBanner = hasSyncIssue || showSyncingBanner;
+  const syncTitle = isSyncing
+    ? 'Connexion base en cours...'
+    : dbSyncState === 'error'
+      ? 'Synchronisation Dayanna indisponible'
+      : 'Synchronisation Dayanna en attente';
+  const syncDescription = dbSyncReason || (isSyncing
+    ? 'Chargement des conversations du projet actif.'
+    : 'Les changements restent visibles et seront resynchronises automatiquement.');
 
   const handleStartEdit = (e: React.MouseEvent, conv: Conversation) => {
     e.stopPropagation();
@@ -162,6 +195,9 @@ export function Sidebar({
                 <div className="flex w-full items-center gap-1 overflow-x-auto px-3 pb-2 scrollbar-none no-scrollbar">
                   <AnimatePresence mode="popLayout">
                     {conversations.slice(0, 5).map((conv) => (
+                      (() => {
+                        const isDeleting = deletingSet.has(conv.id);
+                        return (
                       <motion.div
                         key={conv.id}
                         layout
@@ -174,24 +210,83 @@ export function Sidebar({
                             ? "bg-white/15 border-white/60 text-white" 
                             : "bg-white/[0.07] border-white/35 text-white/80 hover:bg-white/12 hover:text-white"
                         )}
-                        onClick={() => onSelectConversation(conv.id)}
+                        onClick={() => {
+                          if (isDeleting) return;
+                          onSelectConversation(conv.id);
+                        }}
                       >
                         <span className="text-[11px] font-medium truncate flex-1">{conv.title}</span>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (isDeleting) return;
                             onDeleteConversation(conv.id);
                           }}
-                          className="p-0.5 rounded hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className={cn(
+                            "p-0.5 rounded hover:bg-destructive/10 transition-opacity",
+                            isDeleting ? "opacity-100 cursor-not-allowed" : "opacity-0 group-hover:opacity-100"
+                          )}
+                          disabled={isDeleting}
                         >
-                          <X className="w-2.5 h-2.5" />
+                          {isDeleting ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <X className="w-2.5 h-2.5" />}
                         </button>
                       </motion.div>
+                        );
+                      })()
                     ))}
                   </AnimatePresence>
                 </div>
               )}
             </div>
+
+            {shouldShowSyncBanner && (
+              <div className="border-b border-white/20 bg-[#0b2a4d] px-3 py-2 text-white">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex items-start gap-2">
+                    <div className="mt-0.5 shrink-0">
+                      {isSyncing ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-white/95" />
+                      ) : (
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-200" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                    <p className="truncate text-[11px] font-semibold uppercase tracking-wider">
+                      {syncTitle}
+                    </p>
+                    <p className="mt-0.5 truncate text-[10px] text-white/85">
+                      {syncDescription}
+                    </p>
+                    </div>
+                  </div>
+                  {hasSyncIssue && (
+                    <div className="shrink-0 flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={onRetrySync}
+                        className="rounded-md border border-white/55 px-2 py-1 text-[10px] font-semibold text-white transition-colors hover:bg-white/10"
+                      >
+                        Reessayer
+                      </button>
+                      {onHardResetSync ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const ok = window.confirm(
+                              "Reinitialiser Dayanna va supprimer l'historique IA en base pour votre compte. Continuer ?"
+                            );
+                            if (ok) onHardResetSync();
+                          }}
+                          className="rounded-md border border-amber-200/70 px-2 py-1 text-[10px] font-semibold text-amber-100 transition-colors hover:bg-amber-300/10"
+                        >
+                          Reinitialiser
+                        </button>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             
             {/* Main Content Area */}
             <div className="flex-1 overflow-hidden flex flex-col">
@@ -277,7 +372,9 @@ export function Sidebar({
                         <p className="text-sm">Aucune conversation</p>
                       </div>
                     ) : (
-                      filteredConversations.map((conv) => (
+                      filteredConversations.map((conv) => {
+                        const isDeleting = deletingSet.has(conv.id);
+                        return (
                         <motion.div
                           key={conv.id}
                           layout
@@ -290,6 +387,7 @@ export function Sidebar({
                               : "bg-muted/20 border-border/30 hover:bg-accent/50"
                           )}
                           onClick={() => {
+                            if (isDeleting) return;
                             onSelectConversation(conv.id);
                             setView('chat');
                           }}
@@ -335,16 +433,31 @@ export function Sidebar({
                             </div>
                           </div>
                           
-                          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
-                            <Button variant="ghost" size="icon" onClick={(e) => handleStartEdit(e, conv)} className="h-7 w-7 rounded-md text-muted-foreground hover:text-primary" title="Modifier">
+                          <div className={cn(
+                            "absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 transition-all",
+                            isDeleting ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                          )}>
+                            <Button variant="ghost" size="icon" onClick={(e) => handleStartEdit(e, conv)} className="h-7 w-7 rounded-md text-muted-foreground hover:text-primary" title="Modifier" disabled={isDeleting}>
                               <Edit2 className="w-3 h-3" />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onDeleteConversation(conv.id); }} className="h-7 w-7 rounded-md text-muted-foreground hover:text-destructive" title="Supprimer">
-                              <Trash2 className="w-3 h-3" />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isDeleting) return;
+                                onDeleteConversation(conv.id);
+                              }}
+                              className="h-7 w-7 rounded-md text-muted-foreground hover:text-destructive"
+                              title="Supprimer"
+                              disabled={isDeleting}
+                            >
+                              {isDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
                             </Button>
                           </div>
                         </motion.div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>

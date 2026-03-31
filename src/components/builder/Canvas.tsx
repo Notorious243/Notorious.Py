@@ -23,7 +23,7 @@ import { useFileSystem } from '@/hooks/useFileSystem';
 
 export const Canvas: React.FC = () => {
   const { widgets, canvasSettings, addWidget, selectWidget, selectedWidgetId, copyWidget, cutWidget, pasteWidget, deleteWidget, toggleWidgetLock, clipboard, undo, redo, updateWidget, moveWidget, previewMode, updateCanvasSettings } = useWidgets();
-  const { getPyFiles } = useFileSystem();
+  const { getPyFiles, data: fileTree } = useFileSystem();
   const { activeProjectId, createProject, projects, openProject } = useProjects();
   const canvasRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; widgetId: string | null } | null>(null);
@@ -74,7 +74,7 @@ export const Canvas: React.FC = () => {
   const [zoomInputValue, setZoomInputValue] = useState('');
   const zoomInputRef = useRef<HTMLInputElement>(null);
   const zoomIndicatorTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasPyFiles = useMemo(() => getPyFiles().length > 0, [getPyFiles]);
+  const hasPyFiles = useMemo(() => getPyFiles().length > 0, [fileTree, getPyFiles]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -1021,7 +1021,7 @@ export const Canvas: React.FC = () => {
 
       {/* Zoom Controls Dock — always visible in design mode */}
       {previewMode !== 'preview' && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[110] flex justify-center pb-2">
+        <div className="pointer-events-none absolute inset-x-0 bottom-2 z-[220] flex justify-center">
           <div
             className="pointer-events-auto flex min-w-[214px] items-center gap-0.5 rounded-xl border border-border bg-card/95 px-1.5 py-1 shadow-lg backdrop-blur-md"
             onClick={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}

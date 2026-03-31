@@ -13,6 +13,7 @@ import { FileSystemProvider } from '@/hooks/useFileSystem';
 import { GridAnimation } from '@/components/ui/grid-animation';
 import { ProjectProvider, useProjects } from '@/contexts/ProjectContext';
 import { OPEN_AI_WORKSPACE_PANELS_EVENT } from '@/lib/aiSidebar';
+import { PythonLoadingScreen } from '@/components/ui/PythonLoadingScreen';
 const WelcomeScreen = lazy(() => import('@/components/builder/WelcomeScreen').then(m => ({ default: m.WelcomeScreen })));
 
 // Lazy load des composants lourds non critiques
@@ -356,12 +357,11 @@ const ProjectAwareApp: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          <p className="text-sm text-muted-foreground">Chargement...</p>
-        </div>
-      </div>
+      <PythonLoadingScreen
+        variant="project"
+        title="Chargement du projet..."
+        subtitle="Preparation du canvas, des fichiers et des widgets"
+      />
     );
   }
 

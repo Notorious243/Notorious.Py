@@ -148,6 +148,15 @@ DESIGN RULES (CRITICAL):
 6. Spacing: 15-25px vertical gap between widgets. Center content horizontally in frames.
 7. Make it look like a REAL professional desktop application.`;
 
+const QUALITY_RUBRIC = `
+QUALITY RUBRIC (MANDATORY BEFORE OUTPUT):
+- Visual hierarchy: strong heading/subheading/body/action hierarchy.
+- Legibility: avoid tiny components; text should remain readable at 100% zoom.
+- Composition: no empty unusable zones and no crowded clusters.
+- Anti-truncation: ensure labels/buttons/inputs are wide enough for their text.
+- Alignment: keep clean left/right edges and consistent vertical rhythm.
+- Professional finish: balanced contrast, coherent typography, polished spacing.`;
+
 const EXAMPLE_LOGIN = `
 EXAMPLE — "page de login" produces:
 {"widgets":[
@@ -179,6 +188,7 @@ IMPORTANT RULES:
 - NEVER overlap widgets. Ensure every widget has enough vertical/horizontal spacing to avoid collision.
 - Text content in widgets (labels, buttons, etc.) MUST be in French unless the user specifies otherwise.
 ${DESIGN_RULES}
+${QUALITY_RUBRIC}
 ${EXAMPLE_LOGIN}
 
 OUTPUT: Pure JSON only. No text before or after the JSON. No explanation. No markdown.`;
@@ -244,6 +254,7 @@ ACCURACY REQUIREMENTS:
 - Text content MUST be in French unless the image shows another language.
 
 ${DESIGN_RULES}
+${QUALITY_RUBRIC}
 
 OUTPUT: Pure JSON only. No text before or after the JSON. No explanation. No markdown.`;
 
@@ -265,6 +276,7 @@ ${WIDGET_REFERENCE}
 JSON OUTPUT SCHEMA:
 ${WIDGET_SCHEMA}
 ${DESIGN_RULES}
+${QUALITY_RUBRIC}
 
 OUTPUT: Pure JSON only. No text before or after the JSON. No explanation. No markdown.`;
 
@@ -463,10 +475,10 @@ export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
     maxTokens: 8192,
   },
   huggingface: {
-    endpoint: 'https://router.huggingface.co/hf-inference/v1/chat/completions',
+    endpoint: 'https://router.huggingface.co/v1/chat/completions',
     authHeader: (key: string) => ({ Authorization: `Bearer ${key}` }),
     label: 'Hugging Face',
-    keyPrefix: 'hf_...',
+    keyPrefix: 'hf_... (token)',
     keyUrl: 'https://huggingface.co/settings/tokens',
     color: 'amber',
     free: true,

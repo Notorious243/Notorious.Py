@@ -1,8 +1,13 @@
 const AI_OPEN_KEY = 'ctk_open_ai_on_load';
 const AI_FOCUS_KEY = 'ctk_focus_ai_prompt_on_load';
+const AI_FORCE_NEW_CONVERSATION_KEY = 'ctk_force_new_ai_conversation_on_load';
 
 export const OPEN_AI_SIDEBAR_EVENT = 'open-ai-sidebar';
 export const FOCUS_AI_PROMPT_EVENT = 'focus-ai-prompt';
+export const OPEN_AI_WORKSPACE_PANELS_EVENT = 'open-ai-workspace-panels';
+export interface OpenAIAssistantOptions {
+  forceNewConversation?: boolean;
+}
 
 const safeStorageGet = (key: string): string | null => {
   try {
@@ -40,15 +45,23 @@ export const consumeFocusAIPromptOnLoadFlag = (): boolean => {
   return shouldFocus;
 };
 
+export const consumeForceNewConversationOnLoadFlag = (): boolean => {
+  const shouldForce = safeStorageGet(AI_FORCE_NEW_CONVERSATION_KEY) === 'true';
+  if (shouldForce) safeStorageRemove(AI_FORCE_NEW_CONVERSATION_KEY);
+  return shouldForce;
+};
+
 export const emitFocusAIPrompt = () => {
   window.dispatchEvent(new CustomEvent(FOCUS_AI_PROMPT_EVENT));
 };
 
-export const openAIAssistantForPrompt = () => {
+export const openAIAssistantForPrompt = (options?: OpenAIAssistantOptions) => {
   safeStorageSet(AI_OPEN_KEY, 'true');
   safeStorageSet(AI_FOCUS_KEY, 'true');
+  if (options?.forceNewConversation) safeStorageSet(AI_FORCE_NEW_CONVERSATION_KEY, 'true');
 
-  window.dispatchEvent(new CustomEvent(OPEN_AI_SIDEBAR_EVENT));
+  window.dispatchEvent(new CustomEvent(OPEN_AI_SIDEBAR_EVENT, { detail: { forceNewConversation: Boolean(options?.forceNewConversation) } }));
+  window.dispatchEvent(new CustomEvent(OPEN_AI_WORKSPACE_PANELS_EVENT));
 
   // Retry focus after mount/transition to ensure the textarea is ready.
   window.setTimeout(() => emitFocusAIPrompt(), 60);

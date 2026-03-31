@@ -174,7 +174,7 @@ export const Canvas: React.FC = () => {
     if (!name) return;
     try {
       await createProject(name);
-      if (createModalMode === 'ai') openAIAssistantForPrompt();
+      if (createModalMode === 'ai') openAIAssistantForPrompt({ forceNewConversation: true });
       setShowCreateModal(false);
       setNewProjectName('');
     } catch (error) {
@@ -725,7 +725,7 @@ export const Canvas: React.FC = () => {
     <div className="relative flex flex-1 flex-col overflow-hidden">
     <div
       ref={containerRef}
-      className="relative flex flex-1 items-center justify-center overflow-auto pb-24 pt-6 scrollbar-thin scrollbar-thumb-border/40 scrollbar-track-transparent"
+      className="relative flex flex-1 items-center justify-center overflow-auto pb-28 pt-6 scrollbar-thin scrollbar-thumb-border/40 scrollbar-track-transparent"
     >
       <motion.div
         className={`relative z-10 border border-border bg-card shadow-[0_30px_72px_rgba(15,52,96,0.12)] ring-1 ring-black/[0.03] ${previewMode === 'preview' ? 'rounded-xl' : 'rounded-2xl'}`}
@@ -847,8 +847,11 @@ export const Canvas: React.FC = () => {
                       className="mx-auto mt-8 h-10 rounded-full px-5 text-[14px] font-semibold text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
                     >
                       <Upload className="w-4 h-4" />
-                      Importer un projet
+                      Importer projet Notorious.PY
                     </Button>
+                    <p className="mt-2 text-center text-xs text-muted-foreground">
+                      Importez un fichier .zip d&apos;un projet Notorious.PY existant.
+                    </p>
                   </>
                 )}
 
@@ -871,9 +874,12 @@ export const Canvas: React.FC = () => {
                         className="h-11 rounded-xl border border-border bg-secondary px-8 text-[14px] font-semibold text-foreground transition-all hover:-translate-y-0.5 hover:border-primary/45 hover:bg-primary/10"
                       >
                         <Upload className="mr-2 h-5 w-5" />
-                        Importer un projet
+                        Importer projet Notorious.PY
                       </Button>
                     </div>
+                    <p className="mt-2 text-center text-xs text-muted-foreground">
+                      Importez un fichier .zip d&apos;un projet Notorious.PY existant.
+                    </p>
 
                     <div className="mt-16 w-full max-w-2xl mx-auto">
                       <div className="flex items-center justify-between mb-4 px-1">
@@ -1013,94 +1019,115 @@ export const Canvas: React.FC = () => {
       </motion.div>
     </div>
 
-      {/* Zoom Controls Bar — centered bottom, outside scrollable area */}
-      {previewMode !== 'preview' && hasPyFiles && (
-        <div
-          className="absolute bottom-2 left-1/2 z-[100] flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-border bg-card/95 px-1.5 py-1 shadow-lg backdrop-blur-md"
-          onClick={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
-          onMouseDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
-          onPointerDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
-        >
-          <button
-            onClick={handleZoomOut}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-bold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            title="Zoom arrière (Ctrl -)"
+      {/* Zoom Controls Dock — always visible in design mode */}
+      {previewMode !== 'preview' && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[110] flex justify-center pb-2">
+          <div
+            className="pointer-events-auto flex min-w-[214px] items-center gap-0.5 rounded-xl border border-border bg-card/95 px-1.5 py-1 shadow-lg backdrop-blur-md"
+            onClick={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
+            onMouseDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
+            onPointerDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
           >
-            −
-          </button>
-          {isEditingZoom ? (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const val = parseInt(zoomInputValue, 10);
-                if (!isNaN(val) && val >= 10 && val <= 300) {
-                  updateCanvasSettings({ scaling: val / 100 });
-                }
-                setIsEditingZoom(false);
-              }}
-              className="flex items-center"
+            <button
+              onClick={handleZoomOut}
+              disabled={!hasPyFiles}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-bold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+              title={hasPyFiles ? "Zoom arrière (Ctrl -)" : "Créez un fichier .py pour activer le zoom"}
             >
-              <input
-                ref={zoomInputRef}
-                type="text"
-                value={zoomInputValue}
-                onClick={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
-                onMouseDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
-                onPointerDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
-                onChange={(e) => setZoomInputValue(e.target.value.replace(/[^0-9]/g, ''))}
-                onBlur={() => {
-                  // Delay to let form submit fire first if user pressed Enter
-                  setTimeout(() => {
-                    setIsEditingZoom((prev) => {
-                      if (!prev) return false;
+              −
+            </button>
+            {isEditingZoom ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const val = parseInt(zoomInputValue, 10);
+                  if (!hasPyFiles) {
+                    setIsEditingZoom(false);
+                    return;
+                  }
+                  if (!isNaN(val) && val >= 10 && val <= 300) {
+                    updateCanvasSettings({ scaling: val / 100 });
+                  }
+                  setIsEditingZoom(false);
+                }}
+                className="flex items-center"
+              >
+                <input
+                  ref={zoomInputRef}
+                  type="text"
+                  value={zoomInputValue}
+                  onClick={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
+                  onMouseDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
+                  onPointerDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
+                  onChange={(e) => setZoomInputValue(e.target.value.replace(/[^0-9]/g, ''))}
+                  onBlur={() => {
+                    setTimeout(() => {
+                      setIsEditingZoom((prev) => {
+                        if (!prev || !hasPyFiles) return false;
+                        const val = parseInt(zoomInputValue, 10);
+                        if (!isNaN(val) && val >= 10 && val <= 300) {
+                          updateCanvasSettings({ scaling: val / 100 });
+                        }
+                        return false;
+                      });
+                    }, 150);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setIsEditingZoom(false);
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (!hasPyFiles) {
+                        setIsEditingZoom(false);
+                        return;
+                      }
                       const val = parseInt(zoomInputValue, 10);
                       if (!isNaN(val) && val >= 10 && val <= 300) {
                         updateCanvasSettings({ scaling: val / 100 });
                       }
-                      return false;
-                    });
-                  }, 150);
+                      setIsEditingZoom(false);
+                    }
+                  }}
+                  className="h-7 w-14 rounded-lg border border-primary/30 bg-background px-1 text-center text-[11px] font-semibold text-foreground outline-none focus:border-primary/60"
+                  autoFocus
+                  maxLength={3}
+                />
+              </form>
+            ) : (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.nativeEvent.stopImmediatePropagation();
+                  if (!hasPyFiles) return;
+                  setZoomInputValue(String(Math.round((canvasSettings.scaling || 1) * 100)));
+                  setIsEditingZoom(true);
+                  setTimeout(() => zoomInputRef.current?.select(), 10);
                 }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') { setIsEditingZoom(false); }
-                  if (e.key === 'Enter') { e.preventDefault(); const val = parseInt(zoomInputValue, 10); if (!isNaN(val) && val >= 10 && val <= 300) { updateCanvasSettings({ scaling: val / 100 }); } setIsEditingZoom(false); }
-                }}
-                className="h-7 w-14 rounded-lg border border-primary/30 bg-background px-1 text-center text-[11px] font-semibold text-foreground outline-none focus:border-primary/60"
-                autoFocus
-                maxLength={3}
-              />
-            </form>
-          ) : (
+                onMouseDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
+                className="flex h-7 min-w-[3rem] items-center justify-center rounded-lg px-1.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
+                title={hasPyFiles ? "Cliquer pour saisir un pourcentage" : "Créez un fichier .py pour activer le zoom"}
+                disabled={!hasPyFiles}
+              >
+                {Math.round((canvasSettings.scaling || 1) * 100)}%
+              </button>
+            )}
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                e.nativeEvent.stopImmediatePropagation();
-                setZoomInputValue(String(Math.round((canvasSettings.scaling || 1) * 100)));
-                setIsEditingZoom(true);
-                setTimeout(() => zoomInputRef.current?.select(), 10);
-              }}
-              onMouseDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
-              className="flex h-7 min-w-[3rem] items-center justify-center rounded-lg px-1.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-accent"
-              title="Cliquer pour saisir un pourcentage"
+              onClick={handleZoomIn}
+              disabled={!hasPyFiles}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-bold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+              title={hasPyFiles ? "Zoom avant (Ctrl +)" : "Créez un fichier .py pour activer le zoom"}
             >
-              {Math.round((canvasSettings.scaling || 1) * 100)}%
+              +
             </button>
-          )}
-          <button
-            onClick={handleZoomIn}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-bold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            title="Zoom avant (Ctrl +)"
-          >
-            +
-          </button>
-          <div className="mx-0.5 h-4 w-px bg-border/50" />
-          <button
-            onClick={handleZoomFit}
-            className="flex h-7 items-center justify-center rounded-lg px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            title="Ajuster à l'écran"
-          >
-            Fit
-          </button>
+            <div className="mx-0.5 h-4 w-px bg-border/50" />
+            <button
+              onClick={handleZoomFit}
+              disabled={!hasPyFiles}
+              className="flex h-7 items-center justify-center rounded-lg px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+              title={hasPyFiles ? "Ajuster à l'écran" : "Créez un fichier .py pour activer le zoom"}
+            >
+              Fit
+            </button>
+          </div>
         </div>
       )}
 

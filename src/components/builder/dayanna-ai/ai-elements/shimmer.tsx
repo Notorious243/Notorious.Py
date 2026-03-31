@@ -18,7 +18,7 @@ export function Shimmer({
   return (
     <Component
       className={cn(
-        "relative inline-block text-zinc-400 overflow-hidden",
+        "relative inline-block overflow-hidden text-muted-foreground",
         className
       )}
     >

@@ -16,9 +16,28 @@ export interface ContextFile {
     content: string;
 }
 
+export interface GenerationQualityCheck {
+    id: 'bounds' | 'collisions' | 'readability' | 'contrast' | 'truncation';
+    label: string;
+    issueCount: number;
+    fixedCount: number;
+    status: 'passed' | 'fixed' | 'failed';
+    detail: string;
+}
+
+export interface GenerationQualitySummary {
+    score: number;
+    hasBlockingIssues: boolean;
+    remainingIssues: number;
+    notes: string[];
+}
+
 interface AIGenerationResult {
     widgets: WidgetData[];
     canvasSettings?: Partial<CanvasSettings>;
+    qualityChecks?: GenerationQualityCheck[];
+    qualitySummary?: GenerationQualitySummary;
+    selfHealApplied?: boolean;
 }
 
 interface UseAIGenerationReturn {
@@ -30,22 +49,89 @@ interface UseAIGenerationReturn {
     generateIteration: (apiKey: string, prompt: string, currentWidgets: WidgetData[], modelId: string, contextFiles?: ContextFile[]) => Promise<AIGenerationResult | null>;
 }
 
-// Reliable fallback models per provider (used for auto-retry)
-const FALLBACK_MODELS: Record<AIProvider, string[]> = {
-    openrouter: [
-        'meta-llama/llama-3.1-8b-instruct:free',
-        'google/gemma-2-9b-it:free',
-        'mistralai/mistral-7b-instruct:free',
-    ],
-    groq: [
-        'llama-3.1-8b-instant',
-        'mixtral-8x7b-32768',
-    ],
-    google: ['gemini-2.0-flash', 'gemini-1.5-flash'],
-    openai: ['gpt-4o-mini'],
-    anthropic: ['claude-3-haiku-20240307'],
-    deepseek: ['deepseek-chat'],
-    huggingface: ['mistralai/Mistral-Nemo-Instruct-2407', 'meta-llama/Meta-Llama-3.1-8B-Instruct'],
+type AIErrorCode =
+    | 'INVALID_KEY'
+    | 'QUOTA_EXCEEDED'
+    | 'PAID_MODEL'
+    | 'NETWORK'
+    | 'TIMEOUT'
+    | 'RATE_LIMIT'
+    | 'SERVER_ERROR'
+    | 'MODEL_UNAVAILABLE'
+    | 'EMPTY_CONTENT'
+    | 'JSON_INVALID'
+    | 'UNKNOWN';
+
+const MAX_RETRY_ATTEMPTS = 3;
+const RETRYABLE_ERROR_CODES = new Set<AIErrorCode>([
+    'NETWORK',
+    'TIMEOUT',
+    'RATE_LIMIT',
+    'SERVER_ERROR',
+    'EMPTY_CONTENT',
+]);
+
+const withErrorCode = (code: AIErrorCode, message: string): string => `${code}:${message}`;
+
+const splitErrorCode = (rawMessage: string): { code: AIErrorCode; message: string } => {
+    const separator = rawMessage.indexOf(':');
+    if (separator <= 0) return { code: 'UNKNOWN', message: rawMessage };
+    const code = rawMessage.slice(0, separator).trim().toUpperCase() as AIErrorCode;
+    const message = rawMessage.slice(separator + 1).trim() || rawMessage;
+    return { code: (Object.values<string>([
+        'INVALID_KEY',
+        'QUOTA_EXCEEDED',
+        'PAID_MODEL',
+        'NETWORK',
+        'TIMEOUT',
+        'RATE_LIMIT',
+        'SERVER_ERROR',
+        'MODEL_UNAVAILABLE',
+        'EMPTY_CONTENT',
+        'JSON_INVALID',
+        'UNKNOWN',
+    ]).includes(code) ? code : 'UNKNOWN') as AIErrorCode, message };
+};
+
+const normalizeHuggingFaceModel = (provider: AIProvider, model: string): string => {
+    if (provider !== 'huggingface') return model;
+    return model.includes(':') ? model : `${model}:hf-inference`;
+};
+
+const shouldMarkPaidModel = (message: string): boolean => {
+    return /(payment|paid|billing|subscription|required|premium)/i.test(message);
+};
+
+const shouldMarkQuotaExceeded = (message: string): boolean => {
+    return /(quota|credit|insufficient|exceeded|limit reached|balance|tokens? exhausted)/i.test(message);
+};
+
+const formatErrorForUi = (rawMessage: string): string => {
+    const { code, message } = splitErrorCode(rawMessage);
+    switch (code) {
+        case 'INVALID_KEY':
+            return withErrorCode(code, message || 'Acces invalide. Verifiez votre cle API ou token.');
+        case 'QUOTA_EXCEEDED':
+            return withErrorCode(code, message || 'Credits/tokens epuises. Choisissez un autre modele.');
+        case 'PAID_MODEL':
+            return withErrorCode(code, message || 'Modele payant indisponible. Choisissez un autre modele.');
+        case 'RATE_LIMIT':
+            return withErrorCode(code, message || 'Limite de requetes atteinte. Nouvelle tentative en cours.');
+        case 'NETWORK':
+            return withErrorCode(code, message || 'Erreur reseau. Verifiez votre connexion.');
+        case 'TIMEOUT':
+            return withErrorCode(code, message || 'Delai depasse. Reessayez.');
+        case 'SERVER_ERROR':
+            return withErrorCode(code, message || 'Erreur serveur temporaire.');
+        case 'MODEL_UNAVAILABLE':
+            return withErrorCode(code, message || 'Modele indisponible.');
+        case 'EMPTY_CONTENT':
+            return withErrorCode(code, message || 'Le modele a renvoye une reponse vide.');
+        case 'JSON_INVALID':
+            return withErrorCode(code, message || 'Le JSON renvoye est invalide.');
+        default:
+            return withErrorCode('UNKNOWN', message || 'Erreur IA inconnue.');
+    }
 };
 
 export const useAIGeneration = (): UseAIGenerationReturn => {
@@ -190,6 +276,246 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
         return filtered;
     };
 
+    const parseHexColor = (value: unknown): { r: number; g: number; b: number } | null => {
+        if (typeof value !== 'string') return null;
+        const raw = value.trim();
+        if (!raw || raw === 'transparent') return null;
+        const normalized = raw.startsWith('#') ? raw.slice(1) : raw;
+        if (!/^[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(normalized)) return null;
+        const full = normalized.length === 3
+            ? normalized.split('').map((c) => `${c}${c}`).join('')
+            : normalized;
+        return {
+            r: Number.parseInt(full.slice(0, 2), 16),
+            g: Number.parseInt(full.slice(2, 4), 16),
+            b: Number.parseInt(full.slice(4, 6), 16),
+        };
+    };
+
+    const channelToLinear = (channel: number) => {
+        const v = channel / 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    };
+
+    const contrastRatio = (fg: { r: number; g: number; b: number }, bg: { r: number; g: number; b: number }) => {
+        const luminance = (rgb: { r: number; g: number; b: number }) =>
+            0.2126 * channelToLinear(rgb.r) + 0.7152 * channelToLinear(rgb.g) + 0.0722 * channelToLinear(rgb.b);
+        const l1 = luminance(fg);
+        const l2 = luminance(bg);
+        const lighter = Math.max(l1, l2);
+        const darker = Math.min(l1, l2);
+        return (lighter + 0.05) / (darker + 0.05);
+    };
+
+    const estimateTextWidth = (text: string, fontSize: number) => {
+        return Math.ceil(text.length * Math.max(8, fontSize) * 0.56) + 20;
+    };
+
+    const getWidgetText = (widget: any): string => {
+        const props = widget.properties || {};
+        return String(
+            props.text ||
+            props.placeholder_text ||
+            props.title ||
+            props.value ||
+            props.caption ||
+            ''
+        ).trim();
+    };
+
+    const getWidgetMinSize = (widget: any): { width: number; height: number } => {
+        switch (widget.type) {
+            case 'label':
+                return { width: 60, height: 24 };
+            case 'button':
+            case 'entry':
+            case 'passwordentry':
+            case 'combobox':
+            case 'optionmenu':
+            case 'segmentedbutton':
+                return { width: 110, height: 34 };
+            case 'checkbox':
+            case 'radiobutton':
+            case 'switch':
+                return { width: 90, height: 22 };
+            case 'progressbar':
+            case 'slider':
+                return { width: 120, height: 18 };
+            default:
+                return { width: 36, height: 20 };
+        }
+    };
+
+    const overlaps = (a: any, b: any, padding = 2): boolean => {
+        const ax1 = Number(a.position?.x) - padding;
+        const ay1 = Number(a.position?.y) - padding;
+        const ax2 = ax1 + Number(a.size?.width) + padding * 2;
+        const ay2 = ay1 + Number(a.size?.height) + padding * 2;
+        const bx1 = Number(b.position?.x) - padding;
+        const by1 = Number(b.position?.y) - padding;
+        const bx2 = bx1 + Number(b.size?.width) + padding * 2;
+        const by2 = by1 + Number(b.size?.height) + padding * 2;
+        return ax1 < bx2 && ax2 > bx1 && ay1 < by2 && ay2 > by1;
+    };
+
+    const runQualityPass = (
+        widgets: any[],
+        canvasSettings?: Partial<CanvasSettings>
+    ): { widgets: any[]; checks: GenerationQualityCheck[]; summary: GenerationQualitySummary; selfHealApplied: boolean } => {
+        const canvasWidth = Math.max(360, Number(canvasSettings?.width) || 800);
+        const canvasHeight = Math.max(360, Number(canvasSettings?.height) || 600);
+        const fixed = widgets.map((widget) => ({
+            ...widget,
+            position: { ...(widget.position || {}) },
+            size: { ...(widget.size || {}) },
+            style: { ...(widget.style || {}) },
+            properties: { ...(widget.properties || {}) },
+        }));
+
+        let boundsIssues = 0;
+        let boundsFixed = 0;
+        let readabilityIssues = 0;
+        let readabilityFixed = 0;
+        let truncationIssues = 0;
+        let truncationFixed = 0;
+        let contrastIssues = 0;
+        let contrastFixed = 0;
+        let collisionIssues = 0;
+        let collisionFixed = 0;
+
+        for (const widget of fixed) {
+            widget.position.x = Number.isFinite(widget.position.x) ? widget.position.x : 0;
+            widget.position.y = Number.isFinite(widget.position.y) ? widget.position.y : 0;
+            widget.size.width = Number.isFinite(widget.size.width) ? widget.size.width : 120;
+            widget.size.height = Number.isFinite(widget.size.height) ? widget.size.height : 40;
+
+            const minSize = getWidgetMinSize(widget);
+            if (widget.size.width < minSize.width) {
+                readabilityIssues += 1;
+                widget.size.width = minSize.width;
+                readabilityFixed += 1;
+            }
+            if (widget.size.height < minSize.height) {
+                readabilityIssues += 1;
+                widget.size.height = minSize.height;
+                readabilityFixed += 1;
+            }
+
+            const text = getWidgetText(widget);
+            const fontSize = Number(widget.style?.fontSize) || 14;
+            if (text) {
+                const required = estimateTextWidth(text, fontSize);
+                if (required > widget.size.width) {
+                    truncationIssues += 1;
+                    const maxAllowed = Math.max(40, canvasWidth - widget.position.x - 8);
+                    const nextWidth = Math.min(required, maxAllowed);
+                    if (nextWidth > widget.size.width) {
+                        widget.size.width = nextWidth;
+                        truncationFixed += 1;
+                    }
+                }
+            }
+
+            const fg = parseHexColor(widget.style?.textColor);
+            const bg = parseHexColor(widget.style?.backgroundColor) || parseHexColor('#FFFFFF');
+            if (fg && bg) {
+                const ratio = contrastRatio(fg, bg);
+                if (ratio < 4.5) {
+                    contrastIssues += 1;
+                    const white = parseHexColor('#FFFFFF')!;
+                    const dark = parseHexColor('#0F172A')!;
+                    const whiteRatio = contrastRatio(white, bg);
+                    const darkRatio = contrastRatio(dark, bg);
+                    widget.style.textColor = whiteRatio >= darkRatio ? '#FFFFFF' : '#0F172A';
+                    contrastFixed += 1;
+                }
+            }
+
+            const maxX = Math.max(0, canvasWidth - widget.size.width);
+            const maxY = Math.max(0, canvasHeight - widget.size.height);
+            if (widget.position.x < 0 || widget.position.y < 0 || widget.position.x > maxX || widget.position.y > maxY) {
+                boundsIssues += 1;
+                widget.position.x = Math.max(0, Math.min(widget.position.x, maxX));
+                widget.position.y = Math.max(0, Math.min(widget.position.y, maxY));
+                boundsFixed += 1;
+            }
+        }
+
+        const groups = new Map<string, any[]>();
+        for (const widget of fixed) {
+            const groupKey = widget.parentId ? `parent:${widget.parentId}` : 'root';
+            const group = groups.get(groupKey) || [];
+            group.push(widget);
+            groups.set(groupKey, group);
+        }
+
+        for (const group of groups.values()) {
+            const sorted = [...group].sort((a, b) => {
+                const dy = Number(a.position.y) - Number(b.position.y);
+                if (dy !== 0) return dy;
+                return Number(a.position.x) - Number(b.position.x);
+            });
+            for (let i = 0; i < sorted.length; i += 1) {
+                for (let j = 0; j < i; j += 1) {
+                    if (!overlaps(sorted[i], sorted[j], 4)) continue;
+                    collisionIssues += 1;
+                    sorted[i].position.y = sorted[j].position.y + sorted[j].size.height + 12;
+                    const maxY = Math.max(0, canvasHeight - sorted[i].size.height);
+                    sorted[i].position.y = Math.min(maxY, sorted[i].position.y);
+                    collisionFixed += 1;
+                }
+            }
+        }
+
+        const toCheck = (
+            id: GenerationQualityCheck['id'],
+            label: string,
+            issueCount: number,
+            fixedCount: number,
+            detailBase: string
+        ): GenerationQualityCheck => {
+            const remaining = Math.max(0, issueCount - fixedCount);
+            return {
+                id,
+                label,
+                issueCount,
+                fixedCount,
+                status: issueCount === 0 ? 'passed' : remaining === 0 ? 'fixed' : 'failed',
+                detail: issueCount === 0
+                    ? `${detailBase}: OK`
+                    : `${detailBase}: ${issueCount} probleme(s), ${fixedCount} corrige(s), ${remaining} restant(s)`,
+            };
+        };
+
+        const checks: GenerationQualityCheck[] = [
+            toCheck('bounds', 'Widgets hors canvas', boundsIssues, boundsFixed, 'Controle limites canvas'),
+            toCheck('collisions', 'Collisions majeures', collisionIssues, collisionFixed, 'Controle chevauchements'),
+            toCheck('readability', 'Lisibilite tailles', readabilityIssues, readabilityFixed, 'Controle tailles minimales'),
+            toCheck('contrast', 'Contraste texte', contrastIssues, contrastFixed, 'Controle contraste'),
+            toCheck('truncation', 'Texte tronque probable', truncationIssues, truncationFixed, 'Controle largeur texte'),
+        ];
+
+        const totalIssues = checks.reduce((sum, check) => sum + check.issueCount, 0);
+        const totalFixed = checks.reduce((sum, check) => sum + check.fixedCount, 0);
+        const remainingIssues = Math.max(0, totalIssues - totalFixed);
+        const score = Math.max(0, Math.min(100, 100 - remainingIssues * 14 - Math.max(0, totalIssues - totalFixed) * 4));
+        const notes = checks
+            .filter((check) => check.issueCount > 0)
+            .map((check) => check.detail);
+
+        return {
+            widgets: fixed,
+            checks,
+            summary: {
+                score,
+                hasBlockingIssues: remainingIssues > 0,
+                remainingIssues,
+                notes,
+            },
+            selfHealApplied: totalFixed > 0,
+        };
+    };
+
     /**
      * Robustly extracts JSON from an AI response that may contain
      * surrounding text, markdown fences, or other formatting.
@@ -256,9 +582,13 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
 
             console.log(`[AI] Parsed ${finalWidgets.length} widgets successfully (conversion: ${skipConversion ? 'skipped' : 'applied'})`);
 
+            const quality = runQualityPass(finalWidgets, parsed.canvasSettings);
             return {
-                widgets: finalWidgets,
+                widgets: quality.widgets,
                 canvasSettings: parsed.canvasSettings,
+                qualityChecks: quality.checks,
+                qualitySummary: quality.summary,
+                selfHealApplied: quality.selfHealApplied,
             };
         } catch (e: any) {
             console.error('[AI] Parse error:', e.message);
@@ -333,12 +663,19 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
         messages: any[],
         signal?: AbortSignal
     ): Promise<string> => {
-        const modelDef = ALL_MODELS.find(m => m.id === model);
+        const modelBase = model.split(':')[0];
+        const modelDef = ALL_MODELS.find(m => m.id === model) || ALL_MODELS.find(m => m.id === modelBase);
         const provider: AIProvider = modelDef?.provider ?? 'openrouter';
         const config: ProviderConfig = getProviderConfig(provider);
         const providerName = config.label;
+        const requestModel = normalizeHuggingFaceModel(provider, model);
+        const credentialLabel = provider === 'huggingface' ? "token d'acces Hugging Face" : `cle API ${providerName}`;
 
-        console.log(`[AI] Calling ${providerName} — model: ${model}`);
+        if (provider === 'huggingface' && !apiKey.trim().startsWith('hf_')) {
+            throw new Error(withErrorCode('INVALID_KEY', "Token Hugging Face invalide. Utilisez un token 'hf_...'."));
+        }
+
+        console.log(`[AI] Calling ${providerName} — model: ${requestModel}`);
 
         // Build request body based on API format
         let requestBody: string;
@@ -377,7 +714,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
             });
 
             requestBody = JSON.stringify({
-                model,
+                model: requestModel,
                 max_tokens: config.maxTokens,
                 system: systemMsg?.content || '',
                 messages: convertedMessages,
@@ -386,7 +723,7 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
         } else {
             // OpenAI-compatible format (OpenRouter, Groq, Google, OpenAI, DeepSeek)
             requestBody = JSON.stringify({
-                model,
+                model: requestModel,
                 messages,
                 max_tokens: config.maxTokens,
                 temperature: 0,
@@ -407,30 +744,39 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
         } catch (err: any) {
             if (err.name === 'AbortError') throw err;
             console.error(`[AI] Network error:`, err);
-            throw new Error(`Impossible de contacter ${providerName}. Vérifiez votre connexion.`);
+            throw new Error(withErrorCode('NETWORK', `Impossible de contacter ${providerName}. Verifiez votre connexion.`));
         }
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             console.error(`[AI] ${providerName} ${response.status}:`, JSON.stringify(errorData, null, 2));
 
-            const apiMsg = errorData.error?.message || errorData.error?.code || '';
+            const apiMsg = String(errorData.error?.message || errorData.error?.code || errorData.message || '').trim();
 
             if (response.status === 401 || response.status === 403) {
-                throw new Error(`Clé API ${providerName} invalide. Vérifiez votre clé.`);
+                throw new Error(withErrorCode('INVALID_KEY', `${credentialLabel} invalide. Verifiez votre acces.`));
+            }
+            if (response.status === 402 || shouldMarkPaidModel(apiMsg)) {
+                throw new Error(withErrorCode('PAID_MODEL', `Modele payant indisponible sur ${providerName}. Choisissez un autre modele.`));
+            }
+            if (shouldMarkQuotaExceeded(apiMsg)) {
+                throw new Error(withErrorCode('QUOTA_EXCEEDED', `Credits/tokens epuises sur ${providerName}. Choisissez un autre modele.`));
             }
             if (response.status === 429) {
-                throw new Error(`Limite de requêtes ${providerName} atteinte. Réessayez dans ~30s.`);
+                throw new Error(withErrorCode('RATE_LIMIT', `Limite de requetes ${providerName} atteinte. Nouvelle tentative automatique.`));
             }
             if (response.status === 404 || response.status === 400) {
-                throw new Error(`MODEL_ERROR:Modèle "${model}" indisponible sur ${providerName}. ${apiMsg}`);
+                throw new Error(withErrorCode('MODEL_UNAVAILABLE', `Modele "${requestModel}" indisponible sur ${providerName}. ${apiMsg}`.trim()));
+            }
+            if (response.status >= 500) {
+                throw new Error(withErrorCode('SERVER_ERROR', `Erreur serveur ${providerName} (${response.status}).`));
             }
 
-            throw new Error(apiMsg || `Erreur ${providerName} (${response.status})`);
+            throw new Error(withErrorCode('UNKNOWN', apiMsg || `Erreur ${providerName} (${response.status})`));
         }
 
         const data = await response.json();
-        const actualModel = data.model || model;
+        const actualModel = data.model || requestModel;
         console.log(`[AI] Response OK — actual model: ${actualModel}`);
 
         // Extract content based on API format
@@ -440,67 +786,36 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
 
         if (!content) {
             console.error('[AI] Empty content. Full response:', JSON.stringify(data, null, 2));
-            throw new Error(`EMPTY_CONTENT:${providerName} (${actualModel}) a renvoyé une réponse vide.`);
+            throw new Error(withErrorCode('EMPTY_CONTENT', `${providerName} (${actualModel}) a renvoye une reponse vide.`));
         }
 
         return content;
     };
 
-    /**
-     * Calls the provider with automatic retry using fallback models
-     * if the first attempt fails with a retryable error.
-     */
     const callWithRetry = async (
         apiKey: string,
         model: string,
         messages: any[],
         signal?: AbortSignal
     ): Promise<string> => {
-        const modelDef = ALL_MODELS.find(m => m.id === model);
-        const provider: AIProvider = modelDef?.provider ?? 'openrouter';
-        const fallbacks = FALLBACK_MODELS[provider].filter(m => m !== model);
-
-        // First attempt with the requested model
-        try {
-            return await callProvider(apiKey, model, messages, signal);
-        } catch (firstError: any) {
-            if (firstError.name === 'AbortError') throw firstError;
-
-            const isRetryable = firstError.message?.startsWith('EMPTY_CONTENT:')
-                || firstError.message?.startsWith('MODEL_ERROR:');
-
-            // Auth errors or non-retryable — fail immediately
-            if (!isRetryable || fallbacks.length === 0) {
-                // Clean up the prefix for display
-                const cleanMsg = firstError.message
-                    ?.replace('EMPTY_CONTENT:', '')
-                    ?.replace('MODEL_ERROR:', '') || firstError.message;
-                throw new Error(cleanMsg);
-            }
-
-            console.warn(`[AI] First attempt failed (${model}), trying fallbacks...`);
-
-            // Try each fallback model with a small delay between retries
-            for (const fallbackModel of fallbacks) {
-                try {
-                    // Wait 1.5s before retrying to avoid rate-limit cascading (especially OpenRouter 429)
-                    await new Promise(r => setTimeout(r, 1500));
-                    console.log(`[AI] Retry with fallback: ${fallbackModel}`);
-                    setRetryCount(prev => prev + 1);
-                    return await callProvider(apiKey, fallbackModel, messages, signal);
-                } catch (retryError: any) {
-                    if (retryError.name === 'AbortError') throw retryError;
-                    console.warn(`[AI] Fallback ${fallbackModel} also failed:`, retryError.message);
-                    continue;
+        let lastError: Error | null = null;
+        for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt += 1) {
+            try {
+                if (attempt > 1) setRetryCount(attempt - 1);
+                return await callProvider(apiKey, model, messages, signal);
+            } catch (attemptError: any) {
+                if (attemptError.name === 'AbortError') throw attemptError;
+                const { code, message } = splitErrorCode(attemptError.message || '');
+                lastError = new Error(withErrorCode(code, message || attemptError.message || 'Erreur IA'));
+                const isRetryable = RETRYABLE_ERROR_CODES.has(code);
+                if (!isRetryable || attempt >= MAX_RETRY_ATTEMPTS) {
+                    throw lastError;
                 }
+                const waitMs = Math.min(4000, 700 * 2 ** (attempt - 1)) + Math.floor(Math.random() * 250);
+                await new Promise((resolve) => setTimeout(resolve, waitMs));
             }
-
-            // All fallbacks failed
-            throw new Error(
-                `Échec avec ${model} et ${fallbacks.length} modèle(s) de secours. ` +
-                `Vérifiez votre clé API ou essayez plus tard.`
-            );
         }
+        throw lastError || new Error(withErrorCode('UNKNOWN', 'Erreur IA inconnue.'));
     };
 
     const generateFromPrompt = useCallback(async (
@@ -528,12 +843,12 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
 
             const result = parseAIResponse(responseText);
             if (!result) {
-                throw new Error('L\'IA a répondu mais le format JSON est invalide. Réessayez ou changez de modèle.');
+                throw new Error(withErrorCode('JSON_INVALID', "L'IA a repondu mais le format JSON est invalide."));
             }
 
             return result;
         } catch (e: any) {
-            if (e.name !== 'AbortError') setError(e.message);
+            if (e.name !== 'AbortError') setError(formatErrorForUi(e.message || ''));
             return null;
         } finally {
             setIsGenerating(false);
@@ -574,12 +889,12 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
 
             const result = parseAIResponse(responseText);
             if (!result) {
-                throw new Error('L\'IA a répondu mais le format JSON est invalide. Réessayez ou changez de modèle.');
+                throw new Error(withErrorCode('JSON_INVALID', "L'IA a repondu mais le format JSON est invalide."));
             }
 
             return result;
         } catch (e: any) {
-            if (e.name !== 'AbortError') setError(e.message);
+            if (e.name !== 'AbortError') setError(formatErrorForUi(e.message || ''));
             return null;
         } finally {
             setIsGenerating(false);
@@ -617,12 +932,12 @@ USER INSTRUCTION: ${prompt}${contextPrompt}`;
             // skipConversion=true: iterate mode sends absolute coords, gets absolute back
             const result = parseAIResponse(responseText, true);
             if (!result) {
-                throw new Error('L\'IA a répondu mais le format JSON est invalide. Réessayez ou changez de modèle.');
+                throw new Error(withErrorCode('JSON_INVALID', "L'IA a repondu mais le format JSON est invalide."));
             }
 
             return result;
         } catch (e: any) {
-            if (e.name !== 'AbortError') setError(e.message);
+            if (e.name !== 'AbortError') setError(formatErrorForUi(e.message || ''));
             return null;
         } finally {
             setIsGenerating(false);

@@ -37,7 +37,7 @@ export const ProjectDashboard: React.FC = () => {
         if (!newProjectName.trim()) return;
         try {
             await createProject(newProjectName.trim());
-            if (createModalMode === 'ai') openAIAssistantForPrompt();
+            if (createModalMode === 'ai') openAIAssistantForPrompt({ forceNewConversation: true });
             setIsCreateModalOpen(false);
             setNewProjectName('');
             setCreateModalMode('manual');

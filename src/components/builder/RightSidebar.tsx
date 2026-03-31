@@ -8,6 +8,7 @@ import { WidgetProperties } from './properties/WidgetProperties';
 import { WidgetList } from './properties/WidgetList';
 import { CanvasProperties } from './properties/CanvasProperties';
 import { AIAssistantPanel } from './AIAssistantPanel';
+import { cn } from '@/lib/utils';
 import {
   OPEN_AI_SIDEBAR_EVENT,
   consumeFocusAIPromptOnLoadFlag,
@@ -18,6 +19,7 @@ import {
 export const RightSidebar: React.FC = () => {
   const { selectedWidget } = useWidgets();
   const [activeTab, setActiveTab] = React.useState<'properties' | 'ai'>('properties');
+  const isAiTab = activeTab === 'ai';
 
   React.useEffect(() => {
     if (consumeOpenAIOnLoadFlag()) {
@@ -55,20 +57,49 @@ export const RightSidebar: React.FC = () => {
   }, [activeTab]);
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden border-l border-border bg-card">
+    <div
+      className={cn(
+        "flex h-full w-full flex-col overflow-hidden border-l",
+        isAiTab
+          ? "ai-active border-[#2b5a91] bg-[#0e2f57] text-white"
+          : "border-border bg-card"
+      )}
+    >
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'properties' | 'ai')} className="flex h-full flex-col">
-        <div className="border-b border-border bg-card px-4 pb-2 pt-4">
-          <TabsList className="grid h-10 w-full grid-cols-2 rounded-xl border border-border bg-secondary p-1 text-muted-foreground">
+        <div
+          className={cn(
+            "border-b px-4 pb-2 pt-4",
+            isAiTab ? "border-white/20 bg-[#123a67]" : "border-border bg-card"
+          )}
+        >
+          <TabsList
+            className={cn(
+              "grid h-10 w-full grid-cols-2 rounded-xl border p-1",
+              isAiTab
+                ? "border-white/25 bg-[#0f325c] text-white/80"
+                : "border-border bg-secondary text-muted-foreground"
+            )}
+          >
             <TabsTrigger
               value="properties"
-              className="gap-2 rounded-lg text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              className={cn(
+                "gap-2 rounded-lg text-xs",
+                isAiTab
+                  ? "data-[state=active]:bg-white data-[state=active]:text-[#10345e] data-[state=inactive]:text-white/75 data-[state=inactive]:hover:bg-white/10 data-[state=inactive]:hover:text-white"
+                  : "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              )}
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
               Propriétés
             </TabsTrigger>
             <TabsTrigger
               value="ai"
-              className="gap-2 rounded-lg text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              className={cn(
+                "gap-2 rounded-lg text-xs",
+                isAiTab
+                  ? "data-[state=active]:bg-white data-[state=active]:text-[#10345e] data-[state=inactive]:text-white/75 data-[state=inactive]:hover:bg-white/10 data-[state=inactive]:hover:text-white"
+                  : "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              )}
             >
               <Sparkles className="h-3.5 w-3.5" />
               Assistant IA

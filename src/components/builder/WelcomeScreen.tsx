@@ -85,7 +85,7 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
     if (!newProjectName.trim()) return;
     try {
       await createProject(newProjectName.trim());
-      if (createModalMode === 'ai') openAIAssistantForPrompt();
+      if (createModalMode === 'ai') openAIAssistantForPrompt({ forceNewConversation: true });
       setIsCreateModalOpen(false);
       setNewProjectName('');
       setCreateModalMode('manual');
@@ -349,10 +349,13 @@ export const WelcomeScreen: React.FC<{ onClose?: () => void }> = ({ onClose }) =
               size="lg"
             >
               <Upload className="mr-2 h-4 w-4" />
-              Importer un projet
+              Importer projet Notorious.PY
             </Button>
             </div>
           </div>
+          <p className="mt-2 text-center text-xs text-muted-foreground">
+            Importez un fichier .zip d&apos;un projet Notorious.PY existant.
+          </p>
         </div>
 
         {/* ESPACE DE TRAVAIL section — Image 3 list design */}

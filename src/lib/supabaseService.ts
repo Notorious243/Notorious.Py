@@ -656,6 +656,7 @@ export async function cloneGalleryProject(
 export interface SupabaseConversation {
   id: string;
   user_id: string;
+  project_id: string;
   title: string;
   first_message: string | null;
   messages: unknown[];
@@ -664,18 +665,19 @@ export interface SupabaseConversation {
   updated_at: string;
 }
 
-export async function fetchConversations(): Promise<SupabaseConversation[]> {
+export async function fetchConversations(projectId: string): Promise<SupabaseConversation[]> {
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
+  if (!user || !projectId) return [];
 
   const { data, error } = await supabase
     .from('ai_conversations')
     .select('*')
     .eq('user_id', user.id)
+    .eq('project_id', projectId)
     .order('updated_at', { ascending: false });
 
   if (error) {
-    console.warn('[AI] ai_conversations table not found; persistence is disabled until migration is applied:', error.message);
+    console.warn('[AI] ai_conversations table/columns not ready (project-scoped conversations disabled until migration is applied):', error.message);
     return [];
   }
   return data ?? [];
@@ -683,6 +685,7 @@ export async function fetchConversations(): Promise<SupabaseConversation[]> {
 
 export async function upsertConversation(conversation: {
   id: string;
+  project_id: string;
   title: string;
   first_message?: string | null;
   messages: unknown[];
@@ -695,6 +698,7 @@ export async function upsertConversation(conversation: {
     .upsert({
       id: conversation.id,
       user_id: user.id,
+      project_id: conversation.project_id,
       title: conversation.title,
       first_message: conversation.first_message ?? null,
       messages: conversation.messages,

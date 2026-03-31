@@ -12,6 +12,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { FileSystemProvider } from '@/hooks/useFileSystem';
 import { GridAnimation } from '@/components/ui/grid-animation';
 import { ProjectProvider, useProjects } from '@/contexts/ProjectContext';
+import { OPEN_AI_WORKSPACE_PANELS_EVENT } from '@/lib/aiSidebar';
 const WelcomeScreen = lazy(() => import('@/components/builder/WelcomeScreen').then(m => ({ default: m.WelcomeScreen })));
 
 // Lazy load des composants lourds non critiques
@@ -57,6 +58,17 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
     window.addEventListener('right-sidebar-tab-change', handleTabChange);
     return () => window.removeEventListener('right-sidebar-tab-change', handleTabChange);
   }, []);
+
+  useEffect(() => {
+    const handleOpenPanelsForAI = () => {
+      if (isNoProject) return;
+      setIsLeftPanelOpen(true);
+      setIsRightPanelOpen(true);
+    };
+
+    window.addEventListener(OPEN_AI_WORKSPACE_PANELS_EVENT, handleOpenPanelsForAI);
+    return () => window.removeEventListener(OPEN_AI_WORKSPACE_PANELS_EVENT, handleOpenPanelsForAI);
+  }, [isNoProject]);
 
   // Ne lancer le tour qu'après création/ouverture d'un projet
   const shouldStartOnboarding = isFirstTime && !isNoProject;
@@ -299,15 +311,15 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
           }}
         >
           <RightSidebar />
-          {(!hasFiles || isNoProject) && (
+          {isNoProject && (
             <div
-              className={`absolute inset-0 z-30 flex flex-col items-center justify-center bg-[#F7F9FC]/90 ${isNoProject ? 'cursor-pointer transition-colors hover:bg-[#F7F9FC]' : ''}`}
-              onClick={isNoProject ? () => setShowWelcomeOverlay(true) : undefined}
+              className="absolute inset-0 z-30 flex cursor-pointer flex-col items-center justify-center bg-[#F7F9FC]/90 transition-colors hover:bg-[#F7F9FC]"
+              onClick={() => setShowWelcomeOverlay(true)}
             >
               <div className="mb-3 flex size-16 items-center justify-center rounded-2xl bg-slate-100 shadow-inner">
                 <Lock className="w-8 h-8 text-slate-400" />
               </div>
-              <p className="text-xs font-medium text-slate-500 text-center px-4">{isNoProject ? 'Créez un projet pour débloquer' : 'Créez un fichier .py'}</p>
+              <p className="text-xs font-medium text-slate-500 text-center px-4">Créez un projet pour débloquer</p>
             </div>
           )}
         </div>

@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from "motion/react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { Message as MessageType } from "./types";
+import { Message as MessageType, type GenerationStage } from "./types";
 import { ChainOfThought, ChainOfThoughtHeader, ChainOfThoughtContent, ChainOfThoughtStep } from "./ai-elements/chain-of-thought";
 import { Task, TaskTrigger, TaskContent, TaskItem } from "./ai-elements/task";
 import { Conversation, ConversationContent } from "./ai-elements/conversation";
@@ -30,7 +30,6 @@ import {
   Bot,
   RotateCcw,
   CopyIcon,
-  ArrowDown,
   RefreshCcwIcon, 
   ThumbsUpIcon, 
   ThumbsDownIcon,
@@ -44,11 +43,41 @@ import { useState, Fragment, useRef, useEffect } from "react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 
+const STAGE_ORDER: GenerationStage[] = ['queued', 'analyzing', 'composing', 'validating', 'applying', 'completed'];
+const STAGE_LABELS: Record<GenerationStage, string> = {
+  queued: 'En file',
+  analyzing: 'Analyse',
+  composing: 'Composition',
+  validating: 'Validation',
+  applying: 'Application',
+  completed: 'Termine',
+  failed: 'Echec',
+};
+
+const formatDuration = (durationMs?: number) => {
+  if (!durationMs || durationMs <= 0) return '0s';
+  const totalSeconds = Math.floor(durationMs / 1000);
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}m ${seconds}s`;
+};
+
+const getStageProgress = (stage?: GenerationStage) => {
+  if (!stage) return 0;
+  if (stage === 'failed') return 100;
+  const index = STAGE_ORDER.indexOf(stage);
+  if (index < 0) return 0;
+  return Math.round((index / (STAGE_ORDER.length - 1)) * 100);
+};
+
 interface ChatAreaProps {
   messages: MessageType[];
   isTyping: boolean;
   onRestore?: (id: string) => void;
   onSendMessage?: (content: string) => void;
+  onRegenerateAssistantMessage?: (assistantMessageId: string) => void;
+  isRegenerateDisabled?: boolean;
 }
 
 const MarkdownContent = ({ content }: { content: string }) => {
@@ -112,9 +141,16 @@ const MarkdownContent = ({ content }: { content: string }) => {
   );
 };
 
-export function ChatArea({ messages, isTyping, onRestore, onSendMessage }: ChatAreaProps) {
+export function ChatArea({
+  messages,
+  isTyping,
+  onRestore,
+  onSendMessage,
+  onRegenerateAssistantMessage,
+  isRegenerateDisabled = false,
+}: ChatAreaProps) {
   const [confirmingRestoreId, setConfirmingRestoreId] = useState<string | null>(null);
-  const [showScrollButton, setShowScrollButton] = useState(false);
+  const [clockTick, setClockTick] = useState(() => Date.now());
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
@@ -136,17 +172,25 @@ export function ChatArea({ messages, isTyping, onRestore, onSendMessage }: ChatA
     scrollToBottom("auto");
   }, [messages.length]);
 
-  const handleScroll = () => {
-    if (scrollRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
-      setShowScrollButton(!isNearBottom);
+  useEffect(() => {
+    const hasRunningGeneration = messages.some((message) => message.generation?.status === 'running');
+    if (!hasRunningGeneration) return;
+    const timer = window.setInterval(() => setClockTick(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [messages]);
+
+  const handleCopy = async (content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      toast.success("Copié dans le presse-papier");
+    } catch {
+      toast.error("Impossible de copier le message");
     }
   };
 
-  const handleCopy = (content: string) => {
-    navigator.clipboard.writeText(content);
-    toast.success("Copié dans le presse-papier");
+  const handleRegenerate = (messageId: string) => {
+    if (isRegenerateDisabled) return;
+    onRegenerateAssistantMessage?.(messageId);
   };
 
   const handleRestoreClick = (id: string) => {
@@ -161,7 +205,7 @@ export function ChatArea({ messages, isTyping, onRestore, onSendMessage }: ChatA
   };
 
   const ActionTooltip = ({ text }: { text: string }) => (
-    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 rounded bg-popover border border-border text-[10px] text-popover-foreground whitespace-nowrap opacity-0 group-hover/action:opacity-100 pointer-events-none transition-opacity z-50 shadow-lg">
+    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 rounded bg-popover border border-border text-[11px] text-popover-foreground whitespace-nowrap opacity-0 group-hover/action:opacity-100 pointer-events-none transition-opacity z-50 shadow-lg">
       {text}
       <div className="absolute top-full left-1/2 -translate-x-1/2 -translate-y-px w-1.5 h-1.5 bg-popover border-r border-b border-border rotate-45" />
     </div>
@@ -170,39 +214,38 @@ export function ChatArea({ messages, isTyping, onRestore, onSendMessage }: ChatA
   return (
     <div 
       ref={scrollRef}
-      onScroll={handleScroll}
-      className="relative flex-1 overflow-x-hidden overflow-y-auto p-2.5 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
+      className="relative flex-1 overflow-x-hidden overflow-y-auto px-2 py-2.5 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
     >
       <AnimatePresence>
         {confirmingRestoreId && (
-          <div className="absolute inset-x-2.5 top-2.5 z-[100]">
+          <div className="absolute inset-x-3.5 top-3.5 z-[100]">
             <motion.div
               initial={{ opacity: 0, y: -20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -20, scale: 0.95 }}
-              className="rounded-lg border border-border/30 bg-card/95 p-2.5 shadow-lg backdrop-blur-md"
+              className="rounded-lg border border-border/30 bg-card/95 p-3 shadow-lg backdrop-blur-md"
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                    <RotateCcw className="w-3 h-3" />
+                  <div className="w-7 h-7 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <RotateCcw className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-[10px] font-bold text-foreground uppercase tracking-tight">Restaurer ?</h3>
-                    <p className="text-[9px] text-muted-foreground">Revenir a ce point.</p>
+                    <h3 className="text-xs font-bold text-foreground uppercase tracking-tight">Restaurer ?</h3>
+                    <p className="text-[11px] text-muted-foreground">Revenir a ce point.</p>
                   </div>
                 </div>
                 
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => setConfirmingRestoreId(null)}
-                    className="px-2.5 py-1 rounded-md bg-secondary hover:bg-accent text-muted-foreground text-[9px] font-bold uppercase transition-colors"
+                    className="px-2.5 py-1.5 rounded-md bg-secondary hover:bg-accent text-muted-foreground text-[11px] font-bold uppercase transition-colors"
                   >
                     Annuler
                   </button>
                   <button
                     onClick={confirmRestore}
-                    className="px-2.5 py-1 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground text-[9px] font-bold uppercase transition-colors shadow-sm"
+                    className="px-2.5 py-1.5 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-bold uppercase transition-colors shadow-sm"
                   >
                     Confirmer
                   </button>
@@ -213,27 +256,27 @@ export function ChatArea({ messages, isTyping, onRestore, onSendMessage }: ChatA
         )}
       </AnimatePresence>
 
-      <Conversation className="max-w-none">
+      <Conversation className="mx-auto w-full max-w-[900px]">
         <ConversationContent>
           {messages.length === 0 && (
             <div className="flex min-h-[320px] flex-col items-center justify-center p-4">
               <div className="relative mb-4">
                 <div className="absolute inset-0 bg-primary/10 blur-2xl rounded-full" />
-                <div className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-border/30 bg-muted/40 shadow-sm">
-                  <Bot className="h-5 w-5 text-primary" />
+                <div className="relative flex h-12 w-12 items-center justify-center rounded-xl border border-border/30 bg-muted/40 shadow-sm">
+                  <Bot className="h-6 w-6 text-primary" />
                 </div>
               </div>
 
               <div className="mb-4 space-y-1 text-center">
-                <Shimmer className="text-base font-bold tracking-tight text-foreground" duration={2} spread={2}>
+                <Shimmer className="text-lg font-bold tracking-tight text-foreground" duration={2} spread={2}>
                   Comment puis-je vous aider ?
                 </Shimmer>
-                <p className="mx-auto max-w-[200px] text-[10px] text-muted-foreground leading-relaxed">
+                <p className="mx-auto max-w-[220px] text-xs text-muted-foreground leading-relaxed">
                   Dayanna, assistante IA pour Notorious.PY
                 </p>
               </div>
 
-              <div className="grid w-full max-w-[260px] grid-cols-1 gap-1.5">
+              <div className="grid w-full max-w-[280px] grid-cols-1 gap-2">
                 {[
                   { icon: Code, label: "G\u00e9n\u00e9rer une interface", prompt: "Genere-moi une page de login moderne avec un formulaire complet." },
                   { icon: MessageSquare, label: "Modifier le design", prompt: "Change les couleurs du canvas actuel pour un theme sombre professionnel." },
@@ -246,12 +289,12 @@ export function ChatArea({ messages, isTyping, onRestore, onSendMessage }: ChatA
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.08 * i }}
                     onClick={() => onSendMessage?.(suggestion.prompt)}
-                    className="group flex items-center gap-2 rounded-lg border border-border/30 bg-muted/20 p-2 text-left transition-all hover:border-primary/30 hover:bg-primary/5"
+                    className="group flex items-center gap-2 rounded-lg border border-border/30 bg-muted/20 p-2.5 text-left transition-all hover:border-primary/30 hover:bg-primary/5"
                   >
-                    <div className="flex h-5 w-5 items-center justify-center rounded-md bg-muted/40 text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
-                      <suggestion.icon className="h-3 w-3" />
+                    <div className="flex h-6 w-6 items-center justify-center rounded-md bg-muted/40 text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
+                      <suggestion.icon className="h-3.5 w-3.5" />
                     </div>
-                    <span className="text-[10px] font-medium text-muted-foreground transition-colors group-hover:text-foreground">
+                    <span className="text-xs font-medium text-muted-foreground transition-colors group-hover:text-foreground">
                       {suggestion.label}
                     </span>
                   </motion.button>
@@ -266,12 +309,12 @@ export function ChatArea({ messages, isTyping, onRestore, onSendMessage }: ChatA
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="w-full group/msg"
+                  className="group/msg mx-auto flex w-full max-w-[900px] justify-center"
                 >
-                  <Message from={message.role} className="mb-3">
+                  <Message from={message.role} className="mb-3.5 w-full">
                     <div className={cn(
                       "relative flex w-full gap-2.5",
-                      message.role === 'user' ? "flex-row-reverse" : "flex-row"
+                      "flex-row"
                     )}>
                       {message.role === 'assistant' && (
                         <div className="w-6 h-6 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
@@ -280,18 +323,18 @@ export function ChatArea({ messages, isTyping, onRestore, onSendMessage }: ChatA
                       )}
                       
                       <div className={cn(
-                        "flex-1 min-w-0 space-y-2",
-                        message.role === 'user' ? "text-right" : "text-left"
+                        "flex-1 min-w-0 space-y-2.5",
+                        "text-left"
                       )}>
                         <div className={cn(
                           "flex items-center mb-1",
-                          message.role === 'user' ? "justify-end gap-3" : "justify-start gap-2"
+                          "justify-start gap-2"
                         )}>
                           <div className="flex items-center gap-2">
-                            <div className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground">
+                            <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
                               {message.role === 'user' ? "Vous" : "Dayanna"}
                             </div>
-                            <span className="text-[9px] text-muted-foreground/60 font-mono">
+                            <span className="text-[10px] text-muted-foreground/70 font-mono">
                               {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </div>
@@ -300,7 +343,7 @@ export function ChatArea({ messages, isTyping, onRestore, onSendMessage }: ChatA
                         {message.attachments && message.attachments.length > 0 && (
                           <Attachments className={cn(
                             "mb-2",
-                            message.role === 'user' ? "justify-end" : "justify-start"
+                            "justify-start"
                           )}>
                             {message.attachments.map((att) => (
                               <Attachment key={att.id} data={att}>
@@ -310,43 +353,98 @@ export function ChatArea({ messages, isTyping, onRestore, onSendMessage }: ChatA
                           </Attachments>
                         )}
 
+                        {message.role === 'assistant' && message.generation?.stage && (
+                          <div className="w-full rounded-xl border border-border/60 bg-card/50 p-2.5">
+                            <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                              <span>Processus IA</span>
+                              <span className={cn(
+                                "rounded-md px-1.5 py-0.5",
+                                message.generation.stage === 'failed'
+                                  ? "bg-destructive/15 text-destructive"
+                                  : "bg-primary/15 text-primary"
+                              )}>
+                                {STAGE_LABELS[message.generation.stage]}
+                              </span>
+                            </div>
+                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                              <div
+                                className={cn(
+                                  "h-full rounded-full transition-all duration-300",
+                                  message.generation.stage === 'failed' ? "bg-destructive" : "bg-primary"
+                                )}
+                                style={{ width: `${getStageProgress(message.generation.stage)}%` }}
+                              />
+                            </div>
+                            <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+                              <span>
+                                Duree: {formatDuration(
+                                  message.generation.durationMs ??
+                                  (message.generation.startedAt ? clockTick - message.generation.startedAt : 0)
+                                )}
+                              </span>
+                              {message.generation.errorMessage ? (
+                                <span className="max-w-[65%] truncate text-destructive">{message.generation.errorMessage}</span>
+                              ) : null}
+                            </div>
+                            {message.generation.qualitySummary ? (
+                              <div className="mt-1 text-[10px] text-muted-foreground">
+                                Qualite auto: {message.generation.qualitySummary.score}% ·
+                                {` ${message.generation.qualitySummary.remainingIssues}`} issue(s) restante(s)
+                              </div>
+                            ) : null}
+                          </div>
+                        )}
+
                         {message.tasks && message.tasks.length > 0 && (
-                          <Task 
-                            className="w-full" 
-                            defaultExpanded={message.tasks.some(t => t.status === 'running')}
-                            isStreaming={message.tasks.some(t => t.status === 'running')}
-                          >
-                            <TaskTrigger title="AI Actions" />
-                            <TaskContent>
-                              {message.tasks.map((task) => (
-                                <TaskItem key={task.id} status={task.status}>{task.label}</TaskItem>
-                              ))}
-                            </TaskContent>
-                          </Task>
+                          <div className="w-full rounded-xl border border-border/60 bg-card/45 px-2.5 py-2">
+                            <Task 
+                              className="my-0 w-full" 
+                              defaultExpanded={message.tasks.some(t => t.status === 'running')}
+                              isStreaming={message.tasks.some(t => t.status === 'running')}
+                            >
+                              <TaskTrigger title="AI Actions" />
+                              <TaskContent>
+                                {message.tasks.map((task) => (
+                                  <TaskItem key={task.id} status={task.status}>
+                                    <div className="flex flex-col">
+                                      <span>{task.label}</span>
+                                      {task.detail ? (
+                                        <span className="text-[10px] text-muted-foreground/90">{task.detail}</span>
+                                      ) : null}
+                                    </div>
+                                  </TaskItem>
+                                ))}
+                              </TaskContent>
+                            </Task>
+                          </div>
                         )}
 
                         {message.reasoning && (
-                          <ChainOfThought 
-                            isStreaming={message.isReasoningStreaming} 
-                            defaultExpanded={message.isReasoningStreaming}
-                            key={`${message.id}-thought-${message.isReasoningStreaming}`}
-                          >
-                            <ChainOfThoughtHeader />
-                            <ChainOfThoughtContent>
-                              <ChainOfThoughtStep status={message.isReasoningStreaming ? "in-progress" : "completed"}>
-                                {message.reasoning}
-                              </ChainOfThoughtStep>
-                            </ChainOfThoughtContent>
-                          </ChainOfThought>
+                          <div className="w-full rounded-xl border border-border/60 bg-card/45 px-2.5 py-2">
+                            <ChainOfThought 
+                              isStreaming={message.isReasoningStreaming} 
+                              defaultExpanded={message.isReasoningStreaming}
+                              key={`${message.id}-thought-${message.isReasoningStreaming}`}
+                            >
+                              <ChainOfThoughtHeader />
+                              <ChainOfThoughtContent>
+                                <ChainOfThoughtStep status={message.isReasoningStreaming ? "in-progress" : "completed"}>
+                                  {message.reasoning}
+                                </ChainOfThoughtStep>
+                              </ChainOfThoughtContent>
+                            </ChainOfThought>
+                          </div>
                         )}
                         
                         <div className={cn(
                           "flex gap-2 w-full",
-                          message.role === 'user' ? "flex-row items-start justify-end" : "flex-col items-start"
+                          "flex-col items-start"
                         )}>
                           <MessageContent className={cn(
-                            "p-0 bg-transparent",
-                            message.role === 'user' ? "text-foreground text-right" : "text-foreground/90"
+                            "w-full rounded-xl border px-3 py-2.5 text-sm leading-relaxed",
+                            message.role === 'assistant'
+                              ? "border-border/70 bg-card/80 text-foreground"
+                              : "border-border/50 bg-muted/30 text-foreground/95"
                           )}>
                             {message.versions && message.versions.length > 1 ? (
                               <MessageBranch>
@@ -397,7 +495,12 @@ export function ChatArea({ messages, isTyping, onRestore, onSendMessage }: ChatA
                                     <ActionTooltip text="Copier le message" />
                                   </div>
                                   <div className="relative group/action">
-                                    <MessageAction>
+                                    <MessageAction
+                                      onClick={() => handleRegenerate(message.id)}
+                                      className={cn(
+                                        isRegenerateDisabled && "cursor-not-allowed opacity-40 hover:bg-transparent"
+                                      )}
+                                    >
                                       <RefreshCcwIcon className="w-3.5 h-3.5" />
                                     </MessageAction>
                                     <ActionTooltip text="Régénérer la réponse" />
@@ -431,47 +534,32 @@ export function ChatArea({ messages, isTyping, onRestore, onSendMessage }: ChatA
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex gap-2"
+              className="mx-auto flex w-full max-w-[900px] gap-2"
             >
-              <div className="w-6 h-6 rounded-md bg-primary/10 text-primary flex items-center justify-center">
-                <Bot className="w-3 h-3" />
+              <div className="w-7 h-7 rounded-md bg-primary/10 text-primary flex items-center justify-center">
+                <Bot className="w-4 h-4" />
               </div>
               <div className="flex items-center gap-1">
                 <motion.div
                   animate={{ scale: [1, 1.2, 1] }}
                   transition={{ repeat: Infinity, duration: 1 }}
-                  className="w-1 h-1 bg-primary rounded-full"
+                  className="w-1.5 h-1.5 bg-primary rounded-full"
                 />
                 <motion.div
                   animate={{ scale: [1, 1.2, 1] }}
                   transition={{ repeat: Infinity, duration: 1, delay: 0.2 }}
-                  className="w-1 h-1 bg-primary rounded-full"
+                  className="w-1.5 h-1.5 bg-primary rounded-full"
                 />
                 <motion.div
                   animate={{ scale: [1, 1.2, 1] }}
                   transition={{ repeat: Infinity, duration: 1, delay: 0.4 }}
-                  className="w-1 h-1 bg-primary rounded-full"
+                  className="w-1.5 h-1.5 bg-primary rounded-full"
                 />
               </div>
             </motion.div>
           )}
         </ConversationContent>
       </Conversation>
-
-      {/* Jump to Bottom Button */}
-      <AnimatePresence>
-        {showScrollButton && (
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            onClick={() => scrollToBottom()}
-            className="absolute bottom-3 right-3 p-1.5 rounded-lg bg-card text-muted-foreground shadow-md border border-border/30 hover:bg-accent hover:text-foreground transition-all z-50 group"
-          >
-            <ArrowDown className="w-3.5 h-3.5 group-hover:translate-y-0.5 transition-transform" />
-          </motion.button>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

@@ -44,6 +44,7 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({
     const [newLabel, setNewLabel] = useState('');
     const [showCreateForm, setShowCreateForm] = useState(false);
     const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+    const [restoreTarget, setRestoreTarget] = useState<VersionSummary | null>(null);
     const [filterMode, setFilterMode] = useState<'all' | 'file'>('all');
 
     const fetchVersions = useCallback(async () => {
@@ -85,20 +86,22 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({
     };
 
     const handleRestore = async (versionId: string) => {
+        const loadingToastId = toast.loading('Restauration de la version...');
         setRestoringId(versionId);
         try {
             const version = await getVersion(versionId);
             if (!version) {
-                toast.error('Version introuvable');
+                toast.error('Version introuvable', { id: loadingToastId });
                 return;
             }
             onRestore(version.widgets, version.canvas_settings);
-            toast.success('Version restaurée');
+            toast.success('Version restaurée avec succès', { id: loadingToastId });
             onOpenChange(false);
         } catch (e: any) {
-            toast.error(e.message || 'Erreur lors de la restauration');
+            toast.error(e.message || 'Erreur lors de la restauration', { id: loadingToastId });
         } finally {
             setRestoringId(null);
+            setRestoreTarget(null);
         }
     };
 
@@ -135,6 +138,14 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({
         const days = Math.floor(hours / 24);
         if (days < 7) return `Il y a ${days}j`;
         return formatDate(dateStr);
+    };
+
+    const buildRestoreDescription = (version: VersionSummary) => {
+        const base = `Vous allez restaurer "${version.label || 'Sans nom'}" (${formatDate(version.created_at)}) avec ${version.widget_count} widget${version.widget_count !== 1 ? 's' : ''}.`;
+        if (version.file_name) {
+            return `${base} Fichier associé: ${version.file_name}.`;
+        }
+        return base;
     };
 
     return (
@@ -175,42 +186,45 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({
                                 </button>
                             </div>
                         )}
-                        {/* Create version */}
-                        {!showCreateForm ? (
-                            <Button
-                                variant="outline"
-                                onClick={() => setShowCreateForm(true)}
-                                className="w-full border-dashed"
-                            >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Sauvegarder une version
-                            </Button>
-                        ) : (
-                            <div className="flex gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                                <Input
-                                    placeholder="Nom de la version (optionnel)"
-                                    value={newLabel}
-                                    onChange={(e) => setNewLabel(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleCreateVersion()}
-                                    autoFocus
-                                    className="flex-1"
-                                />
-                                <Button onClick={handleCreateVersion} disabled={saving} size="sm">
-                                    {saving ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <Save className="h-4 w-4" />
-                                    )}
-                                </Button>
+                        {/* Create version - stable container to avoid visual jump */}
+                        <div className="rounded-lg border border-border/60 bg-muted/20 p-2 min-h-[52px] transition-all duration-200">
+                            {!showCreateForm ? (
                                 <Button
                                     variant="ghost"
-                                    size="sm"
-                                    onClick={() => setShowCreateForm(false)}
+                                    onClick={() => setShowCreateForm(true)}
+                                    className="h-9 w-full justify-center border border-dashed border-border/70 bg-background/90"
                                 >
-                                    ✕
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Sauvegarder une version
                                 </Button>
-                            </div>
-                        )}
+                            ) : (
+                                <div className="flex gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                    <Input
+                                        placeholder="Nom de la version (optionnel)"
+                                        value={newLabel}
+                                        onChange={(e) => setNewLabel(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleCreateVersion()}
+                                        autoFocus
+                                        className="h-9 flex-1"
+                                    />
+                                    <Button onClick={handleCreateVersion} disabled={saving} size="sm" className="h-9 px-3">
+                                        {saving ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <Save className="h-4 w-4" />
+                                        )}
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setShowCreateForm(false)}
+                                        className="h-9 px-3"
+                                    >
+                                        Annuler
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
 
                         {/* Version list */}
                         <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
@@ -227,15 +241,26 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({
                                     </p>
                                 </div>
                             ) : (
-                                versions.map((version) => (
+                                versions.map((version, index) => (
                                     <div
                                         key={version.id}
-                                        className="group flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+                                        className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                                            index === 0
+                                                ? 'border-blue-200 bg-blue-50/30 dark:border-blue-900/50 dark:bg-blue-950/10'
+                                                : 'bg-card hover:bg-muted/50'
+                                        }`}
                                     >
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium truncate">
-                                                {version.label || 'Sans nom'}
-                                            </p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-sm font-semibold truncate text-foreground">
+                                                    {version.label || 'Sans nom'}
+                                                </p>
+                                                {index === 0 && (
+                                                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                                                        Dernière
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div className="flex items-center gap-3 mt-1 flex-wrap">
                                                 <span className="text-xs text-muted-foreground flex items-center gap-1">
                                                     <Clock className="h-3 w-3" />
@@ -253,14 +278,14 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="flex items-center gap-1">
                                             <Button
-                                                variant="ghost"
+                                                variant="outline"
                                                 size="sm"
-                                                onClick={() => handleRestore(version.id)}
+                                                onClick={() => setRestoreTarget(version)}
                                                 disabled={restoringId === version.id}
                                                 title="Restaurer cette version"
-                                                className="h-8 px-2 text-xs hover:text-blue-500"
+                                                className="h-8 px-2 text-xs border-blue-200/70 text-blue-700 hover:bg-blue-50 hover:text-blue-800 dark:border-blue-900/60 dark:text-blue-300 dark:hover:bg-blue-950/20"
                                             >
                                                 {restoringId === version.id ? (
                                                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -274,7 +299,7 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({
                                                 size="icon"
                                                 onClick={() => setDeleteTargetId(version.id)}
                                                 title="Supprimer"
-                                                className="h-8 w-8 hover:text-red-500"
+                                                className="h-8 w-8 text-muted-foreground/70 hover:text-red-500"
                                             >
                                                 <Trash2 className="h-3.5 w-3.5" />
                                             </Button>
@@ -301,6 +326,20 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({
                 confirmLabel="Supprimer"
                 variant="danger"
                 onConfirm={handleDelete}
+            />
+            <ConfirmDialog
+                open={restoreTarget !== null}
+                onOpenChange={(open) => { if (!open) setRestoreTarget(null); }}
+                title="Restaurer cette version ?"
+                description={restoreTarget ? buildRestoreDescription(restoreTarget) : ''}
+                confirmLabel="Restaurer"
+                cancelLabel="Annuler"
+                variant="default"
+                onConfirm={() => {
+                    if (restoreTarget) {
+                        handleRestore(restoreTarget.id);
+                    }
+                }}
             />
         </>
     );

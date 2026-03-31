@@ -33,7 +33,7 @@ export function MessageContent({ children, className }: { children: React.ReactN
 
 export function MessageResponse({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn("text-sm leading-relaxed text-zinc-200", className)}>
+    <div className={cn("text-sm leading-relaxed text-foreground/90", className)}>
       {children}
     </div>
   );
@@ -65,7 +65,7 @@ export function MessageAction({
       onClick={onClick}
       title={tooltip || label}
       className={cn(
-        "p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors",
+        "p-1.5 rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
         className
       )}
     >
@@ -157,7 +157,7 @@ export function MessageBranchPrevious() {
     <button
       onClick={() => context.setBranch(Math.max(0, context.currentBranch - 1))}
       disabled={context.currentBranch === 0}
-      className="p-1 rounded hover:bg-zinc-800 text-zinc-500 disabled:opacity-30 disabled:hover:bg-transparent"
+      className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
     >
       <ChevronLeft className="w-3.5 h-3.5" />
     </button>
@@ -172,7 +172,7 @@ export function MessageBranchNext() {
     <button
       onClick={() => context.setBranch(Math.min(context.totalBranches - 1, context.currentBranch + 1))}
       disabled={context.currentBranch === context.totalBranches - 1}
-      className="p-1 rounded hover:bg-zinc-800 text-zinc-500 disabled:opacity-30 disabled:hover:bg-transparent"
+      className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
     >
       <ChevronRight className="w-3.5 h-3.5" />
     </button>
@@ -184,7 +184,7 @@ export function MessageBranchPage() {
   if (!context) return null;
 
   return (
-    <span className="text-[10px] font-mono text-zinc-500 px-1">
+    <span className="px-1 text-[10px] font-mono text-muted-foreground">
       {context.currentBranch + 1} / {context.totalBranches}
     </span>
   );

@@ -74,6 +74,40 @@
     --input: 220 10% 20%;
     --ring: 213 73% 22%;
   }
+
+  .dayanna-theme-dark {
+    --background: 214 57% 16%;
+    --foreground: 214 36% 94%;
+
+    --card: 214 50% 18%;
+    --card-foreground: 214 36% 94%;
+
+    --popover: 214 48% 17%;
+    --popover-foreground: 214 36% 94%;
+
+    --primary: 213 70% 46%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 214 41% 22%;
+    --secondary-foreground: 214 36% 94%;
+
+    --muted: 214 37% 20%;
+    --muted-foreground: 215 14% 68%;
+
+    --accent: 214 39% 24%;
+    --accent-foreground: 214 36% 94%;
+
+    --destructive: 0 72% 54%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 220 16% 26%;
+    --input: 220 16% 26%;
+    --ring: 213 70% 46%;
+  }
+
+  .ai-active {
+    --border: 214 44% 32%;
+  }
 }
 
 @layer base {
@@ -103,6 +137,31 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--secondary-foreground) / 0.5);
+}
+
+/* Keyboard shortcuts modal dedicated scrollbar */
+.keyboard-shortcuts-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(63, 95, 134, 0.55) rgba(203, 219, 240, 0.4);
+}
+
+.keyboard-shortcuts-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+
+.keyboard-shortcuts-scroll::-webkit-scrollbar-track {
+  background: rgba(203, 219, 240, 0.4);
+  border-radius: 9999px;
+}
+
+.keyboard-shortcuts-scroll::-webkit-scrollbar-thumb {
+  background: rgba(63, 95, 134, 0.55);
+  border-radius: 9999px;
+  border: 2px solid rgba(203, 219, 240, 0.4);
+}
+
+.keyboard-shortcuts-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(31, 79, 143, 0.75);
 }
 
 /* ============================================
@@ -311,6 +370,20 @@
 }
 .light .ctk-scrollable-content::-webkit-scrollbar-thumb:hover {
   background: #A5A5A5;
+}
+
+.dayanna-theme-dark .prose-ai {
+  color: hsl(var(--foreground) / 0.92);
+}
+
+.dayanna-theme-dark .prose-ai :where(p, li, h1, h2, h3, h4, h5, h6, strong, em, code) {
+  color: inherit;
+}
+
+.dayanna-theme-dark .prose-ai a {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 /* Responsive adjustments */

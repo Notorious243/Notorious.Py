@@ -13,7 +13,8 @@ import {
   Trash2,
   Keyboard,
   MousePointer2,
-  Zap
+  Zap,
+  Sparkles
 } from 'lucide-react';
 
 interface KeyboardShortcutsDialogProps {
@@ -22,14 +23,14 @@ interface KeyboardShortcutsDialogProps {
 }
 
 export const KeyboardShortcutsDialog: React.FC<KeyboardShortcutsDialogProps> = ({ open, onOpenChange }) => {
-  const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+  const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().includes('MAC');
   const modKey = isMac ? '⌘' : 'Ctrl';
-
 
   const shortcuts = [
     {
       category: 'Essentiels',
-      icon: <Zap className="h-4 w-4 text-amber-500" />,
+      tone: 'amber',
+      icon: <Zap className="h-4 w-4" />,
       items: [
         { keys: [modKey, 'Z'], description: 'Annuler' },
         { keys: [modKey, 'Shift', 'Z'], description: 'Rétablir' },
@@ -38,7 +39,8 @@ export const KeyboardShortcutsDialog: React.FC<KeyboardShortcutsDialogProps> = (
     },
     {
       category: 'Presse-papiers',
-      icon: <Copy className="h-4 w-4 text-violet-500" />,
+      tone: 'blue',
+      icon: <Copy className="h-4 w-4" />,
       items: [
         { keys: [modKey, 'C'], description: 'Copier' },
         { keys: [modKey, 'X'], description: 'Couper' },
@@ -47,7 +49,8 @@ export const KeyboardShortcutsDialog: React.FC<KeyboardShortcutsDialogProps> = (
     },
     {
       category: 'Édition & Suppression',
-      icon: <Trash2 className="h-4 w-4 text-red-500" />,
+      tone: 'rose',
+      icon: <Trash2 className="h-4 w-4" />,
       items: [
         { keys: ['Delete'], description: 'Supprimer' },
         { keys: ['Backspace'], description: 'Supprimer (alt)' },
@@ -56,65 +59,104 @@ export const KeyboardShortcutsDialog: React.FC<KeyboardShortcutsDialogProps> = (
     },
     {
       category: 'Déplacement',
-      icon: <ArrowUp className="h-4 w-4 text-emerald-500" />,
+      tone: 'emerald',
+      icon: <ArrowUp className="h-4 w-4" />,
       items: [
-        { keys: ['↑', '↓', '←', '→'], description: 'Déplacer (1px)' },
+        { keys: ['↑', '↓', '←', '→'], description: 'Déplacer (1px)', separator: 'space' as const },
         { keys: ['Shift', 'Arrows'], description: 'Déplacer (10px)' },
       ],
     },
   ];
 
+  const toneStyles: Record<string, { icon: string; badge: string; card: string }> = {
+    amber: {
+      icon: 'bg-amber-100 text-amber-700 ring-1 ring-amber-200',
+      badge: 'text-amber-700',
+      card: 'border-amber-100',
+    },
+    blue: {
+      icon: 'bg-blue-100 text-blue-700 ring-1 ring-blue-200',
+      badge: 'text-blue-700',
+      card: 'border-blue-100',
+    },
+    rose: {
+      icon: 'bg-rose-100 text-rose-700 ring-1 ring-rose-200',
+      badge: 'text-rose-700',
+      card: 'border-rose-100',
+    },
+    emerald: {
+      icon: 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200',
+      badge: 'text-emerald-700',
+      card: 'border-emerald-100',
+    },
+  };
+
+  const renderKey = (key: string) => {
+    if (key === 'Arrows') return '← ↑ ↓ →';
+    return key;
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0 border-none shadow-2xl bg-transparent ring-0">
-
-        {/* Header Glassmorphism */}
-        <div className="p-6 pb-4 bg-background/80 backdrop-blur-xl border-b border-white/10 dark:border-white/5 z-10 relative">
+      <DialogContent
+        className="flex flex-col w-[min(90vw,780px)] max-w-2xl max-h-[78vh] overflow-hidden p-0 gap-0 border border-[#89a9d6]/35 bg-[#f7fbff] shadow-[0_30px_80px_rgba(15,52,96,0.28)] [&>button]:right-3 [&>button]:top-3 [&>button]:z-30 [&>button]:inline-flex [&>button]:items-center [&>button]:justify-center [&>button]:h-8 [&>button]:w-8 [&>button]:rounded-md [&>button]:border [&>button]:border-white/45 [&>button]:bg-[#0f3460]/80 [&>button]:text-white [&>button]:opacity-100 [&>button]:shadow-sm [&>button]:hover:bg-[#0f3460] [&>button]:hover:text-white [&>button]:focus-visible:ring-2 [&>button]:focus-visible:ring-white/70"
+      >
+        <div className="relative shrink-0 overflow-hidden border-b border-[#7a9bc7]/35 bg-gradient-to-r from-[#1f4f8f] via-[#2f66ad] to-[#1f4f8f] p-3.5 text-white">
+          <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.38)_1px,transparent_0)] [background-size:14px_14px]" />
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-3 text-xl font-light tracking-tight">
-              <div className="p-2.5 rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
+            <DialogTitle className="relative flex items-center justify-between gap-4 pr-10 text-base font-semibold tracking-tight">
+              <span className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/35">
                 <Keyboard className="h-5 w-5" />
-              </div>
-              Raccourcis Clavier
+                </span>
+                Raccourcis Clavier
+              </span>
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/35 bg-white/15 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-white/95">
+                <Sparkles className="h-3.5 w-3.5" />
+                {isMac ? 'macOS' : 'Windows/Linux'}
+              </span>
             </DialogTitle>
-            <DialogDescription className="text-base ml-1">
-              Boostez votre productivité avec ces commandes.
+            <DialogDescription className="relative mt-1 text-xs text-blue-100/95">
+              Commandes principales du builder pour travailler plus vite et sans friction.
             </DialogDescription>
           </DialogHeader>
         </div>
 
-        {/* Scrollable Content */}
-        <div className="p-6 pt-6 overflow-y-auto bg-card/95 backdrop-blur-xl space-y-8">
+        <div className="keyboard-shortcuts-scroll flex-1 min-h-0 overflow-y-scroll overflow-x-hidden px-3.5 py-3 pb-4 space-y-3.5">
+          <div className="rounded-xl border border-[#c4d8f1] bg-white px-3.5 py-2 text-xs font-medium text-[#3f5f86]">
+            Touche principale de votre système: <span className="font-bold text-[#1f4f8f]">{modKey}</span>
+          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {shortcuts.map((section) => (
               <div
                 key={section.category}
-                className="space-y-3 p-4 rounded-2xl bg-muted/30 border border-border/50 hover:bg-muted/50 transition-colors duration-300"
+                className={`rounded-2xl border bg-white p-3 shadow-[0_8px_22px_rgba(15,52,96,0.08)] transition-colors ${toneStyles[section.tone].card}`}
               >
-                <h3 className="font-semibold text-sm flex items-center gap-2 text-foreground/90 uppercase tracking-wider mb-2">
-                  {section.icon}
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-slate-700">
+                  <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${toneStyles[section.tone].icon}`}>
+                    {section.icon}
+                  </span>
                   {section.category}
                 </h3>
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   {section.items.map((item, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between py-2 px-1 group"
+                      className="flex items-center justify-between gap-3 rounded-lg border border-transparent px-2 py-2 transition-colors hover:border-slate-200 hover:bg-slate-50/80"
                     >
-                      <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+                      <span className="text-sm font-medium text-slate-600">
                         {item.description}
                       </span>
-                      <div className="flex items-center gap-1.5 opacity-90 group-hover:opacity-100 scale-95 group-hover:scale-100 transition-all">
+                      <div className="flex items-center justify-end gap-1.5">
                         {item.keys.map((key, keyIdx) => (
                           <React.Fragment key={keyIdx}>
-                            {key === '+' ? (
-                              <span className="text-muted-foreground/50 text-xs px-1">+</span>
-                            ) : (
-                              <kbd className="inline-flex items-center justify-center min-w-[24px] h-7 px-2 py-1 text-[11px] font-bold font-mono text-foreground bg-background border-b-2 border-border shadow-sm rounded-md tracking-widest whitespace-nowrap">
-                                {key === 'Arrows' ? <span className="text-xs">⇤ ⇥</span> : key}
-                              </kbd>
+                            {keyIdx > 0 && item.separator !== 'space' && (
+                              <span className="text-[11px] font-bold text-slate-400">+</span>
                             )}
+                            <kbd className="inline-flex h-7 min-w-[28px] items-center justify-center whitespace-nowrap rounded-md border border-slate-300 bg-slate-100 px-2 py-1 font-mono text-[11px] font-semibold tracking-tight text-slate-700 shadow-[inset_0_-1px_0_rgba(15,23,42,0.08)]">
+                              {renderKey(key)}
+                            </kbd>
                           </React.Fragment>
                         ))}
                       </div>
@@ -125,15 +167,15 @@ export const KeyboardShortcutsDialog: React.FC<KeyboardShortcutsDialogProps> = (
             ))}
           </div>
 
-          <div className="grid grid-cols-1 gap-4">
-            <div className="flex gap-4 p-4 rounded-xl bg-violet-500/5 border border-violet-500/10">
+          <div className="grid grid-cols-1 gap-3">
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 flex gap-4 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-slate-50 p-3.5 transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(31,90,160,0.15)]">
               <div className="shrink-0 pt-1">
-                <MousePointer2 className="h-5 w-5 text-violet-500" />
+                <MousePointer2 className="h-5 w-5 text-blue-600" />
               </div>
               <div className="space-y-1">
-                <h4 className="font-medium text-violet-600 dark:text-violet-400 text-sm">Astuces Souris</h4>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Maintenez <kbd className="font-mono text-xs bg-background/50 px-1 rounded border border-border/50">Shift</kbd> lors du redimensionnement pour conserver les proportions, ou lors du déplacement pour aligner sur les axes.
+                <h4 className="text-sm font-semibold text-blue-700">Astuces Souris</h4>
+                <p className="text-xs leading-relaxed text-slate-600">
+                  Maintenez <kbd className="rounded border border-blue-200 bg-white px-1.5 py-0.5 font-mono text-[11px] font-semibold text-blue-700">Shift</kbd> lors du redimensionnement pour conserver les proportions, ou lors du déplacement pour aligner sur les axes.
                   Double-cliquez sur un widget pour éditer son texte rapidement.
                 </p>
               </div>
@@ -141,11 +183,9 @@ export const KeyboardShortcutsDialog: React.FC<KeyboardShortcutsDialogProps> = (
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="py-3 px-6 bg-muted/40 border-t border-border/40 text-xs text-center text-muted-foreground">
-          Appuyez sur <kbd className="font-mono bg-background px-1 rounded border border-border">?</kbd> à tout moment pour rouvrir la visite guidée.
+        <div className="shrink-0 border-t border-[#c9d9ef] bg-white px-3.5 py-2 text-center text-xs text-slate-500">
+          Astuce: appuyez sur <kbd className="rounded border border-slate-300 bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-700">F1</kbd> pour ouvrir rapidement cette fenêtre.
         </div>
-
       </DialogContent>
     </Dialog>
   );

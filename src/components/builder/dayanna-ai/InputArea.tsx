@@ -16,12 +16,12 @@ import {
   Lock,
   Hash,
 } from "lucide-react";
-import { SiGoogle, SiOpenai, SiAnthropic, SiHuggingface } from "react-icons/si";
 import { Model, InputStatus, Provider, ModelInfo, Attachment, ApiKeys, AIMode, TaggedFile } from "./types";
 import type { Message } from "./types";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { nanoid } from "nanoid";
+import { ProviderBrandIcon } from "./provider-brand-icons";
 import { FOCUS_AI_PROMPT_EVENT } from "@/lib/aiSidebar";
 import {
   Context,
@@ -42,25 +42,6 @@ interface AvailableFile {
   content?: string;
 }
 
-const OpenRouterLogo = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-  </svg>
-);
-
-const GroqLogo = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-  </svg>
-);
-
-const DeepSeekLogo = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2"/>
-    <path d="M8 12h8M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-  </svg>
-);
-
 const PythonIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 256 255" fill="none" xmlns="http://www.w3.org/2000/svg">
     <defs>
@@ -80,14 +61,14 @@ const PythonIcon = ({ className }: { className?: string }) => (
 
 const isPythonFile = (name: string) => name.toLowerCase().endsWith('.py');
 
-const PROVIDERS: { id: Provider; name: string; icon: any; free?: boolean }[] = [
-  { id: 'google', name: 'Google Gemini', icon: SiGoogle },
-  { id: 'openrouter', name: 'OpenRouter', icon: OpenRouterLogo, free: true },
-  { id: 'groq', name: 'Groq', icon: GroqLogo, free: true },
-  { id: 'openai', name: 'OpenAI', icon: SiOpenai },
-  { id: 'anthropic', name: 'Anthropic', icon: SiAnthropic },
-  { id: 'deepseek', name: 'DeepSeek', icon: DeepSeekLogo },
-  { id: 'huggingface', name: 'Hugging Face', icon: SiHuggingface, free: true },
+const PROVIDERS: { id: Provider; name: string; free?: boolean }[] = [
+  { id: 'google', name: 'Google Gemini' },
+  { id: 'openrouter', name: 'OpenRouter', free: true },
+  { id: 'groq', name: 'Groq', free: true },
+  { id: 'openai', name: 'OpenAI' },
+  { id: 'anthropic', name: 'Anthropic' },
+  { id: 'deepseek', name: 'DeepSeek' },
+  { id: 'huggingface', name: 'Hugging Face', free: true },
 ];
 
 const MODELS_BY_PROVIDER: Record<Provider, ModelInfo[]> = {
@@ -148,7 +129,7 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
 const DEFAULT_CONTEXT_WINDOW = 32000;
 
 const MODE_CONFIG: Record<AIMode, { icon: any; label: string; description: string }> = {
-  agent: { icon: User, label: 'Agent', description: 'Generation et modification du canvas' },
+  agent: { icon: User, label: 'Agent', description: 'Creer et modifier le canvas' },
   discussions: { icon: MessageSquare, label: 'Discussion', description: 'Questions et reponses simples' },
   plan: { icon: FileText, label: 'Plan', description: 'Planification multi-interfaces' },
 };
@@ -160,12 +141,24 @@ interface InputAreaProps {
   restoreContent?: string | null;
   onClearRestoreContent?: () => void;
   onStopGeneration?: () => void;
+  onOpenSettings?: () => void;
   apiKeys: ApiKeys;
   availableFiles?: AvailableFile[];
   conversationMessages?: Message[];
 }
 
-export function InputArea({ onSendMessage, disabled, status = 'ready', restoreContent, onClearRestoreContent, onStopGeneration, apiKeys, availableFiles = [], conversationMessages = [] }: InputAreaProps) {
+export function InputArea({
+  onSendMessage,
+  disabled,
+  status = 'ready',
+  restoreContent,
+  onClearRestoreContent,
+  onStopGeneration,
+  onOpenSettings,
+  apiKeys,
+  availableFiles = [],
+  conversationMessages = [],
+}: InputAreaProps) {
   const [content, setContent] = useState("");
   const [selectedProvider, setSelectedProvider] = useState<Provider>("google");
   const [selectedModel, setSelectedModel] = useState<Model>("gemini-3-flash-preview");
@@ -219,8 +212,12 @@ export function InputArea({ onSendMessage, disabled, status = 'ready', restoreCo
     else { recognitionRef.current?.start(); setIsListening(true); }
   };
 
+  const configuredProviders = useMemo(
+    () => PROVIDERS.filter((provider) => Boolean(apiKeys[provider.id as keyof ApiKeys]?.trim())),
+    [apiKeys]
+  );
   const providerModels = MODELS_BY_PROVIDER[selectedProvider] ?? [];
-  const currentProvider = PROVIDERS.find(p => p.id === selectedProvider);
+  const currentProvider = configuredProviders.find((provider) => provider.id === selectedProvider) ?? PROVIDERS.find((provider) => provider.id === selectedProvider);
   const currentModel = providerModels.find(m => m.id === selectedModel) ?? providerModels[0];
   const currentModeConfig = MODE_CONFIG[activeMode];
   const approximateTokens = useMemo(() => {
@@ -238,6 +235,24 @@ export function InputArea({ onSendMessage, disabled, status = 'ready', restoreCo
     totalTokens: approximateTokens,
   }), [approximateTokens]);
 
+  useEffect(() => {
+    if (configuredProviders.length === 0) return;
+    if (!configuredProviders.some((provider) => provider.id === selectedProvider)) {
+      const nextProvider = configuredProviders[0];
+      setSelectedProvider(nextProvider.id);
+      const nextModel = MODELS_BY_PROVIDER[nextProvider.id]?.[0];
+      if (nextModel) setSelectedModel(nextModel.id);
+    }
+  }, [configuredProviders, selectedProvider]);
+
+  useEffect(() => {
+    const availableModels = MODELS_BY_PROVIDER[selectedProvider] ?? [];
+    if (availableModels.length === 0) return;
+    if (!availableModels.some((model) => model.id === selectedModel)) {
+      setSelectedModel(availableModels[0].id);
+    }
+  }, [selectedModel, selectedProvider]);
+
   const filteredFiles = useMemo(() => {
     if (!fileSearchQuery) return availableFiles;
     const q = fileSearchQuery.toLowerCase();
@@ -245,13 +260,19 @@ export function InputArea({ onSendMessage, disabled, status = 'ready', restoreCo
   }, [availableFiles, fileSearchQuery]);
 
   const handleSend = useCallback(() => {
+    if (configuredProviders.length === 0) {
+      onOpenSettings?.();
+      return;
+    }
     if (content.trim() && !disabled && status === 'ready') {
       onSendMessage(content.trim(), selectedModel, attachments, selectedProvider, activeMode, taggedFiles.length > 0 ? taggedFiles : undefined);
       setContent("");
       setAttachments([]);
       setTaggedFiles([]);
     }
-  }, [content, selectedModel, selectedProvider, disabled, status, onSendMessage, attachments, activeMode, taggedFiles]);
+  }, [activeMode, attachments, configuredProviders.length, content, disabled, onOpenSettings, onSendMessage, selectedModel, selectedProvider, status, taggedFiles]);
+
+  const canSend = Boolean(content.trim()) && !disabled && status === 'ready' && configuredProviders.length > 0;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -347,7 +368,7 @@ export function InputArea({ onSendMessage, disabled, status = 'ready', restoreCo
 
   return (
     <div className="bg-background p-2">
-      <div className="relative flex w-full flex-col rounded-lg border border-border/30 bg-muted/20 transition-all focus-within:border-primary/30 focus-within:shadow-sm focus-within:shadow-primary/5">
+      <div className="relative flex w-full flex-col rounded-lg border-2 border-border/70 bg-muted/20 transition-all focus-within:border-primary/70 focus-within:shadow-sm focus-within:shadow-primary/10">
         {/* Tagged files chips */}
         <AnimatePresence>
           {taggedFiles.length > 0 && (
@@ -458,7 +479,7 @@ export function InputArea({ onSendMessage, disabled, status = 'ready', restoreCo
                 className="flex items-center gap-1 rounded-md border border-border/30 bg-muted/30 px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 title={`${currentProvider?.name} — ${currentModel?.name}`}
               >
-                {currentProvider && <currentProvider.icon className="h-2.5 w-2.5 shrink-0 text-primary" />}
+                {currentProvider && <ProviderBrandIcon provider={currentProvider.id} className="h-2.5 w-2.5 shrink-0" />}
                 <ChevronDown className={cn("h-2 w-2 shrink-0 transition-transform", isProviderSelectorOpen && "rotate-180")} />
               </button>
 
@@ -466,48 +487,49 @@ export function InputArea({ onSendMessage, disabled, status = 'ready', restoreCo
                 {isProviderSelectorOpen && (
                   <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="absolute bottom-full left-0 z-[220] mb-1.5 w-48 max-w-[calc(100vw-2rem)] rounded-lg border border-border/30 bg-popover p-1 shadow-md">
                     <div className="px-2 py-1 text-[9px] font-mono text-muted-foreground uppercase tracking-widest">Providers</div>
-                    {PROVIDERS.map((p) => {
-                      const hasKey = !!apiKeys[p.id as keyof ApiKeys];
-                      const isDisabled = !hasKey && !p.free;
-                      return (
+                    {configuredProviders.length === 0 ? (
+                      <div className="space-y-2 px-2 pb-2">
+                        <p className="text-[10px] text-muted-foreground leading-relaxed">
+                          Aucun provider configure. Ajoutez une cle API ou un token d'acces dans les parametres.
+                        </p>
                         <button
-                          key={p.id}
                           onClick={() => {
-                            if (isDisabled) return;
-                            setSelectedProvider(p.id);
                             setIsProviderSelectorOpen(false);
-                            const firstModel = MODELS_BY_PROVIDER[p.id]?.[0];
+                            onOpenSettings?.();
+                          }}
+                          className="flex w-full items-center justify-center gap-1.5 rounded-md border border-border/50 px-2 py-1.5 text-[10px] font-medium text-popover-foreground transition-colors hover:bg-accent"
+                        >
+                          <Lock className="h-3 w-3" />
+                          Configurer les acces
+                        </button>
+                      </div>
+                    ) : (
+                      configuredProviders.map((provider) => (
+                        <button
+                          key={provider.id}
+                          onClick={() => {
+                            setSelectedProvider(provider.id);
+                            setIsProviderSelectorOpen(false);
+                            const firstModel = MODELS_BY_PROVIDER[provider.id]?.[0];
                             if (firstModel) setSelectedModel(firstModel.id);
                           }}
                           className={cn(
                             "w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors",
-                            isDisabled && "opacity-50 cursor-not-allowed",
-                            selectedProvider === p.id ? "bg-primary/10 text-primary font-medium" :
-                            hasKey ? "text-popover-foreground hover:bg-accent" :
-                            p.free ? "text-popover-foreground hover:bg-accent" :
-                            "text-muted-foreground"
+                            selectedProvider === provider.id ? "bg-primary/10 text-primary font-medium" : "text-popover-foreground hover:bg-accent"
                           )}
                         >
                           <div className="flex items-center gap-2">
-                            <p.icon className={cn("w-3.5 h-3.5", selectedProvider === p.id ? "text-primary" : "text-muted-foreground")} />
-                            <span>{p.name}</span>
-                            {p.free && <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-600 font-bold uppercase">Gratuit</span>}
+                            <ProviderBrandIcon provider={provider.id} className="w-3.5 h-3.5" />
+                            <span className="whitespace-nowrap">{provider.name}</span>
+                            {provider.free && <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-600 font-bold uppercase">Gratuit</span>}
                           </div>
                           <div className="flex items-center gap-1.5">
-                            {hasKey && (
-                              <span className="flex h-2 w-2 rounded-full bg-emerald-500" title="Cle configuree" />
-                            )}
-                            {!hasKey && !p.free && (
-                              <span className="flex items-center gap-1 text-[8px] text-amber-500 font-medium">
-                                <Lock className="w-2.5 h-2.5" />
-                                Cle requise
-                              </span>
-                            )}
-                            {selectedProvider === p.id && <CheckIcon className="w-3.5 h-3.5" />}
+                            <span className="flex h-2 w-2 rounded-full bg-emerald-500" title="Cle configuree" />
+                            {selectedProvider === provider.id && <CheckIcon className="w-3 h-3" />}
                           </div>
                         </button>
-                      );
-                    })}
+                      ))
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -517,7 +539,11 @@ export function InputArea({ onSendMessage, disabled, status = 'ready', restoreCo
             <div className="relative min-w-0 shrink-0">
               <button
                 onClick={() => { setIsModelSelectorOpen(!isModelSelectorOpen); setIsProviderSelectorOpen(false); }}
-                className="flex items-center gap-0.5 rounded-md border border-border/30 bg-muted/30 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                disabled={configuredProviders.length === 0}
+                className={cn(
+                  "flex items-center gap-0.5 rounded-md border border-border/30 bg-muted/30 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+                  configuredProviders.length === 0 && "cursor-not-allowed opacity-50 hover:bg-muted/30"
+                )}
               >
                 <Sparkles className="h-2 w-2 shrink-0 text-primary/60" />
                 <span className="max-w-[70px] truncate leading-none">{currentModel?.name ?? 'Modele'}</span>
@@ -528,24 +554,32 @@ export function InputArea({ onSendMessage, disabled, status = 'ready', restoreCo
                 {isModelSelectorOpen && (
                   <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="absolute bottom-full left-0 z-[220] mb-1.5 w-52 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-border/30 bg-popover shadow-md">
                     <div className="p-1 space-y-0.5">
-                      <div className="px-2 py-1 text-[9px] font-mono text-muted-foreground uppercase tracking-widest">{currentProvider?.name}</div>
-                      {providerModels.map((m) => (
-                        <button
-                          key={m.id}
-                          onClick={() => { setSelectedModel(m.id); setIsModelSelectorOpen(false); }}
-                          className={cn(
-                            "w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors",
-                            selectedModel === m.id ? "bg-primary/10 text-primary font-medium" : "text-popover-foreground hover:bg-accent"
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Sparkles className={cn("w-3.5 h-3.5", selectedModel === m.id ? "text-primary" : "text-muted-foreground")} />
-                            {m.name}
-                            {m.free && <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-600 font-bold">FREE</span>}
-                          </div>
-                          {selectedModel === m.id && <CheckIcon className="w-3.5 h-3.5" />}
-                        </button>
-                      ))}
+                      {configuredProviders.length === 0 ? (
+                        <div className="px-2 py-2 text-[10px] text-muted-foreground">
+                          Configurez d'abord un provider (cle API ou token) dans les parametres.
+                        </div>
+                      ) : (
+                        <>
+                          <div className="px-2 py-1 text-[9px] font-mono text-muted-foreground uppercase tracking-widest">{currentProvider?.name}</div>
+                          {providerModels.map((m) => (
+                            <button
+                              key={m.id}
+                              onClick={() => { setSelectedModel(m.id); setIsModelSelectorOpen(false); }}
+                              className={cn(
+                                "w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors",
+                                selectedModel === m.id ? "bg-primary/10 text-primary font-medium" : "text-popover-foreground hover:bg-accent"
+                              )}
+                            >
+                              <div className="flex items-center gap-2">
+                                <Sparkles className={cn("w-3.5 h-3.5", selectedModel === m.id ? "text-primary" : "text-muted-foreground")} />
+                                {m.name}
+                                {m.free && <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-600 font-bold">FREE</span>}
+                              </div>
+                              {selectedModel === m.id && <CheckIcon className="w-3.5 h-3.5" />}
+                            </button>
+                          ))}
+                        </>
+                      )}
                     </div>
                   </motion.div>
                 )}
@@ -586,7 +620,7 @@ export function InputArea({ onSendMessage, disabled, status = 'ready', restoreCo
                         <config.icon className={cn("w-3.5 h-3.5", activeMode === mode ? "text-primary" : "text-muted-foreground")} />
                         <div className="flex flex-col items-start gap-0.5">
                           <span>{config.label}</span>
-                          <span className="text-[9px] text-muted-foreground font-normal">{config.description}</span>
+                          <span className="whitespace-nowrap text-[9px] text-muted-foreground font-normal">{config.description}</span>
                         </div>
                         {activeMode === mode && <CheckIcon className="w-3.5 h-3.5 ml-auto" />}
                       </button>
@@ -625,10 +659,10 @@ export function InputArea({ onSendMessage, disabled, status = 'ready', restoreCo
             ) : (
               <button
                 onClick={handleSend}
-                disabled={!content.trim() || disabled || status !== 'ready'}
+                disabled={!canSend}
                 className={cn(
                   "flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all",
-                  content.trim() && !disabled && status === 'ready'
+                  canSend
                     ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/20" 
                     : "bg-secondary text-muted-foreground opacity-50 cursor-not-allowed"
                 )}

@@ -41,7 +41,7 @@ export function TaskTrigger({ title }: { title: string }) {
   return (
     <button
       onClick={() => setIsOpen(!isOpen)}
-      className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors group"
+      className="group flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
     >
       <div className={cn(
         "transition-transform duration-200",
@@ -76,7 +76,7 @@ export function TaskContent({ children }: { children: React.ReactNode }) {
           transition={{ duration: 0.3, ease: "easeInOut" }}
           className="overflow-hidden"
         >
-          <div className="pt-2 pb-1 space-y-1 border-l border-zinc-800 ml-1.5 pl-3">
+          <div className="ml-1.5 space-y-1 border-l border-border/60 pb-1 pl-3 pt-2">
             {children}
           </div>
         </motion.div>
@@ -87,12 +87,12 @@ export function TaskContent({ children }: { children: React.ReactNode }) {
 
 export function TaskItem({ children, status = 'completed' }: { children: React.ReactNode; status?: 'pending' | 'running' | 'completed' | 'error' }) {
   return (
-    <div className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-zinc-800/30 transition-colors group">
+    <div className="group flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent/60">
       <div className={cn(
         "flex items-center justify-center shrink-0",
         status === 'completed' ? "text-emerald-500" : 
         status === 'running' ? "text-sky-500" : 
-        status === 'error' ? "text-red-500" : "text-zinc-600"
+        status === 'error' ? "text-destructive" : "text-muted-foreground/60"
       )}>
         {status === 'completed' ? (
           <CheckCircle2 className="w-3.5 h-3.5" />
@@ -111,8 +111,8 @@ export function TaskItem({ children, status = 'completed' }: { children: React.R
       </div>
       <div className={cn(
         "text-xs font-medium tracking-tight transition-colors",
-        status === 'completed' ? "text-zinc-400" : 
-        status === 'error' ? "text-red-400" : "text-zinc-200"
+        status === 'completed' ? "text-muted-foreground" : 
+        status === 'error' ? "text-destructive" : "text-foreground/90"
       )}>
         {children}
       </div>
@@ -122,7 +122,7 @@ export function TaskItem({ children, status = 'completed' }: { children: React.R
 
 export function TaskItemFile({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[10px] font-mono text-zinc-300 hover:text-sky-400 hover:border-sky-500/50 transition-all cursor-pointer">
+    <span className="inline-flex cursor-pointer items-center gap-1.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-mono text-foreground/80 transition-all hover:border-primary/50 hover:text-primary">
       {children}
     </span>
   );

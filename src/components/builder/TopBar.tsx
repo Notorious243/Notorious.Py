@@ -6,22 +6,27 @@ import { AuthPromptDialog } from '@/components/AuthPromptDialog';
 import { useWidgets } from '@/contexts/useWidgets';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import DropdownMenuUserMenu07 from '@/components/shadcn-studio/dropdown-menu/dropdown-menu-07';
+import { NotificationsFilter } from '@/components/builder/NotificationsFilter';
 const ExportModal = lazy(() => import('./ExportModal').then(m => ({ default: m.ExportModal })));
 const KeyboardShortcutsDialog = lazy(() => import('./KeyboardShortcutsDialog').then(m => ({ default: m.KeyboardShortcutsDialog })));
 const VersionHistoryModal = lazy(() => import('./VersionHistoryModal').then(m => ({ default: m.VersionHistoryModal })));
 import { useProjects } from '@/contexts/useProjects';
 import { useFileSystem } from '@/hooks/useFileSystemContext';
+import { getFormattedDisplayName, getUserInitials } from '@/lib/userProfile';
 
-export const TopBar: React.FC<{ minimal?: boolean }> = ({ minimal }) => {
+interface TopBarProps {
+  minimal?: boolean;
+  onOpenProfile?: () => void;
+  onOpenSettings?: () => void;
+}
+
+export const TopBar: React.FC<TopBarProps> = ({ minimal, onOpenProfile, onOpenSettings }) => {
   const { user, signOut } = useAuth();
   const isGuest = !user;
   const email = user?.email ?? '';
-  const firstName = user?.user_metadata?.first_name as string | undefined;
   const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
-  const initials = firstName
-    ? firstName[0].toUpperCase()
-    : email[0]?.toUpperCase() || '?';
-  const displayName = firstName || email.split('@')[0] || 'Profil';
+  const initials = getUserInitials(user);
+  const displayName = getFormattedDisplayName(user);
   const { viewMode, setViewMode, previewMode, setPreviewMode, undo, redo, canUndo, canRedo, widgets, canvasSettings, loadWorkspaceState, activeFileId } = useWidgets();
   const { activeProjectId } = useProjects();
   const { getNode } = useFileSystem();
@@ -211,13 +216,18 @@ export const TopBar: React.FC<{ minimal?: boolean }> = ({ minimal }) => {
               Se connecter
             </Button>
           ) : (
-            <DropdownMenuUserMenu07
-              email={email}
-              displayName={displayName}
-              initials={initials}
-              avatarUrl={avatarUrl}
-              onSignOut={signOut}
-            />
+            <>
+              <DropdownMenuUserMenu07
+                email={email}
+                displayName={displayName}
+                initials={initials}
+                avatarUrl={avatarUrl}
+                onOpenProfile={() => onOpenProfile?.()}
+                onOpenSettings={() => onOpenSettings?.()}
+                onSignOut={signOut}
+              />
+              <NotificationsFilter />
+            </>
           )}
         </div>
       </div>

@@ -1,0 +1,78 @@
+version: "2"
+type: backend
+tech_stack:
+  - TypeScript
+  - Supabase JavaScript Client
+  - Supabase Postgres tables (projects, project_versions, gallery_projects, ai_conversations, user_settings)
+  - Frontend-managed service layer for backend data access
+features:
+  - name: Project Data Management
+    description: CRUD operations for projects and shared token state.
+    files:
+      - src/lib/supabaseService.ts
+      - src/lib/supabase.ts
+    endpoints:
+      - method: GET
+        path: /rest/v1/projects
+        description: Fetch project list ordered by last update.
+        auth_required: true
+      - method: POST
+        path: /rest/v1/projects
+        description: Create project with initial canvas settings.
+        auth_required: true
+      - method: PATCH
+        path: /rest/v1/projects?id=eq.{projectId}
+        description: Update project metadata and sharing flags.
+        auth_required: true
+      - method: DELETE
+        path: /rest/v1/projects?id=eq.{projectId}
+        description: Delete an existing project.
+        auth_required: true
+    depends_on:
+      - Authentication
+  - name: Versioning and Gallery APIs
+    description: Persist project snapshots and publish/clone gallery entries.
+    files:
+      - src/lib/supabaseService.ts
+    endpoints:
+      - method: POST
+        path: /rest/v1/project_versions
+        description: Save version snapshots for a project.
+        auth_required: true
+      - method: GET
+        path: /rest/v1/project_versions
+        description: List and fetch version records by project.
+        auth_required: true
+      - method: POST
+        path: /rest/v1/gallery_projects
+        description: Publish or update a project in gallery (upsert).
+        auth_required: true
+      - method: POST
+        path: /rest/v1/rpc/increment_clones_count
+        description: Increment clone counter for gallery projects.
+        auth_required: true
+    depends_on:
+      - Project Data Management
+  - name: AI Conversation and User Settings Persistence
+    description: Stores AI chats and user preferences/API keys in Supabase tables.
+    files:
+      - src/lib/supabaseService.ts
+    endpoints:
+      - method: GET
+        path: /rest/v1/ai_conversations
+        description: Fetch conversations scoped by user and project.
+        auth_required: true
+      - method: POST
+        path: /rest/v1/ai_conversations
+        description: Upsert AI conversation history.
+        auth_required: true
+      - method: POST
+        path: /rest/v1/user_settings
+        description: Upsert API keys and generation history.
+        auth_required: true
+    depends_on:
+      - Authentication
+known_limitations:
+  - issue: No dedicated backend server exists in this repository; backend tests target Supabase REST/RPC dependencies indirectly.
+    location: src/lib/supabaseService.ts
+    impact: Backend E2E coverage depends on external Supabase environment configuration and data.

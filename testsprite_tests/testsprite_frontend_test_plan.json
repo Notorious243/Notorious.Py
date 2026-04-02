@@ -1,0 +1,420 @@
+[
+  {
+    "id": "TC001",
+    "title": "Login with valid credentials from auth overlay returns to authenticated builder",
+    "description": "Verifies a user can open the auth overlay, log in with valid credentials, and return to the builder in an authenticated state.",
+    "category": "Authentication and Session Handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Open the auth overlay from the builder"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the auth overlay is closed and the builder workspace is accessible as an authenticated user"
+      }
+    ]
+  },
+  {
+    "id": "TC002",
+    "title": "Login with invalid credentials shows an authentication error and remains unauthenticated",
+    "description": "Verifies invalid login attempts show an authentication error and do not authenticate the user.",
+    "category": "Authentication and Session Handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Open the auth overlay from the builder"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with invalid@example.com"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with wrong-password"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an authentication error message is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user remains unauthenticated and cannot access authenticated-only builder features"
+      }
+    ]
+  },
+  {
+    "id": "TC003",
+    "title": "Password recovery request flow can be initiated from auth overlay",
+    "description": "Verifies a user can trigger password recovery and sees a recovery confirmation state without leaving the builder context.",
+    "category": "Authentication and Session Handling",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Open the auth overlay from the builder"
+      },
+      {
+        "type": "action",
+        "description": "Trigger password recovery from the auth overlay"
+      },
+      {
+        "type": "action",
+        "description": "Fill a valid email into the recovery email field"
+      },
+      {
+        "type": "action",
+        "description": "Submit the password recovery request"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a password recovery request confirmation is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC004",
+    "title": "Switch between login and signup modes within the auth overlay",
+    "description": "Verifies the auth overlay allows switching between login and signup forms.",
+    "category": "Authentication and Session Handling",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Open the auth overlay from the builder"
+      },
+      {
+        "type": "action",
+        "description": "Switch to the signup form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the signup form fields are displayed"
+      },
+      {
+        "type": "action",
+        "description": "Switch back to the login form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the login form fields are displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC005",
+    "title": "Auth overlay can be dismissed without authenticating",
+    "description": "Verifies the user can close the auth overlay and remain on the builder unauthenticated.",
+    "category": "Authentication and Session Handling",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Open the auth overlay from the builder"
+      },
+      {
+        "type": "action",
+        "description": "Close the auth overlay"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the auth overlay is not visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the builder workspace remains accessible in an unauthenticated state"
+      }
+    ]
+  },
+  {
+    "id": "TC006",
+    "title": "Login form validation prevents submitting with empty required fields",
+    "description": "Verifies the login form blocks submission when required fields are missing.",
+    "category": "Authentication and Session Handling",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Open the auth overlay from the builder"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify required field validation errors are visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user remains unauthenticated"
+      }
+    ]
+  },
+  {
+    "id": "TC007",
+    "title": "Visual builder workspace loads primary content on /",
+    "description": "Verifies the main builder workspace loads and shows its primary UI regions.",
+    "category": "Visual Builder Workspace",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the visual builder workspace is displayed with a canvas area and builder controls"
+      }
+    ]
+  },
+  {
+    "id": "TC008",
+    "title": "Add a widget to the canvas and edit its properties",
+    "description": "Verifies a user can add a widget and change its properties via the side panels.",
+    "category": "Visual Builder Workspace",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Add a new widget to the canvas"
+      },
+      {
+        "type": "action",
+        "description": "Select the newly added widget on the canvas"
+      },
+      {
+        "type": "action",
+        "description": "Edit a widget property from the properties side panel using a valid value"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the widget updates on the canvas to reflect the changed property"
+      }
+    ]
+  },
+  {
+    "id": "TC009",
+    "title": "Save project after making a change shows a save confirmation",
+    "description": "Verifies saving after edits produces a visible save confirmation.",
+    "category": "Visual Builder Workspace",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Add a new widget to the canvas"
+      },
+      {
+        "type": "action",
+        "description": "Invoke the save action from the workspace controls"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a save confirmation is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC010",
+    "title": "Validation error prevents saving until properties are corrected",
+    "description": "Verifies invalid widget properties show validation errors and block save until corrected.",
+    "category": "Visual Builder Workspace",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Add a new widget to the canvas"
+      },
+      {
+        "type": "action",
+        "description": "Select the newly added widget on the canvas"
+      },
+      {
+        "type": "action",
+        "description": "Edit a widget property to an invalid value that violates validation rules"
+      },
+      {
+        "type": "action",
+        "description": "Invoke the save action from the workspace controls"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a property validation error is visible"
+      },
+      {
+        "type": "action",
+        "description": "Correct the property using a valid value"
+      },
+      {
+        "type": "action",
+        "description": "Invoke the save action from the workspace controls"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a save confirmation is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC011",
+    "title": "Navigate builder tools and dialogs from the top bar and sidebars",
+    "description": "Verifies core builder tools are reachable through the top bar and sidebars and open their corresponding panels/dialogs.",
+    "category": "Visual Builder Workspace",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Open a builder tool from the top bar"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the corresponding tool panel or dialog is visible"
+      },
+      {
+        "type": "action",
+        "description": "Open a builder tool from a sidebar"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the corresponding sidebar panel is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC012",
+    "title": "Export action is available from workspace controls",
+    "description": "Verifies the export workflow can be initiated via workspace actions without relying on file downloads.",
+    "category": "Visual Builder Workspace",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Add a new widget to the canvas"
+      },
+      {
+        "type": "action",
+        "description": "Invoke the export action from the workspace controls"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an export output view or export confirmation is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC013",
+    "title": "Add multiple widgets and switch selection updates the properties panel",
+    "description": "Verifies selecting different widgets updates the editable properties shown.",
+    "category": "Visual Builder Workspace",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Add a first widget to the canvas"
+      },
+      {
+        "type": "action",
+        "description": "Add a second widget to the canvas"
+      },
+      {
+        "type": "action",
+        "description": "Select the first widget"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the properties panel shows details for the selected widget"
+      },
+      {
+        "type": "action",
+        "description": "Select the second widget"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the properties panel updates to show details for the newly selected widget"
+      }
+    ]
+  },
+  {
+    "id": "TC014",
+    "title": "Shared project viewing routes are not directly navigable due to dynamic token",
+    "description": "Verifies shared project viewing cannot be tested via static routing because the only route requires a dynamic token parameter.",
+    "category": "Shared Project Viewing",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify there is no static route available to open a shared project without a token parameter"
+      }
+    ]
+  }
+]

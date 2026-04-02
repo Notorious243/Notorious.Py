@@ -1,0 +1,21 @@
+{
+  "status": "commited",
+  "type": "backend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:5173",
+  "backendAuthType": "basic token",
+  "backendUsername": "michel.maleka1@gmail.com",
+  "backendPassword": "12345678",
+  "executionArgs": {
+    "projectName": "notorious-py",
+    "projectPath": "/Users/emmanuellamaleka/Documents/FORMATION PYTHON 2025 FIN/Notorious",
+    "testIds": [],
+    "additionalInstruction": "Execute backend-focused validations only, prioritizing API/data integrity paths.",
+    "serverMode": "development",
+    "envs": {
+      "API_KEY": "sk-user-Rba6nJ1NlonJRY-bY2he_wFnhJPtTt_lQ6QIsSsXhcBz1FrQjOXD8jpkSNtYWWU_QA8mXHN67Rr1NS71XM8RG9A_ShCz0fzU5ohj46UQvbjxt3BimWIOqFVtGhpl5SVRiyc"
+    }
+  },
+  "serverPort": 55604,
+  "proxy": "http://435b14ed-05f6-4d2a-a5be-bd9002b14ebb:88vkSk78ljoeaEP6zYlqgUrotsj4lCyC@tun.testsprite.com:8080"
+}

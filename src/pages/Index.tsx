@@ -16,7 +16,9 @@ import { ProjectProvider } from '@/contexts/ProjectContext';
 import { useProjects } from '@/contexts/useProjects';
 import { OPEN_AI_WORKSPACE_PANELS_EVENT } from '@/lib/aiSidebar';
 import { PythonLoadingScreen } from '@/components/ui/PythonLoadingScreen';
+import type { SettingsSection } from '@/types/settings';
 const WelcomeScreen = lazy(() => import('@/components/builder/WelcomeScreen').then(m => ({ default: m.WelcomeScreen })));
+const SettingsHub = lazy(() => import('@/components/settings/SettingsHub').then(m => ({ default: m.SettingsHub })));
 
 // Lazy load des composants lourds non critiques
 const CodeView = lazy(() => import('@/components/builder/CodeView'));
@@ -28,7 +30,8 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
   const [rightSidebarTab, setRightSidebarTab] = useState<'properties' | 'ai'>('properties');
   const [isFirstTime, setIsFirstTime] = useState(false);
-  const [showWelcomeOverlay, setShowWelcomeOverlay] = useState(false);
+  const [activeOverlay, setActiveOverlay] = useState<'none' | 'projects' | 'settings'>('none');
+  const [initialSettingsSection, setInitialSettingsSection] = useState<SettingsSection>('general');
   const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [mobileBannerDismissed, setMobileBannerDismissed] = useState(false);
   const [isTopBarHovered, setIsTopBarHovered] = useState(false);
@@ -43,7 +46,7 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
   // Listen for Home button click from TopBar — always open (allows project creation even with 0 projects)
   useEffect(() => {
     const handler = () => {
-      setShowWelcomeOverlay(true);
+      setActiveOverlay('projects');
     };
     window.addEventListener('open-projects-modal', handler);
     return () => window.removeEventListener('open-projects-modal', handler);
@@ -138,6 +141,7 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
 
   // En mode preview, cacher les panels
   const shouldShowPanels = previewMode !== 'preview';
+  const isOverlayOpen = activeOverlay !== 'none';
 
   const workspaceStyle: React.CSSProperties = {
     background: `
@@ -153,14 +157,24 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
       className="h-screen w-screen flex flex-col bg-background text-foreground transition-all duration-500 ease-in-out"
       style={workspaceStyle}
     >
-      {!showWelcomeOverlay && previewMode !== 'preview' && (
+      {!isOverlayOpen && previewMode !== 'preview' && (
         <div className="relative z-[80] flex-shrink-0">
-          <TopBar minimal={!hasFiles || isNoProject} />
+          <TopBar
+            minimal={!hasFiles || isNoProject}
+            onOpenProfile={() => {
+              setInitialSettingsSection('profile');
+              setActiveOverlay('settings');
+            }}
+            onOpenSettings={() => {
+              setInitialSettingsSection('general');
+              setActiveOverlay('settings');
+            }}
+          />
         </div>
       )}
 
       {/* TopBar hover zone in preview mode */}
-      {!showWelcomeOverlay && previewMode === 'preview' && (
+      {!isOverlayOpen && previewMode === 'preview' && (
         <>
           {/* Invisible hover trigger zone at top of screen */}
           <div
@@ -184,7 +198,17 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
             }}
           >
             <div className="bg-card/95 shadow-lg backdrop-blur-md border-b border-border">
-              <TopBar minimal={!hasFiles || isNoProject} />
+              <TopBar
+                minimal={!hasFiles || isNoProject}
+                onOpenProfile={() => {
+                  setInitialSettingsSection('profile');
+                  setActiveOverlay('settings');
+                }}
+                onOpenSettings={() => {
+                  setInitialSettingsSection('general');
+                  setActiveOverlay('settings');
+                }}
+              />
             </div>
           </div>
         </>
@@ -213,7 +237,7 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
           {isNoProject && (
             <div
               className="absolute inset-0 z-30 flex cursor-pointer flex-col items-center justify-center bg-[#F7F9FC]/90 transition-colors hover:bg-[#F7F9FC]"
-              onClick={() => setShowWelcomeOverlay(true)}
+              onClick={() => setActiveOverlay('projects')}
             >
               <div className="mb-3 flex size-16 items-center justify-center rounded-2xl bg-slate-100 shadow-inner">
                 <Lock className="w-8 h-8 text-slate-400" />
@@ -224,7 +248,7 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
         </div>
 
         {/* Toggle Button Left Panel */}
-        {shouldShowPanels && !showWelcomeOverlay && (
+        {shouldShowPanels && !isOverlayOpen && (
           <Button
             variant="outline"
             size="icon"
@@ -284,7 +308,7 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
         </div>
 
         {/* Toggle Button Right Panel */}
-        {shouldShowPanels && !showWelcomeOverlay && (
+        {shouldShowPanels && !isOverlayOpen && (
           <Button
             variant="outline"
             size="icon"
@@ -317,7 +341,7 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
           {isNoProject && (
             <div
               className="absolute inset-0 z-30 flex cursor-pointer flex-col items-center justify-center bg-[#F7F9FC]/90 transition-colors hover:bg-[#F7F9FC]"
-              onClick={() => setShowWelcomeOverlay(true)}
+              onClick={() => setActiveOverlay('projects')}
             >
               <div className="mb-3 flex size-16 items-center justify-center rounded-2xl bg-slate-100 shadow-inner">
                 <Lock className="w-8 h-8 text-slate-400" />
@@ -329,10 +353,22 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
       </main>
 
       {/* WelcomeScreen full-page overlay (triggered by Home button) */}
-      {showWelcomeOverlay && (
+      {activeOverlay === 'projects' && (
         <Suspense fallback={null}>
           <div className="fixed inset-0 z-[60] animate-in fade-in duration-300">
-            <WelcomeScreen onClose={() => setShowWelcomeOverlay(false)} />
+            <WelcomeScreen onClose={() => setActiveOverlay('none')} />
+          </div>
+        </Suspense>
+      )}
+
+      {/* Settings full-page overlay */}
+      {activeOverlay === 'settings' && (
+        <Suspense fallback={null}>
+          <div className="fixed inset-0 z-[60] animate-in fade-in duration-300">
+            <SettingsHub
+              initialSection={initialSettingsSection}
+              onClose={() => setActiveOverlay('none')}
+            />
           </div>
         </Suspense>
       )}

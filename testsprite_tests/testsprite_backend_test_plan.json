@@ -1,0 +1,52 @@
+[
+  {
+    "id": "TC001",
+    "title": "create_project_with_initial_canvas_settings",
+    "description": "Test the POST /rest/v1/projects endpoint to create a new project with valid initial canvas settings and verify the response returns a 201 status with the project ID."
+  },
+  {
+    "id": "TC002",
+    "title": "fetch_project_list_ordered_by_last_update",
+    "description": "Test the GET /rest/v1/projects endpoint to fetch the list of projects ordered by last update and verify the response returns a 200 status with the correct project records."
+  },
+  {
+    "id": "TC003",
+    "title": "update_project_metadata_and_sharing_flags",
+    "description": "Test the PATCH /rest/v1/projects?id=eq.{projectId} endpoint to update project metadata and sharing flags with valid data and verify the response returns a 204 status indicating successful update."
+  },
+  {
+    "id": "TC004",
+    "title": "delete_existing_project",
+    "description": "Test the DELETE /rest/v1/projects?id=eq.{projectId} endpoint to delete an existing project and verify the response returns a 204 status indicating successful deletion."
+  },
+  {
+    "id": "TC005",
+    "title": "save_version_snapshots_for_project",
+    "description": "Test the POST /rest/v1/project_versions endpoint to save a version snapshot for a project with valid data and verify the response returns a 201 status with the version ID."
+  },
+  {
+    "id": "TC006",
+    "title": "list_and_fetch_version_records_by_project",
+    "description": "Test the GET /rest/v1/project_versions endpoint to list and fetch version records filtered by project ID and verify the response returns a 200 status with the correct version list."
+  },
+  {
+    "id": "TC007",
+    "title": "publish_or_update_project_in_gallery",
+    "description": "Test the POST /rest/v1/gallery_projects endpoint to publish or update a project in the gallery with valid data and verify the response returns a 200 status with the gallery record."
+  },
+  {
+    "id": "TC008",
+    "title": "increment_clone_counter_for_gallery_projects",
+    "description": "Test the POST /rest/v1/rpc/increment_clones_count endpoint to increment the clone counter for a gallery project with valid gallery ID and verify the response returns a 200 status with the updated clone count."
+  },
+  {
+    "id": "TC009",
+    "title": "fetch_conversations_scoped_by_user_and_project",
+    "description": "Test the GET /rest/v1/ai_conversations endpoint to fetch AI conversation history scoped by user and project with valid JWT and verify the response returns a 200 status with the conversation history."
+  },
+  {
+    "id": "TC010",
+    "title": "upsert_api_keys_and_generation_history",
+    "description": "Test the POST /rest/v1/user_settings endpoint to upsert user settings including API keys and generation history with valid data and verify the response returns a 201 status indicating successful upsert."
+  }
+]

@@ -787,7 +787,7 @@ export const Canvas: React.FC = () => {
           {/* Ne rendre QUE les widgets de niveau racine (sans parent) */}
           {/* Les widgets enfants sont rendus par leur conteneur parent */}
           {widgets
-            .filter(widget => !widget.parentId || widget.parentId === null)
+            .filter(widget => (!widget.parentId || widget.parentId === null) && !widget.hidden)
             .map((widget) => (
               <RenderedWidget
                 key={widget.id}

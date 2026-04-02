@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import { ChevronsUpDownIcon, LogOutIcon, SettingsIcon, UserIcon } from 'lucide-react';
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -33,7 +33,6 @@ const DropdownMenuUserMenu07 = ({
   email,
   displayName,
   initials,
-  avatarUrl,
   onOpenProfile,
   onOpenSettings,
   onSignOut,
@@ -49,6 +48,10 @@ const DropdownMenuUserMenu07 = ({
     onSelect: () => void onSignOut(),
   };
   const LogoutIcon = logoutItem.icon;
+  const firstNameInitial =
+    displayName.trim().split(/\s+/)[0]?.charAt(0).toUpperCase() ||
+    initials.trim().charAt(0).toUpperCase() ||
+    '?';
 
   return (
     <DropdownMenu>
@@ -56,17 +59,16 @@ const DropdownMenuUserMenu07 = ({
         <Button
           variant="outline"
           size="sm"
-          className="h-8 gap-1.5 rounded-full border-border/50 bg-card/90 pl-1 pr-2.5 shadow-sm"
+          className="h-10 gap-2 rounded-full border-border/50 bg-card/90 pl-1.5 pr-3 shadow-sm"
           title={displayName}
         >
-          <Avatar className="size-6 border border-background">
-            <AvatarImage src={avatarUrl} alt={displayName} />
-            <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">
-              {initials}
+          <Avatar className="size-8 border border-background">
+            <AvatarFallback className="bg-primary text-sm font-semibold text-primary-foreground">
+              {firstNameInitial}
             </AvatarFallback>
           </Avatar>
-          <span className="max-w-[128px] truncate text-xs font-medium">{displayName}</span>
-          <ChevronsUpDownIcon className="size-3.5 opacity-60" aria-hidden="true" />
+          <span className="max-w-[138px] truncate text-sm font-medium">{displayName}</span>
+          <ChevronsUpDownIcon className="size-4 opacity-60" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-48" align="end" sideOffset={8}>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import {
-  Eye, Trash2, Type, MousePointerClick, TextCursor, FileText, Gauge,
+  Eye, EyeOff, Trash2, Type, MousePointerClick, TextCursor, FileText, Gauge,
   ImageIcon, CheckSquare, Circle, ToggleRight, ListFilter, ChevronDown,
   Menu, SlidersHorizontal, Box, ScrollText, FolderOpen, BarChart3,
   Table, LayoutDashboard, Calendar, ShoppingCart, CircleUser, HelpCircle,
@@ -39,7 +39,7 @@ const WIDGET_ICON_MAP: Record<string, React.ElementType> = {
 };
 
 export const LayersPanel: React.FC = () => {
-  const { widgets, selectedWidgetId, selectWidget, deleteWidget } = useWidgets();
+  const { widgets, selectedWidgetId, selectWidget, deleteWidget, updateWidget } = useWidgets();
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   const pendingWidget = pendingDeleteId ? widgets.find(w => w.id === pendingDeleteId) : null;
@@ -93,10 +93,11 @@ export const LayersPanel: React.FC = () => {
                       className="h-6 w-6 p-0"
                       onClick={(e) => {
                         e.stopPropagation();
-                        // TODO: Implémenter la visibilité
+                        updateWidget(widget.id, { hidden: !widget.hidden }, false);
                       }}
+                      title={widget.hidden ? 'Afficher' : 'Masquer'}
                     >
-                      <Eye className="h-3 w-3" />
+                      {widget.hidden ? <EyeOff className="h-3 w-3 text-muted-foreground/50" /> : <Eye className="h-3 w-3" />}
                     </Button>
                     
                     <Button

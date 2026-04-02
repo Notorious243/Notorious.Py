@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { WidgetData, CanvasSettings, type WidgetProperties } from '@/types/widget';
 import { devWarn, devError } from '@/lib/logger';
+import { sanitizePrompt } from '@/lib/sanitize';
 import {
     SYSTEM_PROMPT_TEXT,
     SYSTEM_PROMPT_IMAGE,
@@ -52,7 +53,7 @@ export interface ContextFile {
 }
 
 export interface GenerationQualityCheck {
-    id: 'bounds' | 'collisions' | 'readability' | 'contrast' | 'truncation' | 'duplicates';
+    id: 'bounds' | 'collisions' | 'readability' | 'contrast' | 'truncation' | 'duplicates' | 'spacing' | 'hierarchy';
     label: string;
     issueCount: number;
     fixedCount: number;
@@ -105,7 +106,8 @@ type AIErrorCode =
     | 'UNKNOWN';
 
 const MAX_RETRY_ATTEMPTS = 3;
-const QUALITY_GATE_MIN_SCORE = 85;
+const AI_CALL_TIMEOUT_MS = 120_000; // 2 minutes max per AI call
+const QUALITY_GATE_MIN_SCORE = 90;
 const RETRYABLE_ERROR_CODES = new Set<AIErrorCode>([
     'NETWORK',
     'TIMEOUT',
@@ -570,6 +572,45 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
             }
         }
 
+        // Spacing consistency: ensure sibling widgets within the same parent
+        // have at least 8px vertical gap (prevents cramped layouts).
+        let spacingIssues = 0;
+        let spacingFixed = 0;
+        for (const group of groups.values()) {
+            const sorted = [...group].sort((a, b) => Number(a.position.y) - Number(b.position.y));
+            for (let i = 1; i < sorted.length; i += 1) {
+                const prev = sorted[i - 1];
+                const curr = sorted[i];
+                const gap = curr.position.y - (prev.position.y + prev.size.height);
+                if (gap >= 0 && gap < 8) {
+                    spacingIssues += 1;
+                    curr.position.y = prev.position.y + prev.size.height + 10;
+                    const sMaxY = Math.max(0, canvasHeight - curr.size.height);
+                    curr.position.y = Math.min(sMaxY, curr.position.y);
+                    spacingFixed += 1;
+                }
+            }
+        }
+
+        // Hierarchy validation: children must reference parent frames/containers
+        const containerTypes = new Set(['frame', 'scrollableframe', 'tabview']);
+        const widgetById = new Map(deduped.map(w => [w.id, w]));
+        let hierarchyIssues = 0;
+        let hierarchyFixed = 0;
+        for (const widget of deduped) {
+            if (!widget.parentId) continue;
+            const parent = widgetById.get(widget.parentId);
+            if (!parent) {
+                hierarchyIssues += 1;
+                widget.parentId = null;
+                hierarchyFixed += 1;
+            } else if (!containerTypes.has(parent.type)) {
+                hierarchyIssues += 1;
+                widget.parentId = null;
+                hierarchyFixed += 1;
+            }
+        }
+
         const toCheck = (
             id: GenerationQualityCheck['id'],
             label: string,
@@ -597,6 +638,8 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
             toCheck('readability', 'Lisibilite tailles', readabilityIssues, readabilityFixed, 'Controle tailles minimales'),
             toCheck('contrast', 'Contraste texte', contrastIssues, contrastFixed, 'Controle contraste'),
             toCheck('truncation', 'Texte tronque probable', truncationIssues, truncationFixed, 'Controle largeur texte'),
+            toCheck('spacing', 'Espacement entre widgets', spacingIssues, spacingFixed, 'Controle espacement minimum'),
+            toCheck('hierarchy', 'Hierarchie parent-enfant', hierarchyIssues, hierarchyFixed, 'Controle references parentId'),
         ];
 
         const totalIssues = checks.reduce((sum, check) => sum + check.issueCount, 0);
@@ -909,7 +952,15 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
         for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt += 1) {
             try {
                 if (attempt > 1) setRetryCount(attempt - 1);
-                return await callProvider(apiKey, model, messages, signal);
+                // Combine user abort signal with a per-call timeout
+                const timeoutController = new AbortController();
+                const timer = setTimeout(() => timeoutController.abort(), AI_CALL_TIMEOUT_MS);
+                signal?.addEventListener('abort', () => timeoutController.abort(), { once: true });
+                try {
+                    return await callProvider(apiKey, model, messages, timeoutController.signal);
+                } finally {
+                    clearTimeout(timer);
+                }
             } catch (attemptError: unknown) {
                 if (attemptError instanceof Error && attemptError.name === 'AbortError') throw attemptError;
                 const rawMsg = attemptError instanceof Error ? attemptError.message : String(attemptError);
@@ -940,8 +991,15 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
         const controller = new AbortController();
         abortRef.current = controller;
 
+        const { valid, sanitized: safePrompt, reason } = sanitizePrompt(prompt);
+        if (!valid) {
+            setError(reason || 'Prompt invalide.');
+            setIsGenerating(false);
+            return null;
+        }
+
         const contextPrompt = buildContextPrompt(contextFiles);
-        const finalPrompt = prompt + contextPrompt;
+        const finalPrompt = safePrompt + contextPrompt;
 
         try {
             const responseText = await callWithRetry(apiKey, modelId, [

@@ -92,6 +92,7 @@ export interface WidgetData {
   parentId?: string | null;
   parentSlot?: string | null;
   locked?: boolean;
+  hidden?: boolean;
   autoLayout?: AutoLayoutConfig;
   autoLayoutChild?: AutoLayoutChildOverrides;
   constraints?: WidgetConstraints;

@@ -10,20 +10,24 @@ interface State {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
+  retryCount: number;
 }
+
+const MAX_AUTO_RETRIES = 2;
 
 export class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
     error: null,
-    errorInfo: null
+    errorInfo: null,
+    retryCount: 0,
   };
 
-  public static getDerivedStateFromError(error: Error): State {
+  public static getDerivedStateFromError(error: Error): Partial<State> {
     return {
       hasError: true,
       error,
-      errorInfo: null
+      errorInfo: null,
     };
   }
 
@@ -35,17 +39,27 @@ export class ErrorBoundary extends Component<Props, State> {
     });
   }
 
-  private handleReset = () => {
-    this.setState({
-      hasError: false,
-      error: null,
-      errorInfo: null
-    });
+  private handleRetry = () => {
+    if (this.state.retryCount < MAX_AUTO_RETRIES) {
+      this.setState((prev) => ({
+        hasError: false,
+        error: null,
+        errorInfo: null,
+        retryCount: prev.retryCount + 1,
+      }));
+    } else {
+      window.location.reload();
+    }
+  };
+
+  private handleHardReload = () => {
     window.location.reload();
   };
 
   public render() {
     if (this.state.hasError) {
+      const canRetry = this.state.retryCount < MAX_AUTO_RETRIES;
+
       return (
         <div className="flex items-center justify-center min-h-screen bg-background">
           <div className="max-w-2xl p-8 bg-card border border-destructive/50 rounded-lg shadow-lg">
@@ -57,7 +71,9 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
             
             <p className="text-muted-foreground mb-4">
-              Une erreur inattendue s'est produite dans l'application. Veuillez recharger la page.
+              {canRetry
+                ? 'Une erreur inattendue est survenue. Vous pouvez réessayer sans recharger la page.'
+                : 'L\'erreur persiste après plusieurs tentatives. Rechargez la page.'}
             </p>
 
             {this.state.error && (
@@ -80,13 +96,22 @@ export class ErrorBoundary extends Component<Props, State> {
 
             <div className="flex gap-3">
               <button
-                onClick={this.handleReset}
+                onClick={this.handleRetry}
                 className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
               >
                 <RefreshCcw className="w-4 h-4" />
-                Recharger la page
+                {canRetry ? `Réessayer (${this.state.retryCount + 1}/${MAX_AUTO_RETRIES})` : 'Recharger la page'}
               </button>
               
+              {canRetry && (
+                <button
+                  onClick={this.handleHardReload}
+                  className="px-4 py-2 bg-muted text-muted-foreground rounded-md hover:bg-muted/80 transition-colors"
+                >
+                  Recharger la page
+                </button>
+              )}
+
               <button
                 onClick={() => window.history.back()}
                 className="px-4 py-2 bg-muted text-muted-foreground rounded-md hover:bg-muted/80 transition-colors"
@@ -97,10 +122,13 @@ export class ErrorBoundary extends Component<Props, State> {
 
             <div className="mt-6 p-4 bg-muted/50 rounded border border-border">
               <p className="text-xs text-muted-foreground">
-                💡 <strong>Conseil :</strong> Si l'erreur persiste, essayez de :<br />
-                • Vider le cache du navigateur (Ctrl+Shift+R)<br />
-                • Vérifier la console du navigateur (F12)<br />
-                • Contacter le support technique si nécessaire
+                Si l'erreur persiste, essayez de :
+                <br />
+                &bull; Vider le cache du navigateur (Ctrl+Shift+R)
+                <br />
+                &bull; Vérifier la console du navigateur (F12)
+                <br />
+                &bull; Contacter le support technique si nécessaire
               </p>
             </div>
           </div>

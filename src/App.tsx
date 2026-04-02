@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { ThemeProvider } from 'next-themes';
 import { Index } from '@/pages/Index';
 import { Toaster } from '@/components/ui/sonner';
@@ -7,10 +7,10 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { useAuth } from '@/contexts/useAuth';
 import { supabase } from '@/lib/supabase';
-const AuthPage = lazy(() => import('@/components/auth/AuthPage').then(m => ({ default: m.AuthPage })));
-const WelcomePage = lazy(() => import('@/components/auth/WelcomePage').then(m => ({ default: m.WelcomePage })));
-
-const SharedProjectView = lazy(() => import('@/pages/SharedProjectView'));
+import { lazyNamed } from '@/lib/lazy';
+const AuthPage = lazyNamed(() => import('@/components/auth/AuthPage'), 'AuthPage');
+const WelcomePage = lazyNamed(() => import('@/components/auth/WelcomePage'), 'WelcomePage');
+const SharedProjectView = lazyNamed(() => import('@/pages/SharedProjectView'));
 
 
 function getShareToken(): string | null {

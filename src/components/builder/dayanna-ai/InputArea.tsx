@@ -383,7 +383,7 @@ export function InputArea({
   }, []);
 
   return (
-    <div className="bg-background p-2">
+    <div className="bg-background p-2" data-tour-ai-input>
       <div className="relative flex w-full flex-col rounded-lg border-2 border-border/70 bg-muted/20 transition-all focus-within:border-primary/70 focus-within:shadow-sm focus-within:shadow-primary/10">
         {/* Tagged files chips */}
         <AnimatePresence>
@@ -425,6 +425,7 @@ export function InputArea({
         <div className="relative flex flex-col gap-1 px-2.5 pt-2">
           <textarea
             ref={textareaRef}
+            data-tour-ai-prompt
             value={content}
             onChange={handleTextChange}
             onKeyDown={handleKeyDown}

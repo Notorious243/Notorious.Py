@@ -1,343 +1,634 @@
-import React, { useEffect } from 'react';
-import { driver } from 'driver.js';
-import 'driver.js/dist/driver.css';
-import { useTheme } from 'next-themes';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  ArrowRight,
+  ArrowLeft,
+  X,
+  Sparkles,
+  MousePointerClick,
+  LayoutDashboard,
+  Palette,
+  Bot,
+  MessageSquareText,
+  FileCode2,
+  Eye,
+  Download,
+  Rocket,
+} from 'lucide-react';
+import { OPEN_AI_SIDEBAR_EVENT, OPEN_AI_WORKSPACE_PANELS_EVENT } from '@/lib/aiSidebar';
+
+// ── Types ───────────────────────────────────────────────────────────────────────
 
 interface OnboardingTourProps {
   isFirstTime: boolean;
   onComplete: () => void;
 }
 
-const START_ONBOARDING_TOUR_EVENT = 'dayanna:start-onboarding-tour';
+interface TourStep {
+  selector: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  hint?: string;
+  icon: React.ElementType;
+  gradient?: boolean;
+  onEnter?: () => void;
+}
 
-// SVG Icons as strings for driver.js HTML content - Modern Software Style
-const Icons = {
-  Sparkles: `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="url(#sparkle-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="sparkle-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#0F3460"/><stop offset="100%" stop-color="#1F5AA0"/></linearGradient></defs><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>`,
-  LayoutGrid: `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="url(#grid-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="grid-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient></defs><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>`,
-  MousePointer: `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="url(#pointer-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="pointer-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#ef4444"/></linearGradient></defs><path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="m13 13 6 6"/></svg>`,
-  Sliders: `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="url(#slider-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="slider-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1F5AA0"/><stop offset="100%" stop-color="#ec4899"/></linearGradient></defs><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/></svg>`,
-  FilePlus: `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="url(#fileplus-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="fileplus-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#22c55e"/><stop offset="100%" stop-color="#14b8a6"/></linearGradient></defs><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15h6"/></svg>`,
-  PlayCircle: `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="url(#play-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="play-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#06b6d4"/><stop offset="100%" stop-color="#3b82f6"/></linearGradient></defs><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>`,
-  Download: `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="url(#download-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="download-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#ef4444"/><stop offset="100%" stop-color="#f97316"/></linearGradient></defs><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>`,
-  CheckCircle: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="url(#check-gradient)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="check-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#22c55e"/></linearGradient></defs><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>`
+interface SpotlightRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+// ── Constants ───────────────────────────────────────────────────────────────────
+
+const START_ONBOARDING_TOUR_EVENT = 'dayanna:start-onboarding-tour';
+const SPOTLIGHT_PAD = 14;
+const SPOTLIGHT_RADIUS = 16;
+const CARD_GAP = 20;
+const CARD_MAX_W = 400;
+
+const openAiWorkspace = () => {
+  window.dispatchEvent(new CustomEvent(OPEN_AI_WORKSPACE_PANELS_EVENT));
+  window.dispatchEvent(new CustomEvent(OPEN_AI_SIDEBAR_EVENT));
 };
 
-// ── Shared CSS builder ──────────────────────────────────────────────────
-const buildTourCSS = (isDark: boolean): string => `
-  .driver-popover.driverjs-theme {
-    background: ${isDark
-      ? 'linear-gradient(145deg, #1e293b 0%, #0f172a 100%)'
-      : 'linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)'};
-    color: ${isDark ? '#f8fafc' : '#0f172a'};
-    border-radius: 20px;
-    border: 1px solid ${isDark ? 'rgba(15, 52, 96, 0.2)' : 'rgba(15, 52, 96, 0.15)'};
-    box-shadow:
-      0 25px 50px -12px rgba(0, 0, 0, 0.25),
-      0 0 0 1px rgba(15, 52, 96, 0.1);
-    padding: 0;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    max-width: 360px;
-    overflow: hidden;
-  }
-  .driver-popover.driverjs-theme .driver-popover-title {
-    font-size: 18px; font-weight: 700; margin: 0;
-    padding: 24px 24px 12px 24px;
-    display: flex; align-items: center; gap: 12px;
-    background: ${isDark
-      ? 'linear-gradient(135deg, rgba(15, 52, 96, 0.15) 0%, rgba(15, 52, 96, 0.1) 100%)'
-      : 'linear-gradient(135deg, rgba(15, 52, 96, 0.08) 0%, rgba(15, 52, 96, 0.05) 100%)'};
-    border-bottom: 1px solid ${isDark ? 'rgba(15, 52, 96, 0.1)' : 'rgba(15, 52, 96, 0.08)'};
-  }
-  .driver-popover.driverjs-theme .driver-popover-title svg {
-    filter: drop-shadow(0 2px 4px rgba(15, 52, 96, 0.3));
-  }
-  .driver-popover.driverjs-theme .driver-popover-description {
-    font-size: 15px; line-height: 1.7;
-    color: ${isDark ? '#cbd5e1' : '#475569'};
-    padding: 16px 24px; margin: 0;
-  }
-  .driver-popover.driverjs-theme .driver-popover-description p { margin: 0 0 10px 0; }
-  .driver-popover.driverjs-theme .driver-popover-description p:last-child { margin-bottom: 0; }
-  .driver-popover.driverjs-theme .driver-popover-description strong {
-    color: ${isDark ? '#f8fafc' : '#0f172a'}; font-weight: 600;
-  }
-  .tour-focus {
-    margin-top: 10px; padding: 10px 12px; border-radius: 10px;
-    border: 1px solid ${isDark ? 'rgba(96, 165, 250, 0.35)' : 'rgba(59, 130, 246, 0.22)'};
-    background: ${isDark ? 'rgba(30, 64, 175, 0.15)' : 'rgba(239, 246, 255, 0.9)'};
-    font-size: 12px; font-weight: 600;
-    color: ${isDark ? '#bfdbfe' : '#1e40af'};
-  }
-  .driver-popover.driverjs-theme .driver-popover-footer {
-    margin: 0; padding: 16px 24px 20px 24px;
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    background: ${isDark ? 'rgba(15, 23, 42, 0.5)' : 'rgba(248, 250, 252, 0.8)'};
-    border-top: 1px solid ${isDark ? 'rgba(15, 52, 96, 0.1)' : 'rgba(15, 52, 96, 0.08)'};
-  }
-  .driver-popover.driverjs-theme .driver-popover-progress-text {
-    font-size: 13px; font-weight: 500;
-    color: ${isDark ? '#94a3b8' : '#64748b'};
-    background: ${isDark ? 'rgba(30, 41, 59, 0.8)' : 'rgba(241, 245, 249, 0.8)'};
-    padding: 6px 14px; border-radius: 20px;
-    border: 1px solid ${isDark ? 'rgba(15, 52, 96, 0.15)' : 'rgba(15, 52, 96, 0.1)'};
-  }
-  .driver-popover.driverjs-theme button.driver-popover-next-btn {
-    background: linear-gradient(135deg, #0F3460 0%, #1F5AA0 100%);
-    color: white; text-shadow: none; border: none; border-radius: 12px;
-    padding: 10px 20px; font-size: 14px; font-weight: 600;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 4px 14px rgba(15, 52, 96, 0.4);
-  }
-  .driver-popover.driverjs-theme button.driver-popover-next-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(15, 52, 96, 0.5);
-    background: linear-gradient(135deg, #0C2B52 0%, #0F3460 100%);
-  }
-  .driver-popover.driverjs-theme button.driver-popover-next-btn:active {
-    transform: translateY(0);
-  }
-  .driver-popover.driverjs-theme button.driver-popover-prev-btn {
-    border: 1px solid ${isDark ? 'rgba(148, 163, 184, 0.3)' : 'rgba(100, 116, 139, 0.2)'};
-    color: ${isDark ? '#94a3b8' : '#64748b'};
-    background: transparent; border-radius: 12px;
-    padding: 10px 18px; font-size: 14px; font-weight: 500;
-    transition: all 0.2s ease;
-  }
-  .driver-popover.driverjs-theme button.driver-popover-prev-btn:hover {
-    background: ${isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(100, 116, 139, 0.08)'};
-    color: ${isDark ? '#e2e8f0' : '#475569'};
-  }
-  .driver-popover.driverjs-theme button.driver-popover-close-btn {
-    color: #94a3b8; width: 32px; height: 32px; border-radius: 8px;
-    display: flex; align-items: center; justify-content: center;
-    transition: all 0.2s ease; top: 16px; right: 16px;
-  }
-  .driver-popover.driverjs-theme button.driver-popover-close-btn:hover {
-    background: ${isDark ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.08)'};
-    color: #ef4444;
-  }
-  .driver-popover-arrow {
-    border-top-color: ${isDark ? '#1e293b' : '#ffffff'} !important;
-  }
-  .driver-overlay {
-    background: rgba(15, 23, 42, 0.56) !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-  }
-  .driver-active-element {
-    outline: none !important; filter: none !important; opacity: 1 !important;
-    box-shadow:
-      0 0 0 2px ${isDark ? 'rgba(255,255,255,0.9)' : 'rgba(15,23,42,0.85)'},
-      0 0 0 9px ${isDark ? 'rgba(15,52,96,0.45)' : 'rgba(15,52,96,0.32)'},
-      0 0 36px ${isDark ? 'rgba(15,52,96,0.45)' : 'rgba(15,52,96,0.28)'} !important;
-    border-radius: 12px !important;
-    animation: driverPulse 1.6s ease-in-out infinite;
-  }
-  .driver-stage { filter: none !important; opacity: 1 !important; }
-  @keyframes driverPulse {
-    0%, 100% {
-      box-shadow:
-        0 0 0 2px ${isDark ? 'rgba(255,255,255,0.9)' : 'rgba(15,23,42,0.85)'},
-        0 0 0 9px ${isDark ? 'rgba(15,52,96,0.45)' : 'rgba(15,52,96,0.32)'},
-        0 0 36px ${isDark ? 'rgba(15,52,96,0.45)' : 'rgba(15,52,96,0.28)'};
-    }
-    50% {
-      box-shadow:
-        0 0 0 2px ${isDark ? 'rgba(255,255,255,0.9)' : 'rgba(15,23,42,0.85)'},
-        0 0 0 11px ${isDark ? 'rgba(15,52,96,0.52)' : 'rgba(15,52,96,0.4)'},
-        0 0 44px ${isDark ? 'rgba(15,52,96,0.5)' : 'rgba(15,52,96,0.34)'};
-    }
-  }
-`;
+// ── Python Glyph (shared visual) ────────────────────────────────────────────────
 
-// ── Shared tour steps builder ───────────────────────────────────────────
-const buildTourSteps = (isDark: boolean) => [
+const PythonGlyph = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 110 110" fill="currentColor" className={className} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M53.8,4.1c-24.8,0-23.3,10.7-23.3,10.7l0,11h23.8v3.4H30.4c0,0-15.3,2.4-15.3,21.8c0,19.4,13.3,20.6,13.3,20.6h6.7v-9.6c0,0-0.4-11.2,11.4-11.2h16c0,0,10.1-0.8,10.1-10.5V14.1C72.5,14.1,72.6,4.1,53.8,4.1z M39.4,11.5c2.4,0,4.4,2,4.4,4.4c0,2.4-2,4.4-4.4,4.4c-2.4,0-4.4-2-4.4-4.4C35.1,13.5,37,11.5,39.4,11.5z" />
+    <path d="M55.7,105.8c24.8,0,23.3-10.7,23.3-10.7l0-11H55.2v-3.4h23.8c0,0,15.3-2.4,15.3-21.8c0-19.4-13.3-20.6-13.3-20.6H74.3v9.6c0,0,0.4,11.2-11.4,11.2H46.9c0,0-10.1,0.8-10.1,10.5v26.2C36.9,95.8,36.8,105.8,55.7,105.8z M70.1,98.4c-2.4,0-4.4-2-4.4-4.4c0,2.4,2-4.4,4.4-4.4c2.4,0,4.4,2,4.4,4.4C74.5,96.4,72.5,98.4,70.1,98.4z" />
+  </svg>
+);
+
+// ── Steps definition ────────────────────────────────────────────────────────────
+
+const TOUR_STEPS: TourStep[] = [
   {
-    element: 'body',
-    popover: {
-      title: `<div style="display: flex; align-items: center; gap: 12px;">${Icons.Sparkles} <span style="background: linear-gradient(135deg, #0F3460 0%, #1F5AA0 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">Bienvenue</span></div>`,
-      description: `
-        <div style="padding: 4px 0;">
-          <p style="margin-bottom: 12px;">
-            Bienvenue dans <strong>Notorious.PY</strong>, l'outil moderne pour créer des interfaces CustomTkinter.
-          </p>
-          <p style="margin-bottom: 0; color: ${isDark ? '#94a3b8' : '#64748b'};">
-            Ce guide rapide vous présentera les fonctionnalités clés en <strong style="color: ${isDark ? '#f8fafc' : '#0f172a'};">moins de 2 minutes</strong>.
-          </p>
-          <div class="tour-focus">Focus: suivez le halo lumineux pour identifier la zone guidée.</div>
-        </div>
-      `,
-      side: 'over' as const,
-      align: 'center' as const
-    }
+    selector: 'body',
+    title: 'Bienvenue',
+    subtitle: 'Votre studio est pret',
+    description:
+      'Bienvenue dans Notorious.PY, votre studio de creation d\'interfaces Python. En moins de 2 minutes, decouvrez les zones essentielles.',
+    hint: 'Suivez le guide lumineux pas a pas',
+    icon: Sparkles,
+    gradient: true,
   },
   {
-    element: '.widget-sidebar',
-    popover: {
-      title: `<div style="display: flex; align-items: center; gap: 12px;">${Icons.LayoutGrid} <span>Widgets</span></div>`,
-      description: `
-        <div style="padding: 4px 0;">
-          <p style="margin-bottom: 10px;">
-            Votre boîte à outils. Glissez-déposez les composants depuis cette barre latérale vers le canvas.
-          </p>
-          <div class="tour-focus">Zone clé: bibliothèque des composants.</div>
-        </div>
-      `,
-      side: 'right' as const,
-      align: 'start' as const
-    }
+    selector: '.widget-sidebar',
+    title: 'Composants',
+    subtitle: 'Bibliotheque de widgets',
+    description:
+      'Glissez-deposez les composants depuis cette palette pour construire votre interface. Boutons, champs, labels, sliders et bien plus.',
+    hint: 'Glisser → deposer sur le canvas',
+    icon: MousePointerClick,
   },
   {
-    element: '.canvas-container',
-    popover: {
-      title: `<div style="display: flex; align-items: center; gap: 12px;">${Icons.MousePointer} <span>Canvas</span></div>`,
-      description: `
-        <div style="padding: 4px 0;">
-          <p style="margin-bottom: 10px;">
-            Votre espace de travail principal. Positionnez, redimensionnez et organisez votre interface ici.
-          </p>
-          <div class="tour-focus">Zone clé: surface de construction de l'interface.</div>
-        </div>
-      `,
-      side: 'left' as const,
-      align: 'center' as const
-    }
+    selector: '.canvas-container',
+    title: 'Canvas',
+    subtitle: 'Zone de design visuel',
+    description:
+      'Le canvas central est votre espace de creation. Positionnez et redimensionnez vos widgets en temps reel pour composer l\'ecran.',
+    hint: 'Cliquez, deplacez, redimensionnez',
+    icon: LayoutDashboard,
   },
   {
-    element: '.properties-panel-container',
-    popover: {
-      title: `<div style="display: flex; align-items: center; gap: 10px;">${Icons.Sliders} <span>Propriétés</span></div>`,
-      description: `
-        <div style="padding: 4px 0;">
-          <p style="margin-bottom: 10px;">
-            Sélectionnez un widget pour modifier ses propriétés : texte, couleurs, dimensions, etc.
-          </p>
-          <div class="tour-focus">Zone clé: panneau de configuration du widget actif.</div>
-        </div>
-      `,
-      side: 'left' as const,
-      align: 'start' as const
-    }
+    selector: '.properties-panel-container',
+    title: 'Proprietes',
+    subtitle: 'Reglages et styles',
+    description:
+      'Ajustez finement les couleurs, dimensions, textes et comportements de chaque widget selectionne ou du canvas global.',
+    hint: 'Selectionnez un widget pour voir ses options',
+    icon: Palette,
   },
   {
-    element: '[data-tour-first-py-file-button], [data-tour-create-file-button]',
-    popover: {
-      title: `<div style="display: flex; align-items: center; gap: 12px;">${Icons.FilePlus} <span>Premier fichier .py</span></div>`,
-      description: `
-        <div style="padding: 4px 0;">
-          <p style="margin-bottom: 10px;">
-            Créez maintenant votre premier fichier Python en cliquant sur <strong>Nouveau Fichier</strong>.
-          </p>
-          <p style="margin-bottom: 0;">
-            Saisissez un nom (ex: <strong>main.py</strong>) puis validez avec <strong>Entrée</strong>.
-          </p>
-          <div class="tour-focus">Action guidée: cette étape initialise votre structure de projet Python.</div>
-        </div>
-      `,
-      side: 'bottom' as const,
-      align: 'start' as const
-    }
+    selector: '[data-tour-ai-tab]',
+    title: 'Assistant IA',
+    subtitle: 'Dayanna, votre co-pilote',
+    description:
+      'Activez l\'assistant IA pour generer des interfaces completes, modifier des layouts ou obtenir des suggestions intelligentes.',
+    hint: 'Decrivez ce que vous voulez en francais',
+    icon: Bot,
+    onEnter: openAiWorkspace,
   },
   {
-    element: '[data-preview-toggle]',
-    popover: {
-      title: `<div style="display: flex; align-items: center; gap: 12px;">${Icons.PlayCircle} <span>Aperçu</span></div>`,
-      description: `
-        <div style="padding: 4px 0;">
-          <p>
-            Testez l'interactivité de votre interface en temps réel.
-          </p>
-          <div class="tour-focus">Zone clé: bascule édition/aperçu en un clic.</div>
-        </div>
-      `,
-      side: 'bottom' as const,
-      align: 'end' as const
-    }
+    selector: '[data-tour-ai-input], [data-tour-ai-tab]',
+    title: 'Prompt IA',
+    subtitle: 'Ecrivez, l\'IA construit',
+    description:
+      'Redigez votre besoin en langage naturel : layout, style, comportement. Plus votre prompt est precis, meilleur sera le resultat.',
+    hint: 'Exemple : "Dashboard pharmacie avec sidebar et stats"',
+    icon: MessageSquareText,
+    onEnter: openAiWorkspace,
   },
   {
-    element: '[data-export-button]',
-    popover: {
-      title: `<div style="display: flex; align-items: center; gap: 12px;">${Icons.Download} <span>Exporter</span></div>`,
-      description: `
-        <div style="padding: 4px 0;">
-          <p>
-            Générez et copiez le code Python final en un clic.
-          </p>
-          <div class="tour-focus">Zone clé: export direct vers votre projet Python.</div>
-        </div>
-      `,
-      side: 'bottom' as const,
-      align: 'center' as const
-    }
+    selector: '[data-tour-first-py-file-button], [data-tour-create-file-button]',
+    title: 'Fichier Python',
+    subtitle: 'Point de depart du projet',
+    description:
+      'Initialisez votre premier fichier .py pour demarrer. Chaque fichier represente un ecran de votre application.',
+    hint: 'Un clic pour commencer',
+    icon: FileCode2,
   },
   {
-    element: 'body',
-    popover: {
-      title: `<div style="display: flex; align-items: center; gap: 12px;">${Icons.CheckCircle} <span style="background: linear-gradient(135deg, #10b981 0%, #22c55e 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">Prêt !</span></div>`,
-      description: `
-        <div style="padding: 4px 0;">
-          <p>
-            Vous avez tout ce qu'il faut. Bon codage !
-          </p>
-        </div>
-      `,
-      side: 'over' as const,
-      align: 'center' as const
-    }
-  }
+    selector: '[data-preview-toggle]',
+    title: 'Apercu',
+    subtitle: 'Controle qualite visuel',
+    description:
+      'Basculez entre le mode edition et le mode apercu pour visualiser le rendu final de votre interface avant l\'export.',
+    hint: 'Raccourci pratique pour valider le design',
+    icon: Eye,
+  },
+  {
+    selector: '[data-export-button]',
+    title: 'Export',
+    subtitle: 'Code Python pret',
+    description:
+      'Exportez votre interface en code Python CustomTkinter propre et fonctionnel, pret a integrer dans votre projet.',
+    hint: 'Sortie vers la production en un clic',
+    icon: Download,
+  },
+  {
+    selector: 'body',
+    title: 'C\'est parti !',
+    subtitle: 'Vous etes pret a creer',
+    description:
+      'Votre environnement est configure. Concevez des interfaces professionnelles avec ou sans assistance IA. Bonne creation !',
+    icon: Rocket,
+    gradient: true,
+  },
 ];
 
-// ── Shared driver launcher ──────────────────────────────────────────────
-const launchTour = (isDark: boolean, onComplete?: () => void) => {
-  const style = document.createElement('style');
-  style.innerHTML = buildTourCSS(isDark);
-  document.head.appendChild(style);
+// ── Helpers ──────────────────────────────────────────────────────────────────────
 
-  const driverObj = driver({
-    showProgress: true,
-    stagePadding: 12,
-    stageRadius: 12,
-    animate: true,
-    showButtons: ['next', 'previous', 'close'],
-    nextBtnText: 'Suivant',
-    prevBtnText: 'Précédent',
-    doneBtnText: 'Commencer !',
-    progressText: '{{current}} / {{total}}',
-    popoverClass: 'driverjs-theme',
-    onDestroyStarted: () => {
-      driverObj.destroy();
-      onComplete?.();
-      document.head.removeChild(style);
-    },
-    steps: buildTourSteps(isDark),
-  });
-
-  driverObj.drive();
+const resolveElement = (selector: string): Element | null => {
+  if (selector === 'body') return null;
+  const parts = selector.split(',').map((s) => s.trim()).filter(Boolean);
+  for (const part of parts) {
+    const el = document.querySelector(part);
+    if (el) return el;
+  }
+  return null;
 };
 
+const getRect = (el: Element | null): SpotlightRect | null => {
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  if (r.width === 0 && r.height === 0) return null;
+  return {
+    x: r.left - SPOTLIGHT_PAD,
+    y: r.top - SPOTLIGHT_PAD,
+    width: r.width + SPOTLIGHT_PAD * 2,
+    height: r.height + SPOTLIGHT_PAD * 2,
+  };
+};
+
+type CardSide = 'right' | 'left' | 'bottom' | 'top' | 'center';
+
+const computeCardPosition = (
+  spot: SpotlightRect | null,
+  cardW: number,
+  cardH: number,
+): { x: number; y: number; side: CardSide } => {
+  if (!spot) {
+    return {
+      x: Math.round((window.innerWidth - cardW) / 2),
+      y: Math.round((window.innerHeight - cardH) / 2),
+      side: 'center',
+    };
+  }
+
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  // Try right
+  const rightX = spot.x + spot.width + CARD_GAP;
+  if (rightX + cardW < vw - 16) {
+    return { x: rightX, y: Math.max(16, Math.min(spot.y, vh - cardH - 16)), side: 'right' };
+  }
+
+  // Try left
+  const leftX = spot.x - CARD_GAP - cardW;
+  if (leftX > 16) {
+    return { x: leftX, y: Math.max(16, Math.min(spot.y, vh - cardH - 16)), side: 'left' };
+  }
+
+  // Try bottom
+  const bottomY = spot.y + spot.height + CARD_GAP;
+  if (bottomY + cardH < vh - 16) {
+    return { x: Math.max(16, Math.min(spot.x, vw - cardW - 16)), y: bottomY, side: 'bottom' };
+  }
+
+  // Try top
+  const topY = spot.y - CARD_GAP - cardH;
+  if (topY > 16) {
+    return { x: Math.max(16, Math.min(spot.x, vw - cardW - 16)), y: topY, side: 'top' };
+  }
+
+  // Fallback center
+  return {
+    x: Math.round((vw - cardW) / 2),
+    y: Math.round((vh - cardH) / 2),
+    side: 'center',
+  };
+};
+
+// ── Spotlight Overlay ───────────────────────────────────────────────────────────
+
+const SpotlightOverlay: React.FC<{ rect: SpotlightRect | null }> = ({ rect }) => {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  return (
+    <svg className="pointer-events-none fixed inset-0 z-[9998] h-full w-full" viewBox={`0 0 ${vw} ${vh}`}>
+      <defs>
+        <mask id="tour-spotlight-mask">
+          <rect x="0" y="0" width={vw} height={vh} fill="white" />
+          {rect && (
+            <motion.rect
+              initial={{ opacity: 0 }}
+              animate={{
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: rect.height,
+                rx: SPOTLIGHT_RADIUS,
+                ry: SPOTLIGHT_RADIUS,
+                opacity: 1,
+              }}
+              transition={{ type: 'spring', stiffness: 180, damping: 28 }}
+              fill="black"
+            />
+          )}
+        </mask>
+      </defs>
+      <rect
+        x="0" y="0" width={vw} height={vh}
+        fill="rgba(8, 12, 28, 0.72)"
+        mask="url(#tour-spotlight-mask)"
+      />
+      {/* Glow ring around spotlight */}
+      {rect && (
+        <motion.rect
+          initial={{ opacity: 0 }}
+          animate={{
+            x: rect.x - 3,
+            y: rect.y - 3,
+            width: rect.width + 6,
+            height: rect.height + 6,
+            rx: SPOTLIGHT_RADIUS + 3,
+            ry: SPOTLIGHT_RADIUS + 3,
+            opacity: 1,
+          }}
+          transition={{ type: 'spring', stiffness: 180, damping: 28 }}
+          fill="none"
+          stroke="rgba(59,130,246,0.45)"
+          strokeWidth="2"
+        />
+      )}
+      {rect && (
+        <motion.rect
+          initial={{ opacity: 0 }}
+          animate={{
+            x: rect.x - 8,
+            y: rect.y - 8,
+            width: rect.width + 16,
+            height: rect.height + 16,
+            rx: SPOTLIGHT_RADIUS + 8,
+            ry: SPOTLIGHT_RADIUS + 8,
+            opacity: 0.5,
+          }}
+          transition={{ type: 'spring', stiffness: 180, damping: 28 }}
+          fill="none"
+          stroke="rgba(59,130,246,0.18)"
+          strokeWidth="1.5"
+        >
+          <animate attributeName="opacity" values="0.5;0.2;0.5" dur="2.4s" repeatCount="indefinite" />
+        </motion.rect>
+      )}
+    </svg>
+  );
+};
+
+// ── Tour Card ───────────────────────────────────────────────────────────────────
+
+interface TourCardProps {
+  step: TourStep;
+  stepIndex: number;
+  totalSteps: number;
+  position: { x: number; y: number; side: CardSide };
+  onNext: () => void;
+  onPrev: () => void;
+  onClose: () => void;
+}
+
+const TourCard: React.FC<TourCardProps> = ({
+  step,
+  stepIndex,
+  totalSteps,
+  position,
+  onNext,
+  onPrev,
+  onClose,
+}) => {
+  const isFirst = stepIndex === 0;
+  const isLast = stepIndex === totalSteps - 1;
+  const Icon = step.icon;
+  const progress = ((stepIndex + 1) / totalSteps) * 100;
+
+  const enterDirection = position.side === 'left' ? 24 : position.side === 'right' ? -24 : 0;
+  const enterY = position.side === 'top' ? 20 : position.side === 'bottom' ? -20 : enterDirection === 0 ? 30 : 0;
+
+  return (
+    <motion.div
+      key={stepIndex}
+      initial={{ opacity: 0, x: enterDirection, y: enterY, scale: 0.96 }}
+      animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.94, y: 8 }}
+      transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+      className="fixed z-[9999] flex flex-col overflow-hidden rounded-2xl border border-white/[0.14] shadow-[0_32px_80px_rgba(8,12,28,0.55),0_0_0_1px_rgba(255,255,255,0.06)]"
+      style={{
+        left: position.x,
+        top: position.y,
+        width: CARD_MAX_W,
+        background: 'linear-gradient(165deg, rgba(15,20,38,0.97) 0%, rgba(22,30,52,0.96) 50%, rgba(15,20,38,0.98) 100%)',
+        backdropFilter: 'blur(24px) saturate(1.6)',
+      }}
+    >
+      {/* Radial glow accents */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
+        <div className="absolute -left-8 -top-8 h-32 w-32 rounded-full bg-blue-500/[0.12] blur-2xl" />
+        <div className="absolute -bottom-6 -right-6 h-24 w-24 rounded-full bg-indigo-500/[0.08] blur-2xl" />
+        {/* Dot grid subtle */}
+        <div
+          className="absolute inset-0 opacity-[0.04]"
+          style={{
+            backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.5) 0.5px, transparent 0.5px)',
+            backgroundSize: '16px 16px',
+          }}
+        />
+      </div>
+
+      {/* Header */}
+      <div className="relative flex items-start justify-between gap-3 border-b border-white/[0.08] px-5 pb-4 pt-5">
+        <div className="flex items-center gap-3">
+          <motion.div
+            initial={{ rotate: -12, scale: 0.8 }}
+            animate={{ rotate: 0, scale: 1 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.1 }}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-400/25 bg-gradient-to-br from-[#0F3460] to-[#1F5AA0] shadow-[0_6px_20px_rgba(15,52,96,0.45)]"
+          >
+            <Icon className="h-5 w-5 text-white" />
+          </motion.div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-md bg-blue-500/20 px-1.5 text-[10px] font-bold leading-none tracking-wider text-blue-300">
+                {String(stepIndex + 1).padStart(2, '0')}
+              </span>
+              <span className="text-[11px] font-medium uppercase tracking-widest text-slate-400">
+                {step.subtitle}
+              </span>
+            </div>
+            <h3
+              className={`mt-1 text-lg font-bold leading-tight ${
+                step.gradient
+                  ? 'bg-gradient-to-r from-blue-300 via-blue-200 to-indigo-300 bg-clip-text text-transparent'
+                  : 'text-white'
+              }`}
+            >
+              {step.title}
+            </h3>
+          </div>
+        </div>
+
+        <button
+          onClick={onClose}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-white/[0.08] hover:text-red-400"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Body */}
+      <div className="relative px-5 py-4">
+        <p className="text-[13.5px] leading-relaxed text-slate-300">{step.description}</p>
+        {step.hint && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="mt-3 rounded-xl border border-blue-400/15 bg-blue-500/[0.08] px-3.5 py-2.5 text-[12px] font-medium text-blue-300"
+          >
+            {step.hint}
+          </motion.div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="relative flex items-center justify-between border-t border-white/[0.06] bg-white/[0.02] px-5 py-3.5">
+        {/* Progress */}
+        <div className="flex items-center gap-3">
+          <div className="h-1.5 w-20 overflow-hidden rounded-full bg-white/[0.08]">
+            <motion.div
+              className="h-full rounded-full bg-gradient-to-r from-[#0F3460] to-[#3B82F6]"
+              initial={{ width: 0 }}
+              animate={{ width: `${progress}%` }}
+              transition={{ type: 'spring', stiffness: 120, damping: 20 }}
+            />
+          </div>
+          <span className="text-[11px] font-semibold tabular-nums text-slate-500">
+            {stepIndex + 1} / {totalSteps}
+          </span>
+        </div>
+
+        {/* Navigation */}
+        <div className="flex items-center gap-2">
+          {!isFirst && (
+            <button
+              onClick={onPrev}
+              className="flex h-9 items-center gap-1.5 rounded-xl border border-white/[0.10] px-3.5 text-[13px] font-medium text-slate-400 transition-all hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Precedent
+            </button>
+          )}
+          <button
+            onClick={onNext}
+            className="flex h-9 items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#0F3460] to-[#1F5AA0] px-4 text-[13px] font-semibold text-white shadow-[0_8px_24px_rgba(15,52,96,0.4)] transition-all hover:shadow-[0_12px_32px_rgba(15,52,96,0.55)] hover:brightness-110 active:scale-[0.97]"
+          >
+            {isLast ? 'Commencer' : 'Suivant'}
+            <ArrowRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+// ── Background decorations ──────────────────────────────────────────────────────
+
+const TourBackground: React.FC = () => (
+  <div className="pointer-events-none fixed inset-0 z-[9997] overflow-hidden">
+    <PythonGlyph className="absolute left-[6%] top-[12%] h-7 w-7 text-blue-400/[0.07]" />
+    <PythonGlyph className="absolute right-[8%] top-[18%] h-6 w-6 text-blue-400/[0.05]" />
+    <PythonGlyph className="absolute bottom-[16%] left-[12%] h-6 w-6 text-blue-400/[0.06]" />
+    <PythonGlyph className="absolute bottom-[12%] right-[7%] h-7 w-7 text-blue-400/[0.05]" />
+  </div>
+);
+
+// ── Main Component ──────────────────────────────────────────────────────────────
+
 export const OnboardingTour: React.FC<OnboardingTourProps> = ({ isFirstTime, onComplete }) => {
-  const { resolvedTheme } = useTheme();
+  const [isActive, setIsActive] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [spotlightRect, setSpotlightRect] = useState<SpotlightRect | null>(null);
+  const [cardPosition, setCardPosition] = useState<{ x: number; y: number; side: CardSide }>({
+    x: 0,
+    y: 0,
+    side: 'center',
+  });
+  const cardRef = useRef<number>(0);
 
+  // Build resolved steps (skip missing elements)
+  const resolvedSteps = useMemo(() => {
+    if (!isActive) return [];
+    return TOUR_STEPS.filter((step) => {
+      if (step.selector === 'body') return true;
+      return resolveElement(step.selector) !== null;
+    });
+  }, [isActive]);
+
+  const totalSteps = resolvedSteps.length;
+  const step = resolvedSteps[currentStep] ?? null;
+
+  // Position the card + spotlight for current step
+  const updatePositions = useCallback(() => {
+    if (!step) return;
+
+    const el = resolveElement(step.selector);
+    const rect = getRect(el);
+    setSpotlightRect(rect);
+
+    // Estimate card height
+    const estimatedH = step.hint ? 280 : 240;
+    const pos = computeCardPosition(rect, CARD_MAX_W, estimatedH);
+    setCardPosition(pos);
+  }, [step]);
+
+  // Recalc on step change & window resize
   useEffect(() => {
-    if (!isFirstTime) return;
+    if (!isActive || !step) return;
 
-    const timer = setTimeout(() => {
-      launchTour(resolvedTheme === 'dark', onComplete);
-    }, 500);
+    // Fire onEnter callback
+    step.onEnter?.();
 
-    return () => clearTimeout(timer);
-  }, [isFirstTime, onComplete, resolvedTheme]);
+    // Small delay to let DOM settle (e.g., after opening AI panel)
+    const timer = window.setTimeout(() => {
+      updatePositions();
+    }, step.onEnter ? 200 : 50);
 
+    const handleResize = () => updatePositions();
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [isActive, currentStep, step, updatePositions]);
+
+  // Start tour
+  const startTour = useCallback(() => {
+    setCurrentStep(0);
+    setIsActive(true);
+    cardRef.current += 1;
+  }, []);
+
+  // Close tour
+  const closeTour = useCallback(() => {
+    setIsActive(false);
+    setCurrentStep(0);
+    setSpotlightRect(null);
+    onComplete();
+  }, [onComplete]);
+
+  // Navigation
+  const goNext = useCallback(() => {
+    if (currentStep >= totalSteps - 1) {
+      closeTour();
+    } else {
+      setCurrentStep((prev) => prev + 1);
+    }
+  }, [currentStep, totalSteps, closeTour]);
+
+  const goPrev = useCallback(() => {
+    if (currentStep > 0) setCurrentStep((prev) => prev - 1);
+  }, [currentStep]);
+
+  // Keyboard navigation
   useEffect(() => {
-    const handleStartTour = () => {
-      launchTour(resolvedTheme === 'dark', onComplete);
+    if (!isActive) return;
+
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeTour();
+      if (e.key === 'ArrowRight' || e.key === 'Enter') goNext();
+      if (e.key === 'ArrowLeft') goPrev();
     };
 
-    window.addEventListener(START_ONBOARDING_TOUR_EVENT, handleStartTour);
-    return () => window.removeEventListener(START_ONBOARDING_TOUR_EVENT, handleStartTour);
-  }, [onComplete, resolvedTheme]);
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [isActive, goNext, goPrev, closeTour]);
 
-  return null;
+  // Auto-start on first visit
+  useEffect(() => {
+    if (!isFirstTime) return;
+    const timer = window.setTimeout(() => startTour(), 600);
+    return () => window.clearTimeout(timer);
+  }, [isFirstTime, startTour]);
+
+  // Listen for manual trigger
+  useEffect(() => {
+    const handler = () => startTour();
+    window.addEventListener(START_ONBOARDING_TOUR_EVENT, handler);
+    return () => window.removeEventListener(START_ONBOARDING_TOUR_EVENT, handler);
+  }, [startTour]);
+
+  if (!isActive || !step) return null;
+
+  return (
+    <>
+      {/* Clickable backdrop (click = close) */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[9996]"
+        onClick={closeTour}
+      />
+
+      {/* Background decorations */}
+      <TourBackground />
+
+      {/* Spotlight overlay */}
+      <SpotlightOverlay rect={spotlightRect} />
+
+      {/* Tour card */}
+      <AnimatePresence mode="wait">
+        <TourCard
+          key={`step-${currentStep}-${cardRef.current}`}
+          step={step}
+          stepIndex={currentStep}
+          totalSteps={totalSteps}
+          position={cardPosition}
+          onNext={goNext}
+          onPrev={goPrev}
+          onClose={closeTour}
+        />
+      </AnimatePresence>
+    </>
+  );
 };
 
 export default OnboardingTour;

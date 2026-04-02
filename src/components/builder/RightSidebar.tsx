@@ -82,6 +82,7 @@ export const RightSidebar: React.FC = () => {
           >
             <TabsTrigger
               value="properties"
+              data-tour-properties-tab
               className={cn(
                 "gap-2 rounded-lg text-xs",
                 isAiTab
@@ -94,6 +95,7 @@ export const RightSidebar: React.FC = () => {
             </TabsTrigger>
             <TabsTrigger
               value="ai"
+              data-tour-ai-tab
               className={cn(
                 "gap-2 rounded-lg text-xs",
                 isAiTab
@@ -109,10 +111,10 @@ export const RightSidebar: React.FC = () => {
         <TabsContent value="properties" className="m-0 flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
           <ScrollArea className="flex-1 overflow-auto">
             <div className="px-4 py-4">
-              <Accordion type="multiple" defaultValue={['proprietes', 'widgets', 'canvas']} className="w-full space-y-4">
+              <Accordion type="multiple" defaultValue={['canvas', 'proprietes', 'widgets']} className="w-full space-y-4">
+                <CanvasProperties />
                 <WidgetProperties selectedWidget={selectedWidget} />
                 <WidgetList />
-                <CanvasProperties />
               </Accordion>
             </div>
           </ScrollArea>

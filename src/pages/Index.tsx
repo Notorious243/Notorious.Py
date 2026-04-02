@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useFileSystem } from '@/hooks/useFileSystemContext';
 import { TopBar } from '@/components/builder/TopBar';
 import { WidgetSidebar } from '@/components/builder/WidgetSidebar';
@@ -14,15 +14,17 @@ import { FileSystemProvider } from '@/hooks/useFileSystem';
 import { GridAnimation } from '@/components/ui/grid-animation';
 import { ProjectProvider } from '@/contexts/ProjectContext';
 import { useProjects } from '@/contexts/useProjects';
+import { useAuth } from '@/contexts/useAuth';
 import { OPEN_AI_WORKSPACE_PANELS_EVENT } from '@/lib/aiSidebar';
 import { PythonLoadingScreen } from '@/components/ui/PythonLoadingScreen';
 import type { SettingsSection } from '@/types/settings';
-const WelcomeScreen = lazy(() => import('@/components/builder/WelcomeScreen').then(m => ({ default: m.WelcomeScreen })));
-const SettingsHub = lazy(() => import('@/components/settings/SettingsHub').then(m => ({ default: m.SettingsHub })));
+import { lazyNamed } from '@/lib/lazy';
+const WelcomeScreen = lazyNamed(() => import('@/components/builder/WelcomeScreen'), 'WelcomeScreen');
+const SettingsHub = lazyNamed(() => import('@/components/settings/SettingsHub'), 'SettingsHub');
 
 // Lazy load des composants lourds non critiques
-const CodeView = lazy(() => import('@/components/builder/CodeView'));
-const OnboardingTour = lazy(() => import('@/components/builder/OnboardingTour'));
+const CodeView = lazyNamed(() => import('@/components/builder/CodeView'));
+const OnboardingTour = lazyNamed(() => import('@/components/builder/OnboardingTour'));
 
 const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
   const { viewMode, previewMode, setViewMode, setPreviewMode } = useWidgets();
@@ -40,8 +42,13 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
   const AI_PANEL_WIDTH = 340;
   const rightPanelWidth = rightSidebarTab === 'ai' ? AI_PANEL_WIDTH : PROPERTIES_PANEL_WIDTH;
   const { projects } = useProjects();
+  const { user } = useAuth();
   const projectsRef = useRef(projects);
   projectsRef.current = projects;
+  const shouldTrackOnboarding = Boolean(user?.id);
+  const onboardingStorageKey = shouldTrackOnboarding
+    ? `hasSeenOnboarding:${user?.id}`
+    : 'hasSeenOnboarding:guest';
 
   // Listen for Home button click from TopBar — always open (allows project creation even with 0 projects)
   useEffect(() => {
@@ -77,16 +84,20 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
   }, [isNoProject]);
 
   // Ne lancer le tour qu'après création/ouverture d'un projet
-  const shouldStartOnboarding = isFirstTime && !isNoProject;
+  const shouldStartOnboarding = shouldTrackOnboarding && isFirstTime && !isNoProject;
 
   // Détecter si c'est la toute première visite (jamais vu le onboarding)
   useEffect(() => {
-    try {
-      const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
-      if (!hasSeenOnboarding) {
-        setIsFirstTime(true);
+    if (!shouldTrackOnboarding) {
+      setIsFirstTime(false);
+    } else {
+      try {
+        const hasSeenOnboarding = localStorage.getItem(onboardingStorageKey);
+        setIsFirstTime(!hasSeenOnboarding);
+      } catch {
+        setIsFirstTime(false);
       }
-    } catch { /* localStorage unavailable */ }
+    }
 
     // Responsive : fermer les panels sur petit écran réel (screen.width = taille physique)
     const checkResponsive = () => {
@@ -105,26 +116,27 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
     // Ecouter le resize
     window.addEventListener('resize', checkResponsive);
     return () => window.removeEventListener('resize', checkResponsive);
-  }, [shouldStartOnboarding]);
+  }, [onboardingStorageKey, shouldStartOnboarding, shouldTrackOnboarding]);
 
   // Marquer le onboarding comme vu
   const handleOnboardingComplete = () => {
+    if (!shouldTrackOnboarding) return;
     try {
-      localStorage.setItem('hasSeenOnboarding', 'true');
+      localStorage.setItem(onboardingStorageKey, 'true');
     } catch { /* ignore */ }
     setIsFirstTime(false);
   };
 
   // Quand le premier projet est créé et le onboarding n'a jamais été vu, on lance le tour
   useEffect(() => {
-    if (isNoProject) return;
+    if (isNoProject || !shouldTrackOnboarding) return;
     try {
-      const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
+      const hasSeenOnboarding = localStorage.getItem(onboardingStorageKey);
       if (!hasSeenOnboarding) {
         setIsFirstTime(true);
       }
     } catch { /* localStorage unavailable */ }
-  }, [isNoProject]);
+  }, [isNoProject, onboardingStorageKey, shouldTrackOnboarding]);
 
   useEffect(() => {
     if (!shouldStartOnboarding) return;

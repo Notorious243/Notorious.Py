@@ -2,15 +2,20 @@ import React, { useEffect, useMemo, useState } from "react"
 import { motion } from "framer-motion"
 import {
   AtSign,
+  CalendarDays,
+  Check,
   ChevronLeft,
+  ChevronsUpDown,
   Loader2,
   LockKeyhole,
   TriangleAlert,
   X,
 } from "lucide-react"
+import { fr } from "date-fns/locale"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
 import {
   Card,
   CardContent,
@@ -19,6 +24,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import {
   InputGroup,
@@ -32,16 +45,33 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp"
 import { Input } from "@/components/ui/input"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import {
+  Stepper,
+  StepperContent,
+  StepperIndicator,
+  StepperItem,
+  StepperNav,
+  StepperPanel,
+  StepperSeparator,
+  StepperTrigger,
+} from "@/components/reui/stepper"
+import {
+  COUNTRY_OPTIONS,
+  NATIONALITY_OPTIONS,
+  normalizeCountryLabel,
+  normalizeNationalityLabel,
+  type CountryOption,
+} from "@/lib/country-nationality"
 import { supabase } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 
 type Mode = "signin" | "signup" | "reset"
 type ResetStep = "email" | "otp"
-type OAuthProvider = "google" | "apple" | "github"
+type OAuthProvider = "google" | "github"
 
 const providerLabel: Record<OAuthProvider, string> = {
   google: "Google",
-  apple: "Apple",
   github: "GitHub",
 }
 
@@ -175,16 +205,103 @@ function GithubIcon(props: React.ComponentProps<"svg">) {
   )
 }
 
-function AppleIcon(props: React.ComponentProps<"svg">) {
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+const SIGNUP_STEPS = [1, 2, 3]
+
+function normalizeBirthDate(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return ""
+  if (ISO_DATE_PATTERN.test(trimmed)) return trimmed
+
+  const frMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  if (frMatch) {
+    const [, day, month, year] = frMatch
+    return `${year}-${month}-${day}`
+  }
+
+  const parsed = new Date(trimmed)
+  if (Number.isNaN(parsed.getTime())) return ""
+  return [
+    parsed.getFullYear(),
+    String(parsed.getMonth() + 1).padStart(2, "0"),
+    String(parsed.getDate()).padStart(2, "0"),
+  ].join("-")
+}
+
+type AuthProfileComboboxProps = {
+  id: string
+  label: string
+  placeholder: string
+  searchPlaceholder: string
+  emptyText: string
+  value: string
+  options: CountryOption[]
+  onChange: (nextValue: string) => void
+}
+
+function AuthProfileCombobox({
+  id,
+  label,
+  placeholder,
+  searchPlaceholder,
+  emptyText,
+  value,
+  options,
+  onChange,
+}: AuthProfileComboboxProps) {
+  const [open, setOpen] = useState(false)
+  const selectedOption = options.find((option) => option.label === value) ?? null
+
   return (
-    <svg fill="currentColor" viewBox="0 0 24 24" {...props}>
-      <g>
-        <g>
-          <path d="M18.546,12.763c0.024-1.87,1.004-3.597,2.597-4.576c-1.009-1.442-2.64-2.323-4.399-2.378 c-1.851-0.194-3.645,1.107-4.588,1.107c-0.961,0-2.413-1.088-3.977-1.056C6.122,5.927,4.25,7.068,3.249,8.867 c-2.131,3.69-0.542,9.114,1.5,12.097c1.022,1.461,2.215,3.092,3.778,3.035c1.529-0.063,2.1-0.975,3.945-0.975 c1.828,0,2.364,0.975,3.958,0.938c1.64-0.027,2.674-1.467,3.66-2.942c0.734-1.041,1.299-2.191,1.673-3.408 C19.815,16.788,18.548,14.879,18.546,12.763z" />
-          <path d="M15.535,3.847C16.429,2.773,16.87,1.393,16.763,0c-1.366,0.144-2.629,0.797-3.535,1.829 c-0.895,1.019-1.349,2.351-1.261,3.705C13.352,5.548,14.667,4.926,15.535,3.847z" />
-        </g>
-      </g>
-    </svg>
+    <Field className="space-y-2">
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            id={id}
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="h-11 w-full justify-between bg-background text-left font-normal"
+          >
+            <span className="truncate text-sm">
+              {selectedOption ? `${selectedOption.flag} ${selectedOption.label}` : placeholder}
+            </span>
+            <ChevronsUpDown className="h-4 w-4 opacity-70" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+          <Command>
+            <CommandInput placeholder={searchPlaceholder} />
+            <CommandList className="max-h-72">
+              <CommandEmpty>{emptyText}</CommandEmpty>
+              <CommandGroup>
+                {options.map((option) => {
+                  const isSelected = option.label === value
+
+                  return (
+                    <CommandItem
+                      key={option.code}
+                      value={`${option.label} ${option.searchLabel} ${option.code} ${option.flag}`}
+                      onSelect={() => {
+                        onChange(option.label)
+                        setOpen(false)
+                      }}
+                    >
+                      <Check className={cn("h-4 w-4", isSelected ? "opacity-100" : "opacity-0")} />
+                      <span className="truncate text-sm">
+                        {option.flag} {option.label}
+                      </span>
+                    </CommandItem>
+                  )
+                })}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </Field>
   )
 }
 
@@ -422,21 +539,6 @@ function SignInAuth11({
                 size="lg"
                 variant="outline"
                 type="button"
-                onClick={() => void handleProviderSignIn("apple")}
-                disabled={isBusy}
-              >
-                {loadingProvider === "apple" ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <AppleIcon data-icon="inline-start" />
-                )}
-                Continuer avec Apple
-              </Button>
-              <Button
-                className="w-full"
-                size="lg"
-                variant="outline"
-                type="button"
                 onClick={() => void handleProviderSignIn("github")}
                 disabled={isBusy}
               >
@@ -550,9 +652,14 @@ function SignUpAuth5({
 }) {
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
+  const [birthDate, setBirthDate] = useState("")
+  const [country, setCountry] = useState("")
+  const [nationality, setNationality] = useState("")
   const [email, setEmail] = useState(initialEmail)
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
+  const [step, setStep] = useState(1)
+  const [isBirthDateOpen, setIsBirthDateOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [loadingProvider, setLoadingProvider] = useState<OAuthProvider | null>(null)
   const [error, setError] = useState("")
@@ -563,6 +670,69 @@ function SignUpAuth5({
   useEffect(() => {
     onEmailChange(email)
   }, [email, onEmailChange])
+
+  const validateStep = (targetStep: number) => {
+    if (targetStep === 1) {
+      if (!firstName.trim() || !lastName.trim()) {
+        setError("Veuillez renseigner le prénom et le nom.")
+        return false
+      }
+      return true
+    }
+
+    if (targetStep === 2) {
+      if (!normalizeBirthDate(birthDate)) {
+        setError("La date de naissance est obligatoire.")
+        return false
+      }
+      if (!country.trim()) {
+        setError("Veuillez sélectionner un pays.")
+        return false
+      }
+      if (!nationality.trim()) {
+        setError("Veuillez sélectionner une nationalité.")
+        return false
+      }
+      return true
+    }
+
+    if (!email.trim()) {
+      setError("Veuillez renseigner votre adresse e-mail.")
+      return false
+    }
+
+    if (password.length < 6) {
+      setError("Le mot de passe doit contenir au moins 6 caractères.")
+      return false
+    }
+
+    if (password !== confirmPassword) {
+      setError("Les mots de passe ne correspondent pas.")
+      return false
+    }
+
+    return true
+  }
+
+  const handleStepChange = (nextStep: number) => {
+    if (nextStep < 1 || nextStep > SIGNUP_STEPS.length) return
+
+    if (nextStep <= step) {
+      setError("")
+      setStep(nextStep)
+      return
+    }
+
+    for (let cursor = step; cursor < nextStep; cursor += 1) {
+      if (!validateStep(cursor)) {
+        setStep(cursor)
+        return
+      }
+    }
+
+    setError("")
+    setStep(nextStep)
+  }
 
   const handleProviderSignUp = async (provider: OAuthProvider) => {
     setError("")
@@ -588,22 +758,26 @@ function SignUpAuth5({
     setError("")
     setInfo("")
 
-    if (!firstName.trim() || !lastName.trim()) {
-      setError("Veuillez renseigner le prénom et le nom.")
+    if (!validateStep(1)) {
+      setStep(1)
       return
     }
-
-    if (password.length < 6) {
-      setError("Le mot de passe doit contenir au moins 6 caractères.")
+    if (!validateStep(2)) {
+      setStep(2)
       return
     }
-
-    if (password !== confirmPassword) {
-      setError("Les mots de passe ne correspondent pas.")
+    if (!validateStep(3)) {
+      setStep(3)
       return
     }
 
     setLoading(true)
+
+    const normalizedBirthDate = normalizeBirthDate(birthDate)
+    const normalizedCountry = normalizeCountryLabel(country.trim())
+    const normalizedNationality = normalizeNationalityLabel(nationality.trim())
+    const cleanFirstName = firstName.trim()
+    const cleanLastName = lastName.trim()
 
     const { data, error: authError } = await supabase.auth.signUp({
       email,
@@ -611,9 +785,12 @@ function SignUpAuth5({
       options: {
         emailRedirectTo: window.location.origin,
         data: {
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          full_name: `${firstName.trim()} ${lastName.trim()}`,
+          first_name: cleanFirstName,
+          last_name: cleanLastName,
+          full_name: `${cleanFirstName} ${cleanLastName}`.trim(),
+          birth_date: normalizedBirthDate,
+          country: normalizedCountry,
+          nationality: normalizedNationality,
         },
       },
     })
@@ -648,13 +825,13 @@ function SignUpAuth5({
               Animation active
             </p>
             <h2 className="text-3xl font-semibold leading-tight">
-              Créez avec providers
+              Inscription guidee
               <br />
-              ou en mode classique.
+              sans friction.
             </h2>
             <p className="text-base text-muted-foreground">
-              Google, Apple, GitHub ou formulaire complet avec prénom, nom, e-mail
-              et mot de passe.
+              Choisissez Google ou GitHub, ou utilisez le parcours en 3 étapes
+              pour compléter votre profil dès l'inscription.
             </p>
           </div>
         </div>
@@ -693,7 +870,7 @@ function SignUpAuth5({
           <div className="flex flex-col space-y-1">
             <h1 className="text-2xl font-bold tracking-wide">Créer un compte</h1>
             <p className="text-base text-muted-foreground">
-              Choisissez un provider ou renseignez les champs classiques.
+              Renseignez vos informations avec un parcours simple et guidé.
             </p>
           </div>
 
@@ -716,20 +893,6 @@ function SignUpAuth5({
               className="w-full"
               variant="outline"
               type="button"
-              onClick={() => void handleProviderSignUp("apple")}
-              disabled={isBusy}
-            >
-              {loadingProvider === "apple" ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                <AppleIcon data-icon="inline-start" />
-              )}
-              Continuer avec Apple
-            </Button>
-            <Button
-              className="w-full"
-              variant="outline"
-              type="button"
               onClick={() => void handleProviderSignUp("github")}
               disabled={isBusy}
             >
@@ -745,98 +908,228 @@ function SignUpAuth5({
           <AuthDivider>OU INSCRIPTION CLASSIQUE</AuthDivider>
 
           <form className="space-y-4" onSubmit={handleSubmit}>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="signup-first-name">Prénom</FieldLabel>
-                <Input
-                  id="signup-first-name"
-                  placeholder="Votre prénom"
-                  value={firstName}
-                  onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-                    setFirstName(event.target.value)
-                  }
-                  required
-                />
-              </Field>
+            <Stepper value={step} onValueChange={handleStepChange} className="space-y-5">
+              <StepperNav>
+                {SIGNUP_STEPS.map((stepValue) => (
+                  <StepperItem key={stepValue} step={stepValue}>
+                    <StepperTrigger aria-label={`Aller a l'etape ${stepValue}`}>
+                      <StepperIndicator>{stepValue}</StepperIndicator>
+                    </StepperTrigger>
+                    {SIGNUP_STEPS.length > stepValue ? <StepperSeparator /> : null}
+                  </StepperItem>
+                ))}
+              </StepperNav>
 
-              <Field>
-                <FieldLabel htmlFor="signup-last-name">Nom</FieldLabel>
-                <Input
-                  id="signup-last-name"
-                  placeholder="Votre nom"
-                  value={lastName}
-                  onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-                    setLastName(event.target.value)
-                  }
-                  required
-                />
-              </Field>
-            </div>
+              <StepperPanel>
+                <StepperContent value={1} className="space-y-4">
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold text-foreground">Identité</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Entrez votre prénom et votre nom.
+                    </p>
+                  </div>
 
-            <Field>
-              <FieldLabel htmlFor="signup-email">Adresse e-mail</FieldLabel>
-              <InputGroup>
-                <InputGroupInput
-                  id="signup-email"
-                  className="pl-10"
-                  placeholder="votre.email@exemple.com"
-                  type="email"
-                  value={email}
-                  onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-                    setEmail(event.target.value)
-                  }
-                  required
-                />
-                <InputGroupAddon align="inline-start">
-                  <AtSign />
-                </InputGroupAddon>
-              </InputGroup>
-            </Field>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel htmlFor="signup-first-name">Prénom</FieldLabel>
+                      <Input
+                        id="signup-first-name"
+                        placeholder="Votre prénom"
+                        value={firstName}
+                        onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
+                          setFirstName(event.target.value)
+                        }
+                        required
+                      />
+                    </Field>
 
-            <Field>
-              <FieldLabel htmlFor="signup-password">Mot de passe</FieldLabel>
-              <InputGroup>
-                <InputGroupInput
-                  id="signup-password"
-                  className="pl-10"
-                  type="password"
-                  placeholder="Minimum 6 caractères"
-                  value={password}
-                  onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-                    setPassword(event.target.value)
-                  }
-                  required
-                />
-                <InputGroupAddon align="inline-start">
-                  <LockKeyhole />
-                </InputGroupAddon>
-              </InputGroup>
-            </Field>
+                    <Field>
+                      <FieldLabel htmlFor="signup-last-name">Nom</FieldLabel>
+                      <Input
+                        id="signup-last-name"
+                        placeholder="Votre nom"
+                        value={lastName}
+                        onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
+                          setLastName(event.target.value)
+                        }
+                        required
+                      />
+                    </Field>
+                  </div>
 
-            <Field>
-              <FieldLabel htmlFor="signup-password-confirm">Confirmer le mot de passe</FieldLabel>
-              <InputGroup>
-                <InputGroupInput
-                  id="signup-password-confirm"
-                  className="pl-10"
-                  type="password"
-                  placeholder="Répétez le mot de passe"
-                  value={confirmPassword}
-                  onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-                    setConfirmPassword(event.target.value)
-                  }
-                  required
-                />
-                <InputGroupAddon align="inline-start">
-                  <LockKeyhole />
-                </InputGroupAddon>
-              </InputGroup>
-            </Field>
+                  <div className="flex justify-end">
+                    <Button type="button" onClick={() => handleStepChange(2)}>
+                      Continuer
+                    </Button>
+                  </div>
+                </StepperContent>
 
-            <Button className="w-full" type="submit" disabled={isBusy}>
-              {loading ? <Loader2 className="animate-spin" /> : null}
-              {loading ? "Création..." : "Créer mon compte"}
-            </Button>
+                <StepperContent value={2} className="space-y-4">
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold text-foreground">Profil</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Complétez votre date de naissance, pays et nationalité.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <Field className="space-y-2">
+                      <FieldLabel htmlFor="signup-birth-date">Date de naissance</FieldLabel>
+                      <Popover open={isBirthDateOpen} onOpenChange={setIsBirthDateOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            id="signup-birth-date"
+                            className="h-11 w-full justify-start text-left font-normal"
+                          >
+                            <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
+                            {birthDate
+                              ? new Date(`${birthDate}T12:00:00`).toLocaleDateString("fr-FR")
+                              : "Selectionner une date"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto overflow-hidden p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={birthDate ? new Date(`${birthDate}T12:00:00`) : undefined}
+                            defaultMonth={birthDate ? new Date(`${birthDate}T12:00:00`) : undefined}
+                            captionLayout="dropdown"
+                            locale={fr}
+                            onSelect={(date) => {
+                              if (!date) {
+                                setBirthDate("")
+                                setIsBirthDateOpen(false)
+                                return
+                              }
+                              const isoDate = [
+                                date.getFullYear(),
+                                String(date.getMonth() + 1).padStart(2, "0"),
+                                String(date.getDate()).padStart(2, "0"),
+                              ].join("-")
+                              setBirthDate(isoDate)
+                              setIsBirthDateOpen(false)
+                            }}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </Field>
+
+                    <AuthProfileCombobox
+                      id="signup-country"
+                      label="Pays"
+                      placeholder="Selectionner un pays"
+                      searchPlaceholder="Rechercher un pays..."
+                      emptyText="Aucun pays trouve."
+                      value={country}
+                      options={COUNTRY_OPTIONS}
+                      onChange={setCountry}
+                    />
+
+                    <div className="sm:col-span-2">
+                      <AuthProfileCombobox
+                        id="signup-nationality"
+                        label="Nationalité"
+                        placeholder="Selectionner une nationalite"
+                        searchPlaceholder="Rechercher une nationalite..."
+                        emptyText="Aucune nationalite trouvee."
+                        value={nationality}
+                        options={NATIONALITY_OPTIONS}
+                        onChange={setNationality}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between gap-2">
+                    <Button type="button" variant="outline" onClick={() => handleStepChange(1)}>
+                      Retour
+                    </Button>
+                    <Button type="button" onClick={() => handleStepChange(3)}>
+                      Continuer
+                    </Button>
+                  </div>
+                </StepperContent>
+
+                <StepperContent value={3} className="space-y-4">
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold text-foreground">Sécurité</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Finalisez l'inscription avec votre e-mail et mot de passe.
+                    </p>
+                  </div>
+
+                  <Field>
+                    <FieldLabel htmlFor="signup-email">Adresse e-mail</FieldLabel>
+                    <InputGroup>
+                      <InputGroupInput
+                        id="signup-email"
+                        className="pl-10"
+                        placeholder="votre.email@exemple.com"
+                        type="email"
+                        value={email}
+                        onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
+                          setEmail(event.target.value)
+                        }
+                        required
+                      />
+                      <InputGroupAddon align="inline-start">
+                        <AtSign />
+                      </InputGroupAddon>
+                    </InputGroup>
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="signup-password">Mot de passe</FieldLabel>
+                    <InputGroup>
+                      <InputGroupInput
+                        id="signup-password"
+                        className="pl-10"
+                        type="password"
+                        placeholder="Minimum 6 caractères"
+                        value={password}
+                        onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
+                          setPassword(event.target.value)
+                        }
+                        required
+                      />
+                      <InputGroupAddon align="inline-start">
+                        <LockKeyhole />
+                      </InputGroupAddon>
+                    </InputGroup>
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="signup-password-confirm">Confirmer le mot de passe</FieldLabel>
+                    <InputGroup>
+                      <InputGroupInput
+                        id="signup-password-confirm"
+                        className="pl-10"
+                        type="password"
+                        placeholder="Répétez le mot de passe"
+                        value={confirmPassword}
+                        onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
+                          setConfirmPassword(event.target.value)
+                        }
+                        required
+                      />
+                      <InputGroupAddon align="inline-start">
+                        <LockKeyhole />
+                      </InputGroupAddon>
+                    </InputGroup>
+                  </Field>
+
+                  <div className="flex justify-between gap-2">
+                    <Button type="button" variant="outline" onClick={() => handleStepChange(2)}>
+                      Retour
+                    </Button>
+                    <Button type="submit" disabled={isBusy}>
+                      {loading ? <Loader2 className="animate-spin" /> : null}
+                      {loading ? "Création..." : "Créer mon compte"}
+                    </Button>
+                  </div>
+                </StepperContent>
+              </StepperPanel>
+            </Stepper>
           </form>
 
           {error ? <AuthError message={error} /> : null}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   Bell,
@@ -7,6 +7,7 @@ import {
   CheckCircle,
   CheckCircle2,
   ChevronsUpDown,
+  CircleAlert,
   Eye,
   EyeOff,
   Filter,
@@ -16,6 +17,7 @@ import {
   Sparkles,
   Star,
   UserRound,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { fr } from 'date-fns/locale';
@@ -31,6 +33,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Command,
   CommandEmpty,
@@ -47,6 +50,7 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/useAuth';
 import { BackgroundPathsLayer } from '@/components/ui/background-paths';
+import { formatBytes, useFileUpload } from '@/hooks/use-file-upload';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { fetchApiKeysFromSupabase, saveApiKeysToSupabase } from '@/lib/supabaseService';
@@ -252,17 +256,68 @@ export function SettingsHub({ onClose, initialSection }: SettingsHubProps) {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [localAvatarUrl, setLocalAvatarUrl] = useState('');
   const [pendingAvatarDataUrl, setPendingAvatarDataUrl] = useState<string | null>(null);
-  const profileImageInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedNotificationCategory, setSelectedNotificationCategory] = useState<
     'all' | NotificationCategory
   >('all');
 
+  const convertFileToDataUrl = useCallback((file: File) => {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result !== 'string') {
+          reject(new Error('invalid_result'));
+          return;
+        }
+        resolve(reader.result);
+      };
+      reader.onerror = () => reject(new Error('read_error'));
+      reader.readAsDataURL(file);
+    });
+  }, []);
+
+  const [
+    { files: avatarFiles, isDragging: isAvatarDragging, errors: avatarUploadErrors },
+    {
+      inputRef: avatarInputRef,
+      clearFiles: clearAvatarFiles,
+      removeFile: removeAvatarFile,
+      handleDragEnter: handleAvatarDragEnter,
+      handleDragLeave: handleAvatarDragLeave,
+      handleDragOver: handleAvatarDragOver,
+      handleDrop: handleAvatarDrop,
+      openFileDialog: openAvatarFileDialog,
+      getInputProps: getAvatarInputProps,
+    },
+  ] = useFileUpload({
+    maxFiles: 1,
+    maxSize: PROFILE_IMAGE_MAX_BYTES,
+    accept: 'image/*',
+    multiple: false,
+    onFilesChange: (files) => {
+      const selectedFile = files[0];
+      if (!selectedFile) {
+        setPendingAvatarDataUrl(null);
+        return;
+      }
+      void convertFileToDataUrl(selectedFile.file)
+        .then((dataUrl) => {
+          setPendingAvatarDataUrl(dataUrl);
+          toast.success('Photo prete. Cliquez sur "Enregistrer le profil".');
+        })
+        .catch(() => {
+          setPendingAvatarDataUrl(null);
+          toast.error("Impossible de charger l'image.");
+        });
+    },
+  });
+
+  const activeAvatarFile = avatarFiles[0] ?? null;
   const isGuest = !user;
   const displayName = getFormattedDisplayName(user);
   const email = user?.email ?? 'Aucune adresse e-mail';
   const initials = getUserInitials(user);
   const avatarUrl = (user?.user_metadata?.avatar_url as string | undefined) ?? '';
-  const displayedAvatarUrl = pendingAvatarDataUrl ?? localAvatarUrl;
+  const displayedAvatarUrl = pendingAvatarDataUrl ?? activeAvatarFile?.preview ?? localAvatarUrl;
   const profileInitial = (capitalizeFirstLetter(firstName).charAt(0) || initials.charAt(0) || 'U').toUpperCase();
 
   useEffect(() => {
@@ -280,7 +335,8 @@ export function SettingsHub({ onClose, initialSection }: SettingsHubProps) {
   useEffect(() => {
     setLocalAvatarUrl(avatarUrl);
     setPendingAvatarDataUrl(null);
-  }, [avatarUrl, user?.id]);
+    clearAvatarFiles();
+  }, [avatarUrl, clearAvatarFiles, user?.id]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -415,40 +471,6 @@ export function SettingsHub({ onClose, initialSection }: SettingsHubProps) {
     [apiKeys]
   );
 
-  const handleProfileImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      toast.error("Format invalide. Utilisez un fichier image.");
-      event.target.value = '';
-      return;
-    }
-
-    if (file.size > PROFILE_IMAGE_MAX_BYTES) {
-      toast.error('Image trop lourde (max 1 Mo).');
-      event.target.value = '';
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (loadEvent) => {
-      const result = loadEvent.target?.result;
-      if (typeof result !== 'string') {
-        toast.error("Impossible de lire l'image.");
-        return;
-      }
-      setPendingAvatarDataUrl(result);
-      toast.success('Image prete. Cliquez sur "Enregistrer le profil".');
-    };
-    reader.onerror = () => {
-      toast.error("Impossible de charger l'image.");
-    };
-    reader.readAsDataURL(file);
-
-    event.target.value = '';
-  };
-
   const handleSaveProfile = async () => {
     if (!user) {
       toast.error('Connexion requise pour modifier le profil.');
@@ -496,6 +518,9 @@ export function SettingsHub({ onClose, initialSection }: SettingsHubProps) {
     if (pendingAvatarDataUrl) {
       setLocalAvatarUrl(pendingAvatarDataUrl);
       setPendingAvatarDataUrl(null);
+      if (activeAvatarFile) {
+        removeAvatarFile(activeAvatarFile.id);
+      }
     }
     setIsProfileSaving(false);
     toast.success('Profil mis a jour avec succes.');
@@ -614,6 +639,7 @@ export function SettingsHub({ onClose, initialSection }: SettingsHubProps) {
       { token: 'API', top: '82%', right: '16%', opacity: 0.07 },
     ];
     const disableMotion = settings.appearance.reduceMotion || prefersReducedMotion;
+    const avatarInputProps = getAvatarInputProps();
 
     return (
       <section className="flex h-full items-center justify-center py-1">
@@ -700,24 +726,57 @@ export function SettingsHub({ onClose, initialSection }: SettingsHubProps) {
               <div className="relative z-10 mx-auto w-full max-w-3xl">
                 <div className="flex flex-col items-center text-center">
                   <div className="relative">
-                    <div className="rounded-full bg-gradient-to-b from-[#d7e4f8] to-[#c3d6f0] p-[2px] shadow-[0_16px_32px_rgba(15,52,96,0.2)]">
+                    <div
+                      className={cn(
+                        'cursor-pointer rounded-full bg-gradient-to-b from-[#d7e4f8] to-[#c3d6f0] p-[2px] shadow-[0_16px_32px_rgba(15,52,96,0.2)] transition-all',
+                        isAvatarDragging && 'scale-[1.02] ring-4 ring-[#1F5AA0]/25'
+                      )}
+                      onDragEnter={handleAvatarDragEnter}
+                      onDragLeave={handleAvatarDragLeave}
+                      onDragOver={handleAvatarDragOver}
+                      onDrop={handleAvatarDrop}
+                      onClick={openAvatarFileDialog}
+                    >
                       <div className="rounded-full border border-white/85 bg-white/82 p-[4px]">
                         <Avatar className="h-28 w-28 rounded-full border-2 border-[#0F3460]/20 bg-white/80">
-                          <AvatarImage src={displayedAvatarUrl || undefined} alt={displayName} className="object-cover" />
+                          <AvatarImage
+                            src={displayedAvatarUrl || undefined}
+                            alt={displayName}
+                            className="object-cover"
+                          />
                           <AvatarFallback className="rounded-full bg-[#0F3460] text-3xl font-semibold text-white">
                             {profileInitial}
                           </AvatarFallback>
                         </Avatar>
                       </div>
+                      <input ref={avatarInputRef} {...avatarInputProps} className="sr-only" />
                     </div>
                     <button
                       type="button"
-                      onClick={() => profileImageInputRef.current?.click()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openAvatarFileDialog();
+                      }}
                       title="Changer la photo de profil"
                       className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-[#0F3460] text-white shadow-[0_8px_16px_rgba(15,52,96,0.3)] transition hover:scale-105 hover:bg-[#1F5AA0]"
                     >
                       <PythonGlyph className="h-4 w-4" />
                     </button>
+                    {activeAvatarFile ? (
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          removeAvatarFile(activeAvatarFile.id);
+                          setPendingAvatarDataUrl(null);
+                        }}
+                        className="absolute -left-1 -top-1 h-7 w-7 rounded-full border border-slate-200 bg-white/90 shadow-sm hover:bg-white"
+                        aria-label="Retirer la photo"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    ) : null}
                   </div>
 
                   <h3 className="mt-3 text-[30px] font-semibold leading-none tracking-tight text-slate-900">{displayName}</h3>
@@ -732,13 +791,25 @@ export function SettingsHub({ onClose, initialSection }: SettingsHubProps) {
                       <span className="text-xs font-medium text-[#0F3460]">Photo prete a enregistrer</span>
                     ) : null}
                   </div>
-                  <input
-                    ref={profileImageInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleProfileImageSelect}
-                  />
+                  <div className="mt-2 text-xs text-slate-600">
+                    {activeAvatarFile
+                      ? `Photo selectionnee: ${activeAvatarFile.name} (${formatBytes(activeAvatarFile.size)})`
+                      : `PNG, JPG, WEBP jusqu'a ${formatBytes(PROFILE_IMAGE_MAX_BYTES)}`}
+                  </div>
+                  <p className="mt-1 text-[11px] font-medium text-slate-500">
+                    Cliquez sur le badge Python bleu ou deposez une image sur l'avatar.
+                  </p>
+                  {avatarUploadErrors.length > 0 ? (
+                    <Alert variant="destructive" className="mt-3 w-full max-w-xl text-left">
+                      <CircleAlert className="h-4 w-4" />
+                      <AlertTitle>Import impossible</AlertTitle>
+                      <AlertDescription>
+                        {avatarUploadErrors.map((error, index) => (
+                          <p key={`${error}-${index}`}>{error}</p>
+                        ))}
+                      </AlertDescription>
+                    </Alert>
+                  ) : null}
                 </div>
               </div>
             </CardHeader>

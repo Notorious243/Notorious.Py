@@ -11,6 +11,7 @@ import { DayannaAIPanel } from './dayanna-ai/DayannaAIPanel';
 import { cn } from '@/lib/utils';
 import {
   OPEN_AI_SIDEBAR_EVENT,
+  OPEN_PROPERTIES_SIDEBAR_EVENT,
   consumeFocusAIPromptOnLoadFlag,
   consumeOpenAIOnLoadFlag,
   emitFocusAIPrompt,
@@ -31,6 +32,12 @@ export const RightSidebar: React.FC = () => {
     const openAiSidebar = () => setActiveTab('ai');
     window.addEventListener(OPEN_AI_SIDEBAR_EVENT, openAiSidebar);
     return () => window.removeEventListener(OPEN_AI_SIDEBAR_EVENT, openAiSidebar);
+  }, []);
+
+  React.useEffect(() => {
+    const openPropertiesSidebar = () => setActiveTab('properties');
+    window.addEventListener(OPEN_PROPERTIES_SIDEBAR_EVENT, openPropertiesSidebar);
+    return () => window.removeEventListener(OPEN_PROPERTIES_SIDEBAR_EVENT, openPropertiesSidebar);
   }, []);
 
   React.useEffect(() => {

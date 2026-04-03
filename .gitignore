@@ -1,7 +1,60 @@
+# Dependencies
 node_modules
+
+# Build output
 dist
+
+# ──────────────────────────────────────────────────
+# SECRETS — NE JAMAIS COMMITER
+# ──────────────────────────────────────────────────
 .env
+.env.local
+.env.*.local
+
+# ──────────────────────────────────────────────────
+# Fichiers de cache / build automatique
+# ──────────────────────────────────────────────────
 *.tsbuildinfo
+
+# ──────────────────────────────────────────────────
+# macOS
+# ──────────────────────────────────────────────────
 .DS_Store
+**/.DS_Store
+
+# ──────────────────────────────────────────────────
+# VS Code (préférences personnelles)
+# ──────────────────────────────────────────────────
+.vscode/
+
+# ──────────────────────────────────────────────────
+# Tests auto-générés TestSprite (inutiles en prod)
+# ──────────────────────────────────────────────────
+testsprite_tests/
+
+# ──────────────────────────────────────────────────
+# Fichiers de preview Python standalone
+# ──────────────────────────────────────────────────
+notorious_preview.py
+
+# ──────────────────────────────────────────────────
+# Migrations SQL (à appliquer manuellement sur Supabase)
+# ──────────────────────────────────────────────────
+*.sql
+
+# ──────────────────────────────────────────────────
+# Template .env (non nécessaire en repo)
+# ──────────────────────────────────────────────────
+.env.example
+
+# ──────────────────────────────────────────────────
+# Logs
+# ──────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Vite generated types (auto-générés)
 vite.config.js
 vite.config.d.ts

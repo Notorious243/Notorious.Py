@@ -3,6 +3,7 @@ const AI_FOCUS_KEY = 'ctk_focus_ai_prompt_on_load';
 const AI_FORCE_NEW_CONVERSATION_KEY = 'ctk_force_new_ai_conversation_on_load';
 
 export const OPEN_AI_SIDEBAR_EVENT = 'open-ai-sidebar';
+export const OPEN_PROPERTIES_SIDEBAR_EVENT = 'open-properties-sidebar';
 export const FOCUS_AI_PROMPT_EVENT = 'focus-ai-prompt';
 export const OPEN_AI_WORKSPACE_PANELS_EVENT = 'open-ai-workspace-panels';
 export interface OpenAIAssistantOptions {

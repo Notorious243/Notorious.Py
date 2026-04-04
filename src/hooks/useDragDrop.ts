@@ -46,7 +46,7 @@ export const useCanvasDrop = ({ onDrop, onHover, canvasRef }: UseCanvasDropOptio
     collect: (monitor) => ({
       isOver: monitor.isOver({ shallow: true }), // Seulement si directement au-dessus
     }),
-  }));
+  }), [onDrop, onHover]);
 
   const attach = useCallback(
     (node: HTMLDivElement | null) => {

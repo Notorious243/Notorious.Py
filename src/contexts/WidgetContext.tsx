@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { WidgetData, CanvasSettings, WidgetStyle } from '@/types/widget';
 import { devWarn, devError } from '@/lib/logger';
 import { isContainerWidget, getParentContentBounds, collectDescendantIds, isDescendant, getDefaultTabSlot, getTabSlots } from '@/lib/widgetLayout';
@@ -64,7 +64,12 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [history, setHistory] = useState<WidgetData[][]>([[]]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const historyIndexRef = React.useRef(historyIndex);
+  const historyRef = React.useRef(history);
   React.useEffect(() => { historyIndexRef.current = historyIndex; }, [historyIndex]);
+  React.useEffect(() => { historyRef.current = history; }, [history]);
+  // Ref stable des widgets pour lecture synchrone sans updater fonctionnel
+  const widgetsRef = React.useRef(widgets);
+  React.useEffect(() => { widgetsRef.current = widgets; }, [widgets]);
 
   const [canvasSettings, setCanvasSettings] = useState<CanvasSettings>({
     width: 800,
@@ -79,34 +84,32 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     gridVisible: true,
   });
 
-  const selectedWidget = widgets.find(w => w.id === selectedWidgetId);
+  const selectedWidget = useMemo(
+    () => widgets.find(w => w.id === selectedWidgetId),
+    [widgets, selectedWidgetId]
+  );
 
 
 
   // Save state to history
+  // Appelé HORS des updaters fonctionnels (pas dans setWidgets(prev => ...)) pour
+  // éviter les setState imbriqués et les mutations de ref dans des updaters.
   const saveToHistory = useCallback((newWidgets: WidgetData[]) => {
+    const newIndex = Math.min(historyIndexRef.current + 1, 49);
     setHistory(prev => {
       const currentIndex = historyIndexRef.current;
       const newHistory = prev.slice(0, currentIndex + 1);
-      newHistory.push(JSON.parse(JSON.stringify(newWidgets))); // Deep copy
-      // Limit history to 50 states
-      if (newHistory.length > 50) {
-        newHistory.shift();
-        const newIndex = newHistory.length - 1;
-        setHistoryIndex(newIndex);
-        historyIndexRef.current = newIndex;
-        return newHistory;
-      }
-      const newIndex = newHistory.length - 1;
-      setHistoryIndex(newIndex);
-      historyIndexRef.current = newIndex;
+      newHistory.push(JSON.parse(JSON.stringify(newWidgets)));
+      if (newHistory.length > 50) newHistory.shift();
       return newHistory;
     });
+    historyIndexRef.current = newIndex;
+    setHistoryIndex(newIndex);
   }, []);
 
-  const snapToGrid = (value: number, gridSize: number = 10) => {
+  const snapToGrid = useCallback((value: number, gridSize: number = 10) => {
     return Math.round(value / gridSize) * gridSize;
-  };
+  }, []);
 
   const computeParentBounds = useCallback((list: WidgetData[], parentId: string | null | undefined) => {
     return getParentContentBounds(list, parentId ?? null, canvasSettings);
@@ -204,91 +207,83 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return;
       }
 
-      setWidgets(prev => {
-        // Vérifier si le widget existe déjà (évite duplication)
-        if (prev.some(w => w.id === widget.id)) {
-          devWarn('[WidgetContext] Widget already exists, skipping:', widget.id);
-          return prev;
-        }
+      const prev = widgetsRef.current;
+      if (prev.some(w => w.id === widget.id)) {
+        devWarn('[WidgetContext] Widget already exists, skipping:', widget.id);
+        return;
+      }
 
-        const sanitized = clampWidgetToBounds(prev, widget, widget.parentId ?? null);
-        let newWidgets = [...prev, sanitized];
-        newWidgets = applyAutoLayoutToWidgets(newWidgets);
-        saveToHistory(newWidgets);
-        return newWidgets;
-      });
+      const sanitized = clampWidgetToBounds(prev, widget, widget.parentId ?? null);
+      let newWidgets = [...prev, sanitized];
+      newWidgets = applyAutoLayoutToWidgets(newWidgets);
+      setWidgets(newWidgets);
+      saveToHistory(newWidgets);
     } catch (error) {
       devError('[WidgetContext] Error in addWidget:', error, widget);
     }
   }, [clampWidgetToBounds, saveToHistory, applyAutoLayoutToWidgets]);
 
   const updateWidget = useCallback((id: string, updates: Partial<WidgetData>, saveHistory: boolean = true) => {
-    setWidgets(prev => {
-      let hasChanged = false;
-      const newWidgets = prev.map(w => {
-        if (w.id !== id) return w;
+    const prev = widgetsRef.current;
+    let hasChanged = false;
+    const newWidgets = prev.map(w => {
+      if (w.id !== id) return w;
 
-        const { style, properties, size, position, parentId, parentSlot, ...rest } = updates;
-        const next: WidgetData = { ...w, ...rest };
+      const { style, properties, size, position, parentId, parentSlot, ...rest } = updates;
+      const next: WidgetData = { ...w, ...rest };
 
-        if (style) {
-          next.style = { ...w.style, ...style };
-        }
-        if (properties) {
-          next.properties = { ...w.properties, ...properties };
-        }
-        if (size) {
-          next.size = { ...w.size, ...size };
-        }
-        if (position) {
-          next.position = { ...position };
-        }
-        if (parentId !== undefined) {
-          next.parentId = parentId;
-        }
-        if (parentSlot !== undefined) {
-          next.parentSlot = parentSlot;
-        }
-
-        const targetParentId = parentId !== undefined ? parentId : next.parentId;
-        const clamped = clampWidgetToBounds(prev, next, targetParentId);
-        hasChanged = true;
-        return clamped;
-      });
-
-      if (!hasChanged) return prev;
-      const finalWidgets = applyAutoLayoutToWidgets(newWidgets);
-      if (saveHistory) {
-        saveToHistory(finalWidgets);
+      if (style) {
+        next.style = { ...w.style, ...style };
+      }
+      if (properties) {
+        next.properties = { ...w.properties, ...properties };
+      }
+      if (size) {
+        next.size = { ...w.size, ...size };
+      }
+      if (position) {
+        next.position = { ...position };
+      }
+      if (parentId !== undefined) {
+        next.parentId = parentId;
+      }
+      if (parentSlot !== undefined) {
+        next.parentSlot = parentSlot;
       }
 
-      return finalWidgets;
+      const targetParentId = parentId !== undefined ? parentId : next.parentId;
+      const clamped = clampWidgetToBounds(prev, next, targetParentId);
+      hasChanged = true;
+      return clamped;
     });
+
+    if (!hasChanged) return;
+    const finalWidgets = applyAutoLayoutToWidgets(newWidgets);
+    setWidgets(finalWidgets);
+    if (saveHistory) {
+      saveToHistory(finalWidgets);
+    }
   }, [clampWidgetToBounds, saveToHistory, applyAutoLayoutToWidgets]);
 
   const updateWidgetStyle = useCallback((id: string, styleUpdates: Partial<WidgetStyle>) => {
-    setWidgets(prev => {
-      const newWidgets = prev.map(w =>
-        w.id === id ? { ...w, style: { ...w.style, ...styleUpdates } } : w
-      );
-      saveToHistory(newWidgets);
-      return newWidgets;
-    });
+    const prev = widgetsRef.current;
+    const newWidgets = prev.map(w =>
+      w.id === id ? { ...w, style: { ...w.style, ...styleUpdates } } : w
+    );
+    setWidgets(newWidgets);
+    saveToHistory(newWidgets);
   }, [saveToHistory]);
 
   const deleteWidget = useCallback((id: string) => {
-    setWidgets(prev => {
-      const descendants = collectDescendantIds(prev, id);
-      const candidates = new Set<string>([id, ...descendants]);
-      const nextWidgets = prev.filter(w => !candidates.has(w.id));
-      if (nextWidgets.length === prev.length) {
-        return prev;
-      }
-      const finalWidgets = applyAutoLayoutToWidgets(nextWidgets);
-      saveToHistory(finalWidgets);
-      setSelectedWidgetId(current => (current && candidates.has(current) ? null : current));
-      return finalWidgets;
-    });
+    const prev = widgetsRef.current;
+    const descendants = collectDescendantIds(prev, id);
+    const candidates = new Set<string>([id, ...descendants]);
+    const nextWidgets = prev.filter(w => !candidates.has(w.id));
+    if (nextWidgets.length === prev.length) return;
+    const finalWidgets = applyAutoLayoutToWidgets(nextWidgets);
+    setWidgets(finalWidgets);
+    saveToHistory(finalWidgets);
+    setSelectedWidgetId(current => (current && candidates.has(current) ? null : current));
   }, [saveToHistory, applyAutoLayoutToWidgets]);
 
   const selectWidget = useCallback((id: string | null) => {
@@ -296,27 +291,62 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   const moveWidget = useCallback((id: string, position: { x: number; y: number }, saveHistory: boolean = false) => {
-    setWidgets(prev => {
-      const widget = prev.find(w => w.id === id);
-      if (!widget) return prev;
+    const prev = widgetsRef.current;
+    const widget = prev.find(w => w.id === id);
+    if (!widget) return;
 
-      // Calculer le delta de déplacement
+    // Calculer le delta de déplacement
+    const deltaX = position.x - widget.position.x;
+    const deltaY = position.y - widget.position.y;
+
+    // Si pas de mouvement, ignorer
+    if (deltaX === 0 && deltaY === 0) return;
+
+    // Trouver tous les descendants (enfants, petits-enfants, etc.)
+    const descendants = collectDescendantIds(prev, id);
+
+    // Mettre à jour le widget parent ET tous ses descendants
+    const newWidgets = prev.map(w => {
+      if (w.id === id) {
+        // Déplacer le widget principal
+        return { ...w, position: { x: position.x, y: position.y } };
+      } else if (descendants.includes(w.id)) {
+        // Déplacer les enfants du même delta (ils gardent leur position relative)
+        return {
+          ...w,
+          position: {
+            x: w.position.x + deltaX,
+            y: w.position.y + deltaY
+          }
+        };
+      }
+      return w;
+    });
+
+    setWidgets(newWidgets);
+    if (saveHistory) {
+      saveToHistory(newWidgets);
+    }
+  }, [saveToHistory]);
+
+  const resizeWidget = useCallback((id: string, size: { width: number; height: number }, position?: { x: number; y: number }, doSaveHistory: boolean = true) => {
+    const prev = widgetsRef.current;
+    const widget = prev.find(w => w.id === id);
+    if (!widget) return;
+
+    let newWidgets: WidgetData[];
+
+    // Si la position change (resize depuis top-left par exemple)
+    if (position && (position.x !== widget.position.x || position.y !== widget.position.y)) {
       const deltaX = position.x - widget.position.x;
       const deltaY = position.y - widget.position.y;
 
-      // Si pas de mouvement, ignorer
-      if (deltaX === 0 && deltaY === 0) return prev;
-
-      // Trouver tous les descendants (enfants, petits-enfants, etc.)
+      // Déplacer aussi les enfants
       const descendants = collectDescendantIds(prev, id);
-
-      // Mettre à jour le widget parent ET tous ses descendants
-      const newWidgets = prev.map(w => {
+      newWidgets = prev.map(w => {
         if (w.id === id) {
-          // Déplacer le widget principal
-          return { ...w, position: { x: position.x, y: position.y } };
+          return { ...w, size, position };
         } else if (descendants.includes(w.id)) {
-          // Déplacer les enfants du même delta (ils gardent leur position relative)
           return {
             ...w,
             position: {
@@ -327,53 +357,15 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
         return w;
       });
+    } else {
+      // Juste changer la taille, pas la position
+      newWidgets = prev.map(w => w.id === id ? { ...w, size } : w);
+    }
 
-      if (saveHistory) {
-        saveToHistory(newWidgets);
-      }
-
-      return newWidgets;
-    });
-  }, [saveToHistory]);
-
-  const resizeWidget = useCallback((id: string, size: { width: number; height: number }, position?: { x: number; y: number }, doSaveHistory: boolean = true) => {
-    setWidgets(prev => {
-      const widget = prev.find(w => w.id === id);
-      if (!widget) return prev;
-
-      let newWidgets = prev;
-
-      // Si la position change (resize depuis top-left par exemple)
-      if (position && (position.x !== widget.position.x || position.y !== widget.position.y)) {
-        const deltaX = position.x - widget.position.x;
-        const deltaY = position.y - widget.position.y;
-
-        // Déplacer aussi les enfants
-        const descendants = collectDescendantIds(prev, id);
-        newWidgets = prev.map(w => {
-          if (w.id === id) {
-            return { ...w, size, position };
-          } else if (descendants.includes(w.id)) {
-            return {
-              ...w,
-              position: {
-                x: w.position.x + deltaX,
-                y: w.position.y + deltaY
-              }
-            };
-          }
-          return w;
-        });
-      } else {
-        // Juste changer la taille, pas la position
-        newWidgets = prev.map(w => w.id === id ? { ...w, size } : w);
-      }
-
-      if (doSaveHistory) {
-        saveToHistory(newWidgets);
-      }
-      return newWidgets;
-    });
+    setWidgets(newWidgets);
+    if (doSaveHistory) {
+      saveToHistory(newWidgets);
+    }
   }, [saveToHistory]);
 
   const setActiveFile = useCallback((id: string) => {
@@ -455,66 +447,62 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   const reparentWidget = useCallback((id: string, parentId: string | null, position: { x: number; y: number }, parentSlot?: string) => {
-    setWidgets(prev => {
-      const widgetIndex = prev.findIndex(w => w.id === id);
-      if (widgetIndex === -1) return prev;
+    const prev = widgetsRef.current;
+    const widgetIndex = prev.findIndex(w => w.id === id);
+    if (widgetIndex === -1) return;
 
-      const targetParentId = parentId ?? null;
+    const targetParentId = parentId ?? null;
 
-      if (targetParentId) {
-        if (targetParentId === id) return prev;
-        if (isDescendant(prev, id, targetParentId)) return prev;
-        const parentWidget = prev.find(w => w.id === targetParentId);
-        if (!parentWidget || !isContainerWidget(parentWidget)) {
-          return prev;
-        }
-      }
+    if (targetParentId) {
+      if (targetParentId === id) return;
+      if (isDescendant(prev, id, targetParentId)) return;
+      const parentWidget = prev.find(w => w.id === targetParentId);
+      if (!parentWidget || !isContainerWidget(parentWidget)) return;
+    }
 
-      const parentWidget = targetParentId ? prev.find(w => w.id === targetParentId) : undefined;
-      let resolvedSlot: string | undefined;
-      if (parentWidget?.type === 'tabview') {
-        const slots = getTabSlots(parentWidget);
-        const defaultSlot = getDefaultTabSlot(parentWidget);
-        resolvedSlot = parentSlot && slots.includes(parentSlot) ? parentSlot : defaultSlot;
-      }
+    const parentWidget = targetParentId ? prev.find(w => w.id === targetParentId) : undefined;
+    let resolvedSlot: string | undefined;
+    if (parentWidget?.type === 'tabview') {
+      const slots = getTabSlots(parentWidget);
+      const defaultSlot = getDefaultTabSlot(parentWidget);
+      resolvedSlot = parentSlot && slots.includes(parentSlot) ? parentSlot : defaultSlot;
+    }
 
-      const candidate: WidgetData = {
-        ...prev[widgetIndex],
-        parentId: targetParentId,
-        parentSlot: resolvedSlot ?? null,
-        position: { x: position.x, y: position.y },
-      };
+    const candidate: WidgetData = {
+      ...prev[widgetIndex],
+      parentId: targetParentId,
+      parentSlot: resolvedSlot ?? null,
+      position: { x: position.x, y: position.y },
+    };
 
-      const newWidgets = [...prev];
-      const sanitized = clampWidgetToBounds(newWidgets, candidate, targetParentId);
-      const current = prev[widgetIndex];
-      const hasChanges =
-        current.parentId !== sanitized.parentId ||
-        current.parentSlot !== sanitized.parentSlot ||
-        current.position.x !== sanitized.position.x ||
-        current.position.y !== sanitized.position.y ||
-        current.size.width !== sanitized.size.width ||
-        current.size.height !== sanitized.size.height;
+    const newWidgets = [...prev];
+    const sanitized = clampWidgetToBounds(newWidgets, candidate, targetParentId);
+    const current = prev[widgetIndex];
+    const hasChanges =
+      current.parentId !== sanitized.parentId ||
+      current.parentSlot !== sanitized.parentSlot ||
+      current.position.x !== sanitized.position.x ||
+      current.position.y !== sanitized.position.y ||
+      current.size.width !== sanitized.size.width ||
+      current.size.height !== sanitized.size.height;
 
-      if (!hasChanges) {
-        return prev;
-      }
+    if (!hasChanges) return;
 
-      newWidgets[widgetIndex] = sanitized;
-      const finalWidgets = applyAutoLayoutToWidgets(newWidgets);
-      saveToHistory(finalWidgets);
-      return finalWidgets;
-    });
+    newWidgets[widgetIndex] = sanitized;
+    const finalWidgets = applyAutoLayoutToWidgets(newWidgets);
+    setWidgets(finalWidgets);
+    saveToHistory(finalWidgets);
   }, [clampWidgetToBounds, saveToHistory, applyAutoLayoutToWidgets]);
 
   const duplicateWidget = useCallback((id: string) => {
-    const widgetToDuplicate = widgets.find(w => w.id === id);
+    const currentWidgets = widgetsRef.current;
+    const widgetToDuplicate = currentWidgets.find(w => w.id === id);
     if (!widgetToDuplicate) return;
 
-    const subtreeIds = [id, ...collectDescendantIds(widgets, id)];
+    const subtreeIds = [id, ...collectDescendantIds(currentWidgets, id)];
     const idMap = new Map<string, string>();
     const clones: WidgetData[] = subtreeIds.map(originalId => {
-      const original = widgets.find(w => w.id === originalId);
+      const original = currentWidgets.find(w => w.id === originalId);
       if (!original) return null;
       const newId = `widget-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
       idMap.set(originalId, newId);
@@ -531,21 +519,19 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     if (clones.length === 0) return;
 
-    setWidgets(prev => {
-      const combined = [...prev];
-      clones.forEach(clone => {
-        const sanitized = clampWidgetToBounds(combined, clone, clone.parentId ?? null);
-        combined.push(sanitized);
-      });
-      saveToHistory(combined);
-      return combined;
+    const combined = [...currentWidgets];
+    clones.forEach(clone => {
+      const sanitized = clampWidgetToBounds(combined, clone, clone.parentId ?? null);
+      combined.push(sanitized);
     });
+    setWidgets(combined);
+    saveToHistory(combined);
 
     const newRootId = idMap.get(id);
     if (newRootId) {
       selectWidget(newRootId);
     }
-  }, [widgets, clampWidgetToBounds, saveToHistory, selectWidget]);
+  }, [clampWidgetToBounds, saveToHistory, selectWidget]);
 
   const copyWidget = useCallback((idOrIds: string | string[]) => {
     const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
@@ -600,15 +586,14 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     if (clones.length === 0) return;
 
-    setWidgets(prev => {
-      const combined = [...prev];
-      clones.forEach(clone => {
-        const sanitized = clampWidgetToBounds(combined, clone, clone.parentId ?? null);
-        combined.push(sanitized);
-      });
-      saveToHistory(combined);
-      return combined;
+    const prev = widgetsRef.current;
+    const combined = [...prev];
+    clones.forEach(clone => {
+      const sanitized = clampWidgetToBounds(combined, clone, clone.parentId ?? null);
+      combined.push(sanitized);
     });
+    setWidgets(combined);
+    saveToHistory(combined);
 
     const newRootId = idMap.get(clipboard[0].id);
     if (newRootId) {
@@ -617,39 +602,35 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [clipboard, clampWidgetToBounds, saveToHistory, selectWidget]);
 
   const toggleWidgetLock = useCallback((id: string) => {
-    setWidgets(prev => {
-      const widget = prev.find(w => w.id === id);
-      if (!widget) return prev;
-      const newWidgets = prev.map(w =>
-        w.id === id ? { ...w, locked: !w.locked } : w
-      );
-      saveToHistory(newWidgets);
-      return newWidgets;
-    });
+    const prev = widgetsRef.current;
+    const widget = prev.find(w => w.id === id);
+    if (!widget) return;
+    const newWidgets = prev.map(w =>
+      w.id === id ? { ...w, locked: !w.locked } : w
+    );
+    setWidgets(newWidgets);
+    saveToHistory(newWidgets);
   }, [saveToHistory]);
 
   const undo = useCallback(() => {
-    setHistory(prev => {
-      const currentIndex = historyIndexRef.current;
-      if (currentIndex <= 0) return prev;
-      const newIndex = currentIndex - 1;
-      setHistoryIndex(newIndex);
-      historyIndexRef.current = newIndex;
-      setWidgets(JSON.parse(JSON.stringify(prev[newIndex])));
-      return prev;
-    });
+    const currentIndex = historyIndexRef.current;
+    if (currentIndex <= 0) return;
+    const newIndex = currentIndex - 1;
+    historyIndexRef.current = newIndex;
+    setHistoryIndex(newIndex);
+    // Lire via historyRef — évite d'appeler setWidgets dans un updater de setHistory
+    const snapshot = historyRef.current[newIndex];
+    if (snapshot) setWidgets(JSON.parse(JSON.stringify(snapshot)));
   }, []);
 
   const redo = useCallback(() => {
-    setHistory(prev => {
-      const currentIndex = historyIndexRef.current;
-      if (currentIndex >= prev.length - 1) return prev;
-      const newIndex = currentIndex + 1;
-      setHistoryIndex(newIndex);
-      historyIndexRef.current = newIndex;
-      setWidgets(JSON.parse(JSON.stringify(prev[newIndex])));
-      return prev;
-    });
+    const currentIndex = historyIndexRef.current;
+    if (currentIndex >= historyRef.current.length - 1) return;
+    const newIndex = currentIndex + 1;
+    historyIndexRef.current = newIndex;
+    setHistoryIndex(newIndex);
+    const snapshot = historyRef.current[newIndex];
+    if (snapshot) setWidgets(JSON.parse(JSON.stringify(snapshot)));
   }, []);
 
   const canUndo = historyIndex > 0;
@@ -660,12 +641,11 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   const clearCanvas = useCallback(() => {
-    setWidgets(prev => {
-      if (prev.length > 0) {
-        saveToHistory([]);
-      }
-      return [];
-    });
+    const hadWidgets = widgetsRef.current.length > 0;
+    setWidgets([]);
+    if (hadWidgets) {
+      saveToHistory([]);
+    }
     setSelectedWidgetId(null);
   }, [saveToHistory]);
 
@@ -690,47 +670,60 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setSelectedWidgetId(null);
   }, []);
 
+  const contextValue = useMemo(() => ({
+    widgets,
+    selectedWidgetId,
+    selectedWidget,
+    canvasSettings,
+    viewMode,
+    previewMode,
+    snapLines,
+    setSnapLines,
+    addWidget,
+    updateWidget,
+    updateWidgetStyle,
+    deleteWidget,
+    selectWidget,
+    moveWidget,
+    resizeWidget,
+    reparentWidget,
+    duplicateWidget,
+    updateCanvasSettings,
+    clearCanvas,
+    setViewMode,
+    setPreviewMode,
+    snapToGrid,
+    copyWidget,
+    cutWidget,
+    pasteWidget,
+    toggleWidgetLock,
+    clipboard,
+    files,
+    activeFileId,
+    setActiveFile,
+    createFile,
+    deleteFile,
+    renameFile,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    loadWorkspaceState,
+  }), [
+    widgets, selectedWidgetId, selectedWidget, canvasSettings,
+    viewMode, previewMode, snapLines, setSnapLines,
+    addWidget, updateWidget, updateWidgetStyle, deleteWidget,
+    selectWidget, moveWidget, resizeWidget, reparentWidget,
+    duplicateWidget, updateCanvasSettings, clearCanvas,
+    setViewMode, setPreviewMode, snapToGrid,
+    copyWidget, cutWidget, pasteWidget, toggleWidgetLock,
+    clipboard, files, activeFileId, setActiveFile,
+    createFile, deleteFile, renameFile,
+    undo, redo, canUndo, canRedo, loadWorkspaceState,
+  ]);
+
   return (
-    <WidgetContext.Provider value={{
-      widgets,
-      selectedWidgetId,
-      selectedWidget,
-      canvasSettings,
-      viewMode,
-      previewMode,
-      snapLines,
-      setSnapLines,
-      addWidget,
-      updateWidget,
-      updateWidgetStyle,
-      deleteWidget,
-      selectWidget,
-      moveWidget,
-      resizeWidget,
-      reparentWidget,
-      duplicateWidget,
-      updateCanvasSettings,
-      clearCanvas,
-      setViewMode,
-      setPreviewMode,
-      snapToGrid,
-      copyWidget,
-      cutWidget,
-      pasteWidget,
-      toggleWidgetLock,
-      clipboard,
-      files,
-      activeFileId,
-      setActiveFile,
-      createFile,
-      deleteFile,
-      renameFile,
-      undo,
-      redo,
-      canUndo,
-      canRedo,
-      loadWorkspaceState,
-    }}>
+    <WidgetContext.Provider value={contextValue}>
       {children}
     </WidgetContext.Provider>
   );

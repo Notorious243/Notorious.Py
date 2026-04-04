@@ -1,4 +1,4 @@
-import React, { useEffect, useState, ReactNode } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { devWarn } from '@/lib/logger';
 import type { User, Session } from '@supabase/supabase-js';
@@ -26,7 +26,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return () => subscription.unsubscribe();
     }, []);
 
-    const signOut = async () => {
+    const signOut = useCallback(async () => {
         // Flush all pending saves BEFORE invalidating the session (RLS needs a valid token)
         window.dispatchEvent(new Event('app-pre-signout'));
         try {
@@ -39,10 +39,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         try { localStorage.removeItem('ctk-active-project'); } catch { /* ignore */ }
         await supabase.auth.signOut();
-    };
+    }, []);
+
+    const contextValue = useMemo(
+        () => ({ user, session, loading, signOut }),
+        [user, session, loading, signOut]
+    );
 
     return (
-        <AuthContext.Provider value={{ user, session, loading, signOut }}>
+        <AuthContext.Provider value={contextValue}>
             {children}
         </AuthContext.Provider>
     );

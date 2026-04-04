@@ -32,12 +32,14 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
   const [rightSidebarTab, setRightSidebarTab] = useState<'properties' | 'ai'>('properties');
   const [isFirstTime, setIsFirstTime] = useState(false);
+  const [phase1Done, setPhase1Done] = useState(false);
   const [activeOverlay, setActiveOverlay] = useState<'none' | 'projects' | 'settings'>('none');
   const [initialSettingsSection, setInitialSettingsSection] = useState<SettingsSection>('general');
   const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [mobileBannerDismissed, setMobileBannerDismissed] = useState(false);
   const [isTopBarHovered, setIsTopBarHovered] = useState(false);
   const topBarTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (topBarTimeoutRef.current) clearTimeout(topBarTimeoutRef.current); }, []);
   const PROPERTIES_PANEL_WIDTH = 280;
   const AI_PANEL_WIDTH = 340;
   const rightPanelWidth = rightSidebarTab === 'ai' ? AI_PANEL_WIDTH : PROPERTIES_PANEL_WIDTH;
@@ -49,6 +51,9 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
   const onboardingStorageKey = shouldTrackOnboarding
     ? `hasSeenOnboarding:${user?.id}`
     : 'hasSeenOnboarding:guest';
+  const phase1StorageKey = shouldTrackOnboarding
+    ? `notorious:tour:p1:${user?.id}`
+    : 'notorious:tour:p1:guest';
 
   // Listen for Home button click from TopBar — always open (allows project creation even with 0 projects)
   useEffect(() => {
@@ -57,19 +62,6 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
     };
     window.addEventListener('open-projects-modal', handler);
     return () => window.removeEventListener('open-projects-modal', handler);
-  }, []);
-
-  useEffect(() => {
-    const handleTabChange = (event: Event) => {
-      const customEvent = event as CustomEvent<{ tab?: 'properties' | 'ai' }>;
-      const tab = customEvent.detail?.tab;
-      if (tab === 'properties' || tab === 'ai') {
-        setRightSidebarTab(tab);
-      }
-    };
-
-    window.addEventListener('right-sidebar-tab-change', handleTabChange);
-    return () => window.removeEventListener('right-sidebar-tab-change', handleTabChange);
   }, []);
 
   useEffect(() => {
@@ -83,42 +75,53 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
     return () => window.removeEventListener(OPEN_AI_WORKSPACE_PANELS_EVENT, handleOpenPanelsForAI);
   }, [isNoProject]);
 
-  // Ne lancer le tour qu'après création/ouverture d'un projet
-  const shouldStartOnboarding = shouldTrackOnboarding && isFirstTime && !isNoProject;
+  // Check if any file exists (from context — needed early for phase conditions)
+  const { hasFiles } = useFileSystem();
+
+  // Phase 1 : écran d'accueil (pas de projet) → Bienvenue + Création de projet
+  const shouldStartPhase1 = shouldTrackOnboarding && isFirstTime && !phase1Done && isNoProject;
+  // Phase 2 : dans le builder, après la création du premier fichier .py
+  const shouldStartPhase2 = shouldTrackOnboarding && isFirstTime && phase1Done && !isNoProject && hasFiles;
 
   // Détecter si c'est la toute première visite (jamais vu le onboarding)
+  // NB: shouldStartPhase1/shouldStartPhase2 sont VOLONTAIREMENT absents des deps :
+  //     ils sont dérivés de isFirstTime/phase1Done — les inclure crée une boucle infinie.
   useEffect(() => {
     if (!shouldTrackOnboarding) {
       setIsFirstTime(false);
     } else {
       try {
-        const hasSeenOnboarding = localStorage.getItem(onboardingStorageKey);
-        setIsFirstTime(!hasSeenOnboarding);
+        setIsFirstTime(!localStorage.getItem(onboardingStorageKey));
+        setPhase1Done(!!localStorage.getItem(phase1StorageKey));
       } catch {
         setIsFirstTime(false);
       }
     }
+  }, [onboardingStorageKey, phase1StorageKey, shouldTrackOnboarding]);
 
-    // Responsive : fermer les panels sur petit écran réel (screen.width = taille physique)
+  // Responsive : fermer les panels sur petit écran — effect séparé, sans closure sur l'onboarding
+  useEffect(() => {
     const checkResponsive = () => {
-      const realWidth = window.screen.width;
-      const isSmall = realWidth < 1024;
+      const isSmall = window.screen.width < 1024;
       setIsMobileDevice(isSmall);
-      if (isSmall && !shouldStartOnboarding) {
+      if (isSmall) {
         setIsLeftPanelOpen(false);
         setIsRightPanelOpen(false);
       }
     };
-
-    // Check initial
     checkResponsive();
-
-    // Ecouter le resize
     window.addEventListener('resize', checkResponsive);
     return () => window.removeEventListener('resize', checkResponsive);
-  }, [onboardingStorageKey, shouldStartOnboarding, shouldTrackOnboarding]);
+  }, []);
 
-  // Marquer le onboarding comme vu
+  // Marquer la phase 1 comme vue (bienvenue + création de projet)
+  const handlePhase1Complete = () => {
+    if (!shouldTrackOnboarding) return;
+    try { localStorage.setItem(phase1StorageKey, 'true'); } catch { /* ignore */ }
+    setPhase1Done(true);
+  };
+
+  // Marquer le onboarding complet (phase 2 terminée)
   const handleOnboardingComplete = () => {
     if (!shouldTrackOnboarding) return;
     try {
@@ -132,24 +135,25 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
     if (isNoProject || !shouldTrackOnboarding) return;
     try {
       const hasSeenOnboarding = localStorage.getItem(onboardingStorageKey);
-      if (!hasSeenOnboarding) {
-        setIsFirstTime(true);
+      if (!hasSeenOnboarding) setIsFirstTime(true);
+      // Si l'utilisateur arrive directement dans le builder, marquer phase 1 comme faite
+      const p1 = localStorage.getItem(phase1StorageKey);
+      if (!p1) {
+        localStorage.setItem(phase1StorageKey, 'true');
+        setPhase1Done(true);
       }
     } catch { /* localStorage unavailable */ }
-  }, [isNoProject, onboardingStorageKey, shouldTrackOnboarding]);
+  }, [isNoProject, onboardingStorageKey, phase1StorageKey, shouldTrackOnboarding]);
 
   useEffect(() => {
-    if (!shouldStartOnboarding) return;
+    if (!shouldStartPhase2) return;
 
     // Assure une vue guidée visible et immersive
     setViewMode('design');
     setPreviewMode('edit');
     setIsLeftPanelOpen(true);
     setIsRightPanelOpen(true);
-  }, [shouldStartOnboarding, setPreviewMode, setViewMode]);
-
-  // Check if any file exists (from context)
-  const { hasFiles } = useFileSystem();
+  }, [shouldStartPhase2, setPreviewMode, setViewMode]);
 
   // En mode preview, cacher les panels
   const shouldShowPanels = previewMode !== 'preview';
@@ -349,7 +353,7 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
             overflow: 'hidden'
           }}
         >
-          <RightSidebar />
+          <RightSidebar onTabChange={setRightSidebarTab} />
           {isNoProject && (
             <div
               className="absolute inset-0 z-30 flex cursor-pointer flex-col items-center justify-center bg-[#F7F9FC]/90 transition-colors hover:bg-[#F7F9FC]"
@@ -385,9 +389,18 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
         </Suspense>
       )}
 
-      {/* Onboarding Tour */}
+      {/* Onboarding Tour — phase 1 : accueil (bienvenue + création de projet) */}
       <Suspense fallback={null}>
-        <OnboardingTour isFirstTime={shouldStartOnboarding} onComplete={handleOnboardingComplete} />
+        {shouldStartPhase1 && (
+          <OnboardingTour key="phase1" isFirstTime={true} phase={1} onComplete={handlePhase1Complete} />
+        )}
+      </Suspense>
+
+      {/* Onboarding Tour — phase 2 : builder (fichier → export) */}
+      <Suspense fallback={null}>
+        {shouldStartPhase2 && (
+          <OnboardingTour key="phase2" isFirstTime={true} phase={2} onComplete={handleOnboardingComplete} />
+        )}
       </Suspense>
     </div>
   );

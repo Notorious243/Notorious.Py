@@ -689,7 +689,15 @@ export const DayannaAIPanel = () => {
   const pendingConversationWritesRef = useRef<Map<string, PendingConversationWrite>>(new Map());
   const fileRenameMigrationDoneByProjectRef = useRef<Set<string>>(new Set());
   const syncHealthFailureCountRef = useRef(0);
+  // Ref pour forceNewConversationRequested — évite qu'il soit dans les deps
+  // du useEffect de chargement (sinon le setForceNewConversationRequested(false)
+  // dans le finally re-déclencherait immédiatement le même effect).
+  const forceNewConvRef = useRef(false);
+  // Ref de garde pour l'init de conversation vide
+  const hasCreatedInitialConvRef = useRef(false);
   const [forceNewConversationRequested, setForceNewConversationRequested] = useState(false);
+  // Synchronise la ref avec le state pour que le useEffect puisse lire la valeur sans la dep
+  useEffect(() => { forceNewConvRef.current = forceNewConversationRequested; }, [forceNewConversationRequested]);
 
   const { user } = useAuth();
   const { activeProjectId } = useProjects();
@@ -955,7 +963,7 @@ export const DayannaAIPanel = () => {
 
         const mapped: Conversation[] = dbConvos.map((c) => mapDbConversation(c as DbConversationRow));
         const sorted = sortConversationsByLatest(mapped);
-        const shouldCreateNew = forceNewConversationRequested || sorted.length === 0;
+        const shouldCreateNew = forceNewConvRef.current || sorted.length === 0;
 
         if (shouldCreateNew) {
           const created = createBlankConversation();
@@ -987,7 +995,8 @@ export const DayannaAIPanel = () => {
       } finally {
         if (!cancelled) {
           setIsLoadingDb(false);
-          if (forceNewConversationRequested) {
+          if (forceNewConvRef.current) {
+            forceNewConvRef.current = false;
             setForceNewConversationRequested(false);
           }
         }
@@ -1001,7 +1010,7 @@ export const DayannaAIPanel = () => {
     dbReloadNonce,
     dbReady,
     fetchProjectConversationsWithRetry,
-    forceNewConversationRequested,
+    // forceNewConversationRequested retiré des deps — lu via forceNewConvRef
     mapDbConversation,
     persistConversationToDb,
     sortConversationsByLatest,
@@ -1140,12 +1149,19 @@ export const DayannaAIPanel = () => {
 
   useEffect(() => {
     if (isLoadingDb || !user || !dbReady || !activeProjectId) return;
-    if (conversations.length > 0) return;
+    if (conversations.length > 0) {
+      hasCreatedInitialConvRef.current = false; // reset si des conversations existent
+      return;
+    }
+    if (hasCreatedInitialConvRef.current) return; // garde anti-doublon
+    hasCreatedInitialConvRef.current = true;
     const created = createBlankConversation();
     setConversations([created]);
     setCurrentConversationId(created.id);
     void persistConversationToDb(created, activeProjectId);
-  }, [activeProjectId, conversations.length, createBlankConversation, dbReady, isLoadingDb, persistConversationToDb, user]);
+  // conversations.length retiré des deps — évité via hasCreatedInitialConvRef
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProjectId, createBlankConversation, dbReady, isLoadingDb, persistConversationToDb, user]);
 
   const getFileSummary = useCallback((content: string, maxLines = 5): string => {
     if (!content) return '(vide)';
@@ -1626,11 +1642,14 @@ MODE DISCUSSION:
     toast.success(`${renameEntries.length} fichier(s) .py renommes en PascalCase.`);
   }, [activeProjectId, getPyFiles, renameNode, updateNode]);
 
+  const migrationDoneRef = useRef<string | null>(null);
+  const hasFiles = files.length > 0;
   useEffect(() => {
-    if (!activeProjectId) return;
-    if (files.length === 0) return;
+    if (!activeProjectId || !hasFiles) return;
+    if (migrationDoneRef.current === activeProjectId) return;
+    migrationDoneRef.current = activeProjectId;
     migratePythonFilesToPascalCase();
-  }, [activeProjectId, files, migratePythonFilesToPascalCase]);
+  }, [activeProjectId, hasFiles, migratePythonFilesToPascalCase]);
 
   const applyGeneratedInterface = useCallback((targetFileId: string, title: string, widgetsData: unknown[], nextSettings: Record<string, unknown>) => {
     const normalizedSettings = {

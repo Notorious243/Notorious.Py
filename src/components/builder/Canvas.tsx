@@ -28,6 +28,10 @@ export const Canvas: React.FC = () => {
   const { getPyFiles } = useFileSystem();
   const { activeProjectId, createProject, projects, openProject } = useProjects();
   const canvasRef = useRef<HTMLDivElement>(null);
+  const widgetsRef = useRef(widgets);
+  widgetsRef.current = widgets;
+  const canvasSettingsRef = useRef(canvasSettings);
+  canvasSettingsRef.current = canvasSettings;
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; widgetId: string | null } | null>(null);
   const [selectionBox, setSelectionBox] = useState<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
@@ -226,7 +230,7 @@ export const Canvas: React.FC = () => {
     }, null);
   }, [widgets, canvasSettings]);
 
-  const handleDrop = (item: WidgetTypeDragItem, monitor: DropTargetMonitor) => {
+  const handleDrop = useCallback((item: WidgetTypeDragItem, monitor: DropTargetMonitor) => {
     // LOCK: Empêcher les drops simultanés
     if (isDropInProgress.current) {
       devWarn('[Canvas] Drop ignored - another drop is in progress');
@@ -388,7 +392,7 @@ export const Canvas: React.FC = () => {
     } finally {
       // SnapLines removed - SmartGuides handles all alignment visualization
     }
-  };
+  }, [addWidget, selectWidget, canvasSettings.width, canvasSettings.height]);
 
   const { attach: attachCanvasRef } = useCanvasDrop({
     onDrop: handleDrop,
@@ -414,8 +418,9 @@ export const Canvas: React.FC = () => {
     if (e.target === e.currentTarget && e.button === 0) {
       const rect = canvasRef.current?.getBoundingClientRect();
       if (rect) {
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const scale = canvasSettings.scaling || 1;
+        const x = (e.clientX - rect.left) / scale;
+        const y = (e.clientY - rect.top) / scale;
         setIsSelecting(true);
         setSelectionBox({ startX: x, startY: y, endX: x, endY: y });
         justFinishedSelecting.current = false;
@@ -427,8 +432,9 @@ export const Canvas: React.FC = () => {
     if (isSelecting && selectionBox) {
       const rect = canvasRef.current?.getBoundingClientRect();
       if (rect) {
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const scale = canvasSettings.scaling || 1;
+        const x = (e.clientX - rect.left) / scale;
+        const y = (e.clientY - rect.top) / scale;
 
         // Only update if mouse actually moved (not just a click)
         const hasMoved = Math.abs(x - selectionBox.startX) > 2 || Math.abs(y - selectionBox.startY) > 2;
@@ -497,9 +503,10 @@ export const Canvas: React.FC = () => {
 
     const rect = canvasRef.current?.getBoundingClientRect();
     if (rect) {
+      const scale = canvasSettings.scaling || 1;
       setContextMenu({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
+        x: (e.clientX - rect.left) / scale,
+        y: (e.clientY - rect.top) / scale,
         widgetId,
       });
     }
@@ -589,11 +596,11 @@ export const Canvas: React.FC = () => {
             const isChild = (parentId: string | null | undefined, childId: string): boolean => {
               if (!parentId) return false;
               if (parentId === childId) return true;
-              const parent = widgets.find(w => w.id === parentId);
+              const parent = widgetsRef.current.find(w => w.id === parentId);
               if (!parent) return false;
               return isChild(parent.parentId, childId);
             };
-            const widget = widgets.find(w => w.id === widgetId);
+            const widget = widgetsRef.current.find(w => w.id === widgetId);
             return widget && isChild(widget.parentId, otherId);
           });
         });
@@ -605,18 +612,18 @@ export const Canvas: React.FC = () => {
         }
 
         topLevelWidgets.forEach(widgetId => {
-          const widget = widgets.find(w => w.id === widgetId);
+          const widget = widgetsRef.current.find(w => w.id === widgetId);
           if (!widget || widget.locked) return;
 
           // Calculer les limites en fonction du parent
           let minX = 0;
           let minY = 0;
-          let maxX = canvasSettings.width - widget.size.width;
-          let maxY = (canvasSettings.height - 40) - widget.size.height;
+          let maxX = canvasSettingsRef.current.width - widget.size.width;
+          let maxY = (canvasSettingsRef.current.height - 40) - widget.size.height;
 
           // Si le widget a un parent, utiliser les limites du parent
           if (widget.parentId) {
-            const parent = widgets.find(w => w.id === widget.parentId);
+            const parent = widgetsRef.current.find(w => w.id === widget.parentId);
             if (parent) {
               // Calculer la zone de contenu du parent
               const parentPadding = typeof parent.style?.padding === 'number' ? parent.style.padding : 12;
@@ -718,7 +725,7 @@ export const Canvas: React.FC = () => {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedWidgetId, selectedWidgets, widgets, canvasSettings, copyWidget, cutWidget, pasteWidget, deleteWidget, updateWidget, moveWidget, undo, redo]);
+  }, [selectedWidgetId, selectedWidgets, copyWidget, cutWidget, pasteWidget, deleteWidget, updateWidget, moveWidget, undo, redo]);
 
   const defaultBg = '#ffffff';
   const bgColor = canvasSettings.backgroundColor || defaultBg;

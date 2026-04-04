@@ -22,6 +22,8 @@ import { StepAnimation } from './OnboardingAnimations';
 interface OnboardingTourProps {
   isFirstTime: boolean;
   onComplete: () => void;
+  /** 1 = bienvenue+projet (avant le builder) | 2 = builder steps (après fichier créé) */
+  phase?: 1 | 2;
 }
 
 interface TourStep {
@@ -33,6 +35,8 @@ interface TourStep {
   icon: React.ElementType;
   gradient?: boolean;
   onEnter?: () => void;
+  /** Phase du tour : 1 = avant le builder, 2 = dans le builder */
+  phase: 1 | 2;
   animationKey?: string;
 }
 
@@ -78,6 +82,7 @@ const TOUR_STEPS: TourStep[] = [
     hint: 'Suivez le guide lumineux pas a pas',
     icon: Sparkles,
     gradient: true,
+    phase: 1,
   },
   // ── 2. Creation de projet ────────────────────────────────────────────────────
   {
@@ -89,6 +94,7 @@ const TOUR_STEPS: TourStep[] = [
     hint: 'Cliquez sur Nouveau projet pour démarrer votre interface.',
     icon: Rocket,
     animationKey: 'project',
+    phase: 1,
   },
   // ── 3. Fichier Python ────────────────────────────────────────────────────────
   {
@@ -100,6 +106,7 @@ const TOUR_STEPS: TourStep[] = [
     hint: 'Onglet Explorateur → + → main.py',
     icon: FileCode2,
     animationKey: 'python',
+    phase: 2,
   },
   // ── 4. Sidebar Composants ────────────────────────────────────────────────────
   {
@@ -111,6 +118,7 @@ const TOUR_STEPS: TourStep[] = [
     hint: 'Astuce : Ajoutez plusieurs widgets puis organisez-les ensuite.',
     icon: MousePointerClick,
     animationKey: 'sidebar',
+    phase: 2,
   },
   // ── 5. Canvas — Arrangement ──────────────────────────────────────────────────
   {
@@ -122,6 +130,7 @@ const TOUR_STEPS: TourStep[] = [
     hint: 'Glissez → alignez → construisez votre interface.',
     icon: LayoutDashboard,
     animationKey: 'canvas',
+    phase: 2,
   },
   // ── 6. Proprietes ────────────────────────────────────────────────────────────
   {
@@ -134,6 +143,7 @@ const TOUR_STEPS: TourStep[] = [
     icon: Palette,
     animationKey: 'properties',
     onEnter: () => window.dispatchEvent(new CustomEvent(OPEN_PROPERTIES_SIDEBAR_EVENT)),
+    phase: 2,
   },
   // ── 7. Assistant IA ──────────────────────────────────────────────────────────
   {
@@ -146,6 +156,7 @@ const TOUR_STEPS: TourStep[] = [
     icon: Bot,
     onEnter: openAiWorkspace,
     animationKey: 'ai',
+    phase: 2,
   },
   // ── 8. Apercu ────────────────────────────────────────────────────────────────
   {
@@ -157,6 +168,7 @@ const TOUR_STEPS: TourStep[] = [
     hint: 'Bouton Apercu dans la barre du haut',
     icon: Eye,
     animationKey: 'preview',
+    phase: 2,
   },
   // ── 9. Export ────────────────────────────────────────────────────────────────
   {
@@ -168,6 +180,7 @@ const TOUR_STEPS: TourStep[] = [
     hint: 'Bouton Exporter → copie + telechargement automatique',
     icon: Download,
     animationKey: 'export',
+    phase: 2,
   },
   // ── 10. C\'est parti ! ───────────────────────────────────────────────────────
   {
@@ -178,6 +191,7 @@ const TOUR_STEPS: TourStep[] = [
       'Vous connaissez desormais tout le flux : projet → fichier → widgets → proprietes → IA → apercu → export. Creez votre premiere interface professionnelle !',
     icon: Rocket,
     gradient: true,
+    phase: 2,
   },
 ];
 
@@ -379,7 +393,7 @@ const TourCard: React.FC<TourCardProps> = ({
     >
       {/* Radial glow accents */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
-        <div className={`absolute -left-8 -top-8 h-32 w-32 rounded-full blur-2xl ${isLast ? 'bg-emerald-500/[0.14]' : 'bg-blue-500/[0.12]'}`} />
+        <div className="absolute -left-8 -top-8 h-32 w-32 rounded-full bg-blue-500/[0.12] blur-2xl" />
         <div className={`absolute -bottom-6 -right-6 h-24 w-24 rounded-full blur-2xl ${isLast ? 'bg-blue-400/[0.10]' : 'bg-indigo-500/[0.08]'}`} />
         <div
           className="absolute inset-0 opacity-[0.04]"
@@ -392,137 +406,97 @@ const TourCard: React.FC<TourCardProps> = ({
 
       {isLast ? (
         /* ════════════════════════════════════════════════
-         *  FINALE CARD — redesign complet
+         *  FINALE CARD — même philosophie que les autres
          * ════════════════════════════════════════════════ */
         <>
-          {/* Close */}
-          <button
-            onClick={onClose}
-            className="absolute right-3.5 top-3.5 z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-white/[0.08] hover:text-red-400"
-          >
-            <X className="h-4 w-4" />
-          </button>
-
-          {/* ── Hero ── */}
-          <div className="flex flex-col items-center px-6 pb-3 pt-7 text-center">
-            {/* Rocket flottant */}
-            <motion.div
-              animate={{ y: [0, -6, 0] }}
-              transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
-              className="relative mb-4"
-            >
+          {/* Header — identique aux autres cards */}
+          <div className="relative flex items-start justify-between gap-3 border-b border-white/[0.08] px-5 pb-4 pt-5">
+            <div className="flex items-center gap-3">
               <motion.div
-                animate={{ scale: [1, 1.22, 1], opacity: [0.35, 0.12, 0.35] }}
-                transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
-                className="absolute inset-0 rounded-2xl bg-emerald-400/30 blur-xl"
-              />
-              <div className="relative flex h-[58px] w-[58px] items-center justify-center rounded-2xl border border-emerald-400/30 bg-gradient-to-br from-[#054e2a] via-[#0a6e3a] to-[#0d9353] shadow-[0_12px_40px_rgba(13,147,83,0.5)]">
-                <Rocket className="h-7 w-7 text-white" />
+                initial={{ rotate: -15, scale: 0.8 }}
+                animate={{ rotate: 0, scale: 1 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 18, delay: 0.1 }}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-400/25 bg-gradient-to-br from-[#0F3460] to-[#1F5AA0] shadow-[0_6px_20px_rgba(15,52,96,0.45)]"
+              >
+                <Rocket className="h-5 w-5 text-white" />
+              </motion.div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-md bg-blue-500/20 px-1.5 text-[10px] font-bold leading-none tracking-wider text-blue-300">
+                    {String(stepIndex + 1).padStart(2, '0')}
+                  </span>
+                  <span className="text-[11px] font-medium uppercase tracking-widest text-slate-400">
+                    {step.subtitle}
+                  </span>
+                </div>
+                <h3 className="mt-1 bg-gradient-to-r from-blue-300 via-blue-200 to-indigo-300 bg-clip-text text-lg font-bold leading-tight text-transparent">
+                  {step.title}
+                </h3>
               </div>
-            </motion.div>
-
-            {/* Badge parcours terminé */}
-            <motion.span
-              initial={{ opacity: 0, scale: 0.75 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.15, type: 'spring', stiffness: 280, damping: 20 }}
-              className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-400"
+            </div>
+            <button
+              onClick={onClose}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-white/[0.08] hover:text-red-400"
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              Parcours terminé — 8 étapes
-            </motion.span>
-
-            {/* Titre */}
-            <motion.h3
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-gradient-to-r from-emerald-300 via-white to-blue-300 bg-clip-text text-[26px] font-extrabold leading-tight text-transparent"
-            >
-              C'est parti !
-            </motion.h3>
-            <motion.p
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.28 }}
-              className="mt-1.5 max-w-[270px] text-[12.5px] leading-relaxed text-slate-400"
-            >
-              Vous maîtrisez le flux complet. Créez votre première interface Python professionnelle.
-            </motion.p>
+              <X className="h-4 w-4" />
+            </button>
           </div>
 
-          {/* ── Grille étapes complétées ── */}
-          <div className="mx-4 mb-3 rounded-xl border border-white/[0.07] bg-white/[0.03] p-3">
-            <p className="mb-2 text-[9px] font-semibold uppercase tracking-widest text-slate-500">Étapes réalisées</p>
-            <div className="grid grid-cols-4 gap-1.5">
+          {/* Zone visuelle — parcours en ligne (remplace l'animation) */}
+          <div className="border-b border-white/[0.06] px-5 py-5">
+            <p className="mb-3 text-[9px] font-semibold uppercase tracking-widest text-slate-500">Parcours complété</p>
+            <div className="flex items-start">
               {(
                 [
-                  { SI: Rocket,            label: 'Projet'     },
-                  { SI: FileCode2,         label: 'Fichier'    },
-                  { SI: MousePointerClick, label: 'Widgets'    },
-                  { SI: LayoutDashboard,   label: 'Canvas'     },
-                  { SI: Palette,           label: 'Propriétés' },
-                  { SI: Bot,               label: 'IA'         },
-                  { SI: Eye,               label: 'Aperçu'     },
-                  { SI: Download,          label: 'Export'     },
+                  { SI: Rocket,            label: 'Projet'  },
+                  { SI: FileCode2,         label: 'Fichier' },
+                  { SI: MousePointerClick, label: 'Widgets' },
+                  { SI: LayoutDashboard,   label: 'Canvas'  },
+                  { SI: Palette,           label: 'Propr.'  },
+                  { SI: Bot,               label: 'IA'      },
+                  { SI: Eye,               label: 'Aperçu'  },
+                  { SI: Download,          label: 'Export'  },
                 ] as { SI: React.ElementType; label: string }[]
               ).map(({ SI, label }, i) => (
-                <motion.div
-                  key={label}
-                  initial={{ opacity: 0, scale: 0.65 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.05 * i + 0.32, type: 'spring', stiffness: 300, damping: 22 }}
-                  className="flex flex-col items-center gap-1 rounded-lg border border-emerald-500/15 bg-emerald-500/[0.07] px-1 py-2"
-                >
-                  <div className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-500/20">
-                    <SI className="h-3 w-3 text-emerald-400" />
-                  </div>
-                  <span className="text-center text-[8px] leading-tight text-slate-400">{label}</span>
-                </motion.div>
+                <React.Fragment key={label}>
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.05 * i + 0.15, type: 'spring', stiffness: 280, damping: 22 }}
+                    className="flex flex-1 flex-col items-center gap-1.5"
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-blue-400/25 bg-blue-500/[0.12]">
+                      <SI className="h-3.5 w-3.5 text-blue-300" />
+                    </div>
+                    <span className="text-center text-[7px] leading-tight text-slate-500">{label}</span>
+                  </motion.div>
+                  {i < 7 && (
+                    <motion.div
+                      initial={{ scaleX: 0 }}
+                      animate={{ scaleX: 1 }}
+                      transition={{ delay: 0.05 * i + 0.28, duration: 0.2 }}
+                      className="mt-3.5 h-px flex-none bg-blue-400/20"
+                      style={{ width: 6 }}
+                    />
+                  )}
+                </React.Fragment>
               ))}
             </div>
           </div>
 
-          {/* ── 3 façons de démarrer ── */}
-          <div className="mx-4 mb-5 flex flex-col gap-1.5">
-            <p className="mb-1 text-[9px] font-semibold uppercase tracking-widest text-slate-500">Commencer par</p>
-            {(
-              [
-                { color: '#3b82f6', mark: '✦', label: 'Nouveau projet vide',  sub: 'Partir d\'une page blanche'           },
-                { color: '#8b5cf6', mark: '◈', label: 'Générer avec Dayanna', sub: 'Laisser l\'IA construire pour vous'    },
-                { color: '#0d9353', mark: '◉', label: 'Cloner un template',   sub: 'Adapter un design existant'            },
-              ] as { color: string; mark: string; label: string; sub: string }[]
-            ).map(({ color, mark, label, sub }, i) => (
-              <motion.div
-                key={label}
-                initial={{ opacity: 0, x: -14 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.1 * i + 0.55 }}
-                className="group flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3.5 py-2.5 transition-all hover:border-white/[0.15] hover:bg-white/[0.06]"
-              >
-                <span
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 text-[17px] font-bold"
-                  style={{ color }}
-                >
-                  {mark}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[12.5px] font-semibold text-white">{label}</p>
-                  <p className="text-[10.5px] text-slate-500">{sub}</p>
-                </div>
-                <ArrowRight className="h-3.5 w-3.5 shrink-0 text-slate-600 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-400" />
-              </motion.div>
-            ))}
+          {/* Body */}
+          <div className="px-5 py-4">
+            <p className="text-[13.5px] leading-relaxed text-slate-300">{step.description}</p>
           </div>
 
-          {/* ── Footer finale ── */}
-          <div className="flex items-center justify-between border-t border-white/[0.06] bg-white/[0.02] px-5 py-3.5">
+          {/* Footer standard */}
+          <div className="relative flex items-center justify-between border-t border-white/[0.06] bg-white/[0.02] px-5 py-3.5">
             <div className="flex items-center gap-3">
               <div className="h-1.5 w-20 overflow-hidden rounded-full bg-white/[0.08]">
-                <div className="h-full w-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400" />
+                <div className="h-full w-full rounded-full bg-gradient-to-r from-[#0F3460] to-[#3B82F6]" />
               </div>
-              <span className="text-[11px] font-semibold tabular-nums text-slate-500">
-                {totalSteps} / {totalSteps}
+              <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold tracking-wider text-blue-300">
+                ✓ Terminé
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -535,7 +509,7 @@ const TourCard: React.FC<TourCardProps> = ({
               </button>
               <button
                 onClick={onNext}
-                className="flex h-9 items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-700 to-emerald-500 px-4 text-[13px] font-semibold text-white shadow-[0_8px_24px_rgba(13,147,83,0.45)] transition-all hover:brightness-110 active:scale-[0.97]"
+                className="flex h-9 items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#0F3460] to-[#1F5AA0] px-4 text-[13px] font-semibold text-white shadow-[0_8px_24px_rgba(15,52,96,0.40)] transition-all hover:shadow-[0_12px_32px_rgba(15,52,96,0.55)] hover:brightness-110 active:scale-[0.97]"
               >
                 Commencer
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -659,7 +633,7 @@ const TourBackground: React.FC = () => (
 
 // ── Main Component ──────────────────────────────────────────────────────────────
 
-export const OnboardingTour: React.FC<OnboardingTourProps> = ({ isFirstTime, onComplete }) => {
+export const OnboardingTour: React.FC<OnboardingTourProps> = ({ isFirstTime, onComplete, phase }) => {
   const [isActive, setIsActive] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [spotlightRect, setSpotlightRect] = useState<SpotlightRect | null>(null);
@@ -670,14 +644,15 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ isFirstTime, onC
   });
   const cardRef = useRef<number>(0);
 
-  // Build resolved steps (skip missing elements)
+  // Build resolved steps (skip missing elements, filter by phase if provided)
   const resolvedSteps = useMemo(() => {
     if (!isActive) return [];
-    return TOUR_STEPS.filter((step) => {
+    const phaseSteps = phase ? TOUR_STEPS.filter((s) => s.phase === phase) : TOUR_STEPS;
+    return phaseSteps.filter((step) => {
       if (step.selector === 'body') return true;
       return resolveElement(step.selector) !== null;
     });
-  }, [isActive]);
+  }, [isActive, phase]);
 
   const totalSteps = resolvedSteps.length;
   const step = resolvedSteps[currentStep] ?? null;

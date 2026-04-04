@@ -17,28 +17,33 @@ import {
   emitFocusAIPrompt,
 } from '@/lib/aiSidebar';
 
-export const RightSidebar: React.FC = () => {
+export const RightSidebar: React.FC<{ onTabChange?: (tab: 'properties' | 'ai') => void }> = ({ onTabChange }) => {
   const { selectedWidget } = useWidgets();
   const [activeTab, setActiveTab] = React.useState<'properties' | 'ai'>('properties');
   const isAiTab = activeTab === 'ai';
 
+  const handleTabChange = React.useCallback((tab: 'properties' | 'ai') => {
+    setActiveTab(tab);
+    onTabChange?.(tab);
+  }, [onTabChange]);
+
   React.useEffect(() => {
     if (consumeOpenAIOnLoadFlag()) {
-      setActiveTab('ai');
+      handleTabChange('ai');
     }
-  }, []);
+  }, [handleTabChange]);
 
   React.useEffect(() => {
-    const openAiSidebar = () => setActiveTab('ai');
+    const openAiSidebar = () => handleTabChange('ai');
     window.addEventListener(OPEN_AI_SIDEBAR_EVENT, openAiSidebar);
     return () => window.removeEventListener(OPEN_AI_SIDEBAR_EVENT, openAiSidebar);
-  }, []);
+  }, [handleTabChange]);
 
   React.useEffect(() => {
-    const openPropertiesSidebar = () => setActiveTab('properties');
+    const openPropertiesSidebar = () => handleTabChange('properties');
     window.addEventListener(OPEN_PROPERTIES_SIDEBAR_EVENT, openPropertiesSidebar);
     return () => window.removeEventListener(OPEN_PROPERTIES_SIDEBAR_EVENT, openPropertiesSidebar);
-  }, []);
+  }, [handleTabChange]);
 
   React.useEffect(() => {
     if (activeTab !== 'ai') return;
@@ -55,14 +60,6 @@ export const RightSidebar: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, [activeTab]);
 
-  React.useEffect(() => {
-    window.dispatchEvent(
-      new CustomEvent('right-sidebar-tab-change', {
-        detail: { tab: activeTab },
-      })
-    );
-  }, [activeTab]);
-
   return (
     <div
       className={cn(
@@ -72,7 +69,7 @@ export const RightSidebar: React.FC = () => {
           : "border-border bg-card"
       )}
     >
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'properties' | 'ai')} className="flex h-full flex-col">
+      <Tabs value={activeTab} onValueChange={(value) => handleTabChange(value as 'properties' | 'ai')} className="flex h-full flex-col">
         <div
           className={cn(
             "border-b px-4 pb-2 pt-4",

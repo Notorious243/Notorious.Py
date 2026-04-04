@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, ReactNode } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo, ReactNode } from 'react';
 import { devWarn } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 import type { CanvasSettings } from '@/types/widget';
@@ -395,9 +395,11 @@ const useFileSystemLogic = (projectId: string | null) => {
                 }
             });
         };
-        traverse(data, false);
+        // Use dataRef so this function keeps a stable reference across auto-saves
+        traverse(dataRef.current, false);
         return files;
-    }, [data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const saveNow = useCallback((overrideData?: FileSystemItem[], options: SaveNowOptions = {}) => {
         const treeToSave = overrideData ?? dataRef.current;
@@ -416,7 +418,7 @@ const useFileSystemLogic = (projectId: string | null) => {
         await retryCanvasSync(pid);
     }, []);
 
-    return {
+    return useMemo(() => ({
         data,
         dataRef,
         addNode,
@@ -438,10 +440,29 @@ const useFileSystemLogic = (projectId: string | null) => {
         pendingWritesCount,
         lastSyncedAt,
         lastErrorCode,
-    };
+    }), [
+        data,
+        addNode,
+        addImage,
+        updateNode,
+        renameNode,
+        deleteNode,
+        hasFiles,
+        projectCreated,
+        createProject,
+        getNode,
+        getAllFiles,
+        getPyFiles,
+        saveNow,
+        flushPendingWrites,
+        retrySyncNow,
+        canvasSyncState,
+        canvasSyncReason,
+        pendingWritesCount,
+        lastSyncedAt,
+        lastErrorCode,
+    ]);
 };
-
-export type FileSystemContextValue = ReturnType<typeof useFileSystemLogic>;
 
 // Provider component
 export const FileSystemProvider = ({ children, projectId }: { children: ReactNode, projectId: string | null }) => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { devError } from '@/lib/logger';
 import { useAuth } from '@/contexts/useAuth';
@@ -180,12 +180,18 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
         });
     }, []);
 
+    const contextValue = useMemo(() => ({
+      projects, activeProjectId, loading,
+      createProject, openProject, closeProject,
+      deleteProject, renameProject, updateProjectThumbnail,
+    }), [
+      projects, activeProjectId, loading,
+      createProject, openProject, closeProject,
+      deleteProject, renameProject, updateProjectThumbnail,
+    ]);
+
     return (
-        <ProjectContext.Provider value={{
-            projects, activeProjectId, loading,
-            createProject, openProject, closeProject,
-            deleteProject, renameProject, updateProjectThumbnail,
-        }}>
+        <ProjectContext.Provider value={contextValue}>
             {children}
         </ProjectContext.Provider>
     );

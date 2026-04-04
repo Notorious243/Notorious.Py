@@ -1,4 +1,4 @@
-import { CanvasSettings, WidgetData } from '@/types/widget';
+import { CanvasSettings, Position, Size, WidgetData } from '@/types/widget';
 
 export const CONTAINER_TYPES = ['frame', 'scrollableframe', 'tabview'] as const;
 export const ACTIVE_TAB_STATE_KEY = '__builder_active_tab';
@@ -54,6 +54,47 @@ export interface ContentBounds {
   width: number;
   height: number;
 }
+
+export interface OverflowPolicy {
+  allowOverflowX: boolean;
+  allowOverflowY: boolean;
+}
+
+const NO_OVERFLOW_POLICY: OverflowPolicy = {
+  allowOverflowX: false,
+  allowOverflowY: false,
+};
+
+export const getContainerOverflowPolicy = (parent?: WidgetData | null): OverflowPolicy => {
+  if (!parent || parent.type !== 'scrollableframe') {
+    return NO_OVERFLOW_POLICY;
+  }
+
+  const orientation = parent.properties?.orientation === 'horizontal' ? 'horizontal' : 'vertical';
+  if (orientation === 'horizontal') {
+    return { allowOverflowX: true, allowOverflowY: false };
+  }
+  return { allowOverflowX: false, allowOverflowY: true };
+};
+
+export const clampPositionToBounds = (
+  position: Position,
+  size: Size,
+  bounds: ContentBounds,
+  overflowPolicy: OverflowPolicy = NO_OVERFLOW_POLICY
+): Position => {
+  const maxX = bounds.left + Math.max(0, bounds.width - size.width);
+  const maxY = bounds.top + Math.max(0, bounds.height - size.height);
+
+  const clampedX = overflowPolicy.allowOverflowX
+    ? Math.max(position.x, bounds.left)
+    : Math.min(Math.max(position.x, bounds.left), maxX);
+  const clampedY = overflowPolicy.allowOverflowY
+    ? Math.max(position.y, bounds.top)
+    : Math.min(Math.max(position.y, bounds.top), maxY);
+
+  return { x: clampedX, y: clampedY };
+};
 
 export const getParentContentBounds = (
   widgets: WidgetData[],

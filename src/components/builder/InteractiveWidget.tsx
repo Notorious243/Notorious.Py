@@ -15,6 +15,7 @@ interface InteractiveWidgetProps {
   isPreviewMode?: boolean;
   contentRef?: React.RefObject<HTMLDivElement | null>;
   childElements?: React.ReactNode;
+  childWidgets?: WidgetData[];
   hasChildren?: boolean;
   containerMetrics?: ContainerMetrics;
   activeTab?: string;
@@ -30,6 +31,7 @@ export const InteractiveWidget: React.FC<InteractiveWidgetProps> = React.memo(({
   isPreviewMode = false,
   contentRef,
   childElements = null,
+  childWidgets = [],
   hasChildren: _hasChildren = false,
   containerMetrics,
   activeTab,
@@ -128,7 +130,7 @@ export const InteractiveWidget: React.FC<InteractiveWidgetProps> = React.memo(({
   const renderCtx: WidgetRenderContext = {
     widget, isPreviewMode, isDark, colors, baseStyle, textColor, fgColor, borderColor,
     effectiveBorderWidth, effectiveBorderColor, cornerRadius, properties, style, fontSize, fontFamily, fontWeight,
-    contentRef, childElements, containerMetrics, activeTab, onTabChange, updateWidget, isDraggingChild,
+    contentRef, childElements, childWidgets, containerMetrics, activeTab, onTabChange, updateWidget, isDraggingChild,
   };
 
   switch (widget.type) {

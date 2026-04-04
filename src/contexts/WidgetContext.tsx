@@ -1,7 +1,16 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { WidgetData, CanvasSettings, WidgetStyle } from '@/types/widget';
 import { devWarn, devError } from '@/lib/logger';
-import { isContainerWidget, getParentContentBounds, collectDescendantIds, isDescendant, getDefaultTabSlot, getTabSlots } from '@/lib/widgetLayout';
+import {
+  isContainerWidget,
+  getParentContentBounds,
+  collectDescendantIds,
+  isDescendant,
+  getDefaultTabSlot,
+  getTabSlots,
+  clampPositionToBounds,
+  getContainerOverflowPolicy,
+} from '@/lib/widgetLayout';
 import { computeAutoLayout, hasAutoLayout } from '@/lib/autoLayoutEngine';
 import { WidgetContext } from '@/contexts/widget-context';
 
@@ -131,12 +140,14 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       const width = Math.max(minSize, Math.min(widget.size.width, Math.max(minSize, availableWidth)));
       const height = Math.max(minSize, Math.min(widget.size.height, Math.max(minSize, availableHeight)));
-
-      const maxX = bounds.left + Math.max(0, bounds.width - width);
-      const maxY = bounds.top + Math.max(0, bounds.height - height);
-
-      const clampedX = Math.min(Math.max(widget.position.x, bounds.left), maxX);
-      const clampedY = Math.min(Math.max(widget.position.y, bounds.top), maxY);
+      const parentWidget = targetParentId ? list.find((w) => w.id === targetParentId) : null;
+      const overflowPolicy = getContainerOverflowPolicy(parentWidget);
+      const clampedPosition = clampPositionToBounds(
+        widget.position,
+        { width, height },
+        bounds,
+        overflowPolicy
+      );
 
       let parentSlot = widget.parentSlot;
       if (targetParentId) {
@@ -157,7 +168,7 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         parentId: targetParentId ?? null,
         parentSlot: parentSlot ?? null,
         size: { width, height },
-        position: { x: clampedX, y: clampedY },
+        position: clampedPosition,
       };
     } catch (error) {
       devError('[WidgetContext] Error in clampWidgetToBounds:', error, widget);
@@ -476,6 +487,7 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     const newWidgets = [...prev];
+    const descendants = collectDescendantIds(prev, id);
     const sanitized = clampWidgetToBounds(newWidgets, candidate, targetParentId);
     const current = prev[widgetIndex];
     const hasChanges =
@@ -489,6 +501,23 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!hasChanges) return;
 
     newWidgets[widgetIndex] = sanitized;
+    const deltaX = sanitized.position.x - current.position.x;
+    const deltaY = sanitized.position.y - current.position.y;
+
+    if (deltaX !== 0 || deltaY !== 0) {
+      for (let i = 0; i < newWidgets.length; i++) {
+        const maybeChild = newWidgets[i];
+        if (!descendants.includes(maybeChild.id)) continue;
+        newWidgets[i] = {
+          ...maybeChild,
+          position: {
+            x: maybeChild.position.x + deltaX,
+            y: maybeChild.position.y + deltaY,
+          },
+        };
+      }
+    }
+
     const finalWidgets = applyAutoLayoutToWidgets(newWidgets);
     setWidgets(finalWidgets);
     saveToHistory(finalWidgets);

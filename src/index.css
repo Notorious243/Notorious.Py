@@ -170,22 +170,22 @@
   height: 8px;
 }
 .ctk-scrollable-content::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--ctk-scroll-track-color, transparent);
   border-radius: 4px;
 }
 .ctk-scrollable-content::-webkit-scrollbar-thumb {
-  background: #4A4D50;
+  background: var(--ctk-scroll-thumb-color, #4A4D50);
   border-radius: 4px;
   min-height: 20px;
 }
 .ctk-scrollable-content::-webkit-scrollbar-thumb:hover {
-  background: #636363;
+  background: var(--ctk-scroll-thumb-hover-color, #636363);
 }
 .light .ctk-scrollable-content::-webkit-scrollbar-thumb {
-  background: #CCCCCC;
+  background: var(--ctk-scroll-thumb-color, #CCCCCC);
 }
 .light .ctk-scrollable-content::-webkit-scrollbar-thumb:hover {
-  background: #A5A5A5;
+  background: var(--ctk-scroll-thumb-hover-color, #A5A5A5);
 }
 
 .dayanna-theme-dark .prose-ai {

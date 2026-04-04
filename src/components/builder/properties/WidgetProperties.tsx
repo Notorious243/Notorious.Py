@@ -456,6 +456,41 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] text-muted-foreground">Couleur piste scrollbar</Label>
+              <ColorPicker
+                color={properties.scrollbar_fg_color || '#CCCCCC'}
+                onChange={color => handlePropertyChange('scrollbar_fg_color', color)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] text-muted-foreground">Couleur bouton scrollbar</Label>
+              <ColorPicker
+                color={properties.scrollbar_button_color || '#4A4D50'}
+                onChange={color => handlePropertyChange('scrollbar_button_color', color)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] text-muted-foreground">Couleur hover scrollbar</Label>
+              <ColorPicker
+                color={properties.scrollbar_button_hover_color || '#636363'}
+                onChange={color => handlePropertyChange('scrollbar_button_hover_color', color)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] text-muted-foreground">Fond du label</Label>
+              <ColorPicker
+                color={properties.label_fg_color || '#FFFFFF'}
+                onChange={color => handlePropertyChange('label_fg_color', color)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] text-muted-foreground">Couleur texte label</Label>
+              <ColorPicker
+                color={properties.label_text_color || '#000000'}
+                onChange={color => handlePropertyChange('label_text_color', color)}
+              />
+            </div>
           </div>
         )}
 

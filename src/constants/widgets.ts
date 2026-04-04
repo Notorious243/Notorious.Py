@@ -412,8 +412,8 @@ export const WIDGET_DEFINITIONS: WidgetType[] = [
       label_text_color: null, // Auto (theme)
       label_text: '', // Texte du label en haut
       label_font: ['Roboto', 13],
-      label_anchor: 'center'
-      // Note: orientation n'est pas supporté - toujours vertical
+      label_anchor: 'center',
+      orientation: 'vertical', // 'vertical' ou 'horizontal'
     },
     category: 'Conteneurs'
   },

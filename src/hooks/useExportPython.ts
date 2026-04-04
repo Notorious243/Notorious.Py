@@ -888,6 +888,11 @@ export const useExportPython = () => {
         ];
         if (properties.label_text) { sfParams.push(`label_text="${sanitize(properties.label_text)}"`); }
         if (properties.orientation === 'horizontal') { sfParams.push(`orientation="horizontal"`); }
+        if (propColor('scrollbar_fg_color')) { sfParams.push(`scrollbar_fg_color="${properties.scrollbar_fg_color}"`); }
+        if (propColor('scrollbar_button_color')) { sfParams.push(`scrollbar_button_color="${properties.scrollbar_button_color}"`); }
+        if (propColor('scrollbar_button_hover_color')) { sfParams.push(`scrollbar_button_hover_color="${properties.scrollbar_button_hover_color}"`); }
+        if (propColor('label_fg_color')) { sfParams.push(`label_fg_color="${properties.label_fg_color}"`); }
+        if (propColor('label_text_color')) { sfParams.push(`label_text_color="${properties.label_text_color}"`); }
         if (propColor('fg_color')) { sfParams.push(`fg_color="${properties.fg_color}"`); }
         code += `        self.${widgetName} = ctk.CTkScrollableFrame(\n            ${sfParams.join(',\n            ')}${getStyleParams(false, new Set(['fg_color']))}\n        )\n`;
         break;

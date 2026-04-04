@@ -12,6 +12,7 @@ import {
     type AIProvider,
     type ProviderConfig,
 } from '@/lib/aiPrompts';
+import { getContainerMetrics } from '@/lib/widgetLayout';
 
 interface RawAIWidget {
     id: string;
@@ -249,15 +250,12 @@ export const useAIGeneration = (): UseAIGenerationReturn => {
                     // Ensure parent is processed first (for nested frames)
                     process(parent);
 
-                    // Compute content offset (padding + header if applicable)
-                    const padding = typeof parent.style?.padding === 'number' ? parent.style.padding : 12;
-                    let offsetY = padding;
-                    if (parent.type === 'tabview') offsetY += 40;
-                    if (parent.type === 'scrollableframe' && parent.properties?.label_text) offsetY += 28;
+                    // Compute content offset exactly like the canvas rendering engine
+                    const metrics = getContainerMetrics(parent as WidgetData);
 
                     // Convert: absolute = parent.absolute + padding + relative
-                    widget.position.x = parent.position.x + padding + widget.position.x;
-                    widget.position.y = parent.position.y + offsetY + widget.position.y;
+                    widget.position.x = parent.position.x + metrics.offsetX + widget.position.x;
+                    widget.position.y = parent.position.y + metrics.offsetY + widget.position.y;
                 }
             }
         }

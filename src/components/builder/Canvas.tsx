@@ -6,7 +6,14 @@ import { useWidgets } from '@/contexts/useWidgets';
 import { useCanvasDrop, type WidgetTypeDragItem } from '@/hooks/useDragDrop';
 import type { FileSystemItem } from '@/hooks/useFileSystem';
 import { ALL_WIDGET_DEFINITIONS } from '@/constants/widgets';
-import { isContainerWidget, getParentContentBounds, getWidgetDepth, getActiveTabSlot, getDefaultTabSlot } from '@/lib/widgetLayout';
+import {
+  isContainerWidget,
+  getParentContentBounds,
+  getWidgetDepth,
+  getActiveTabSlot,
+  getDefaultTabSlot,
+  getContainerOverflowPolicy,
+} from '@/lib/widgetLayout';
 import { CanvasGrid } from './CanvasGrid';
 import { useProjects } from '@/contexts/useProjects';
 import { RenderedWidget } from './RenderedWidget';
@@ -21,11 +28,9 @@ import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { openAIAssistantForPrompt } from '@/lib/aiSidebar';
-import { useFileSystem } from '@/hooks/useFileSystemContext';
 
 export const Canvas: React.FC = () => {
   const { widgets, canvasSettings, addWidget, selectWidget, selectedWidgetId, copyWidget, cutWidget, pasteWidget, deleteWidget, toggleWidgetLock, clipboard, undo, redo, updateWidget, moveWidget, previewMode, updateCanvasSettings } = useWidgets();
-  const { getPyFiles } = useFileSystem();
   const { activeProjectId, createProject, projects, openProject } = useProjects();
   const canvasRef = useRef<HTMLDivElement>(null);
   const widgetsRef = useRef(widgets);
@@ -39,16 +44,22 @@ export const Canvas: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createModalMode, setCreateModalMode] = useState<'manual' | 'ai'>('manual');
   const [newProjectName, setNewProjectName] = useState('');
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const [isPanningCanvas, setIsPanningCanvas] = useState(false);
   const importZipRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState<{ width: number; height: number } | null>(null);
+  const panStateRef = useRef({
+    active: false,
+    startX: 0,
+    startY: 0,
+    scrollLeft: 0,
+    scrollTop: 0,
+  });
 
-  // Mesurer l'espace disponible pour l'auto-scale en mode preview
+  // Mesurer l'espace disponible du viewport canvas (utile en preview + centrage dynamique)
   useEffect(() => {
-    if (previewMode !== 'preview' || !containerRef.current) {
-      setContainerSize(null);
-      return;
-    }
+    if (!containerRef.current) return;
     const measure = () => {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
@@ -59,7 +70,7 @@ export const Canvas: React.FC = () => {
     const observer = new ResizeObserver(measure);
     observer.observe(containerRef.current);
     return () => observer.disconnect();
-  }, [previewMode]);
+  }, []);
 
   // Calculer le scale automatique en mode preview
   const previewScale = useMemo(() => {
@@ -80,13 +91,18 @@ export const Canvas: React.FC = () => {
   const [zoomInputValue, setZoomInputValue] = useState('');
   const zoomInputRef = useRef<HTMLInputElement>(null);
   const zoomIndicatorTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasPyFiles = useMemo(() => getPyFiles().length > 0, [getPyFiles]);
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || previewMode === 'preview' || !hasPyFiles) return;
+    if (!container || previewMode === 'preview') return;
 
     const handleWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey && e.shiftKey) {
+        e.preventDefault();
+        container.scrollLeft += e.deltaY;
+        return;
+      }
+
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         e.stopPropagation();
@@ -106,7 +122,100 @@ export const Canvas: React.FC = () => {
 
     container.addEventListener('wheel', handleWheel, { passive: false });
     return () => container.removeEventListener('wheel', handleWheel);
-  }, [previewMode, canvasSettings.scaling, updateCanvasSettings, hasPyFiles]);
+  }, [previewMode, canvasSettings.scaling, updateCanvasSettings]);
+
+  // Pan style Figma: espace + glisser (ou bouton milieu)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      setIsSpacePressed(true);
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        setIsSpacePressed(false);
+      }
+    };
+
+    const handleBlur = () => {
+      setIsSpacePressed(false);
+      panStateRef.current.active = false;
+      setIsPanningCanvas(false);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isPanningCanvas) return;
+
+    const previousUserSelect = document.body.style.userSelect;
+    const previousCursor = document.body.style.cursor;
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'grabbing';
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const panState = panStateRef.current;
+      if (!panState.active) return;
+
+      const container = containerRef.current;
+      if (!container) return;
+
+      e.preventDefault();
+      const dx = e.clientX - panState.startX;
+      const dy = e.clientY - panState.startY;
+      container.scrollLeft = panState.scrollLeft - dx;
+      container.scrollTop = panState.scrollTop - dy;
+    };
+
+    const stopPan = () => {
+      panStateRef.current.active = false;
+      setIsPanningCanvas(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', stopPan);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', stopPan);
+      document.body.style.userSelect = previousUserSelect;
+      document.body.style.cursor = previousCursor;
+    };
+  }, [isPanningCanvas]);
+
+  const handleViewportPanStart = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (previewMode === 'preview') return;
+    const scale = canvasSettings.scaling || 1;
+    const wantsPan = e.button === 1 || (e.button === 0 && isSpacePressed);
+    if (!wantsPan) return;
+    if (scale <= 1 && e.button !== 1) return;
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    panStateRef.current = {
+      active: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      scrollLeft: container.scrollLeft,
+      scrollTop: container.scrollTop,
+    };
+    setIsPanningCanvas(true);
+  }, [previewMode, canvasSettings.scaling, isSpacePressed]);
 
   // Zoom controls
   const handleZoomIn = useCallback(() => {
@@ -323,12 +432,17 @@ export const Canvas: React.FC = () => {
       if (containerTarget) {
         // Widget déposé dans un conteneur
         const bounds = getParentContentBounds(widgets, containerTarget.id, canvasSettings);
+        const overflowPolicy = getContainerOverflowPolicy(containerTarget);
 
         // Clamp dans les limites du conteneur
         const maxX = bounds.left + Math.max(0, bounds.width - width);
         const maxY = bounds.top + Math.max(0, bounds.height - height);
-        absX = Math.max(bounds.left, Math.min(absX, maxX));
-        absY = Math.max(bounds.top, Math.min(absY, maxY));
+        absX = overflowPolicy.allowOverflowX
+          ? Math.max(bounds.left, absX)
+          : Math.max(bounds.left, Math.min(absX, maxX));
+        absY = overflowPolicy.allowOverflowY
+          ? Math.max(bounds.top, absY)
+          : Math.max(bounds.top, Math.min(absY, maxY));
 
         targetParentId = containerTarget.id;
         if (containerTarget.type === 'tabview') {
@@ -392,7 +506,7 @@ export const Canvas: React.FC = () => {
     } finally {
       // SnapLines removed - SmartGuides handles all alignment visualization
     }
-  }, [addWidget, selectWidget, canvasSettings.width, canvasSettings.height]);
+  }, [addWidget, selectWidget, canvasSettings, findContainerAtPoint, widgets]);
 
   const { attach: attachCanvasRef } = useCanvasDrop({
     onDrop: handleDrop,
@@ -414,6 +528,7 @@ export const Canvas: React.FC = () => {
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    if (isPanningCanvas || (isSpacePressed && e.button === 0)) return;
     // Only start selection if clicking on canvas background
     if (e.target === e.currentTarget && e.button === 0) {
       const rect = canvasRef.current?.getBoundingClientRect();
@@ -429,6 +544,7 @@ export const Canvas: React.FC = () => {
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
+    if (isPanningCanvas) return;
     if (isSelecting && selectionBox) {
       const rect = canvasRef.current?.getBoundingClientRect();
       if (rect) {
@@ -473,6 +589,7 @@ export const Canvas: React.FC = () => {
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
+    if (isPanningCanvas) return;
     if (isSelecting) {
       // Check if it was just a click (no drag)
       const wasDrag = selectionBox && (
@@ -622,25 +739,19 @@ export const Canvas: React.FC = () => {
           let maxY = (canvasSettingsRef.current.height - 40) - widget.size.height;
 
           // Si le widget a un parent, utiliser les limites du parent
+          let allowOverflowX = false;
+          let allowOverflowY = false;
           if (widget.parentId) {
             const parent = widgetsRef.current.find(w => w.id === widget.parentId);
             if (parent) {
-              // Calculer la zone de contenu du parent
-              const parentPadding = typeof parent.style?.padding === 'number' ? parent.style.padding : 12;
-              let offsetY = parentPadding;
-
-              // Ajuster pour les headers spéciaux
-              if (parent.type === 'tabview') {
-                offsetY += 40; // Header des onglets
-              }
-              if (parent.type === 'scrollableframe' && parent.properties?.label_text) {
-                offsetY += 28; // Label
-              }
-
-              minX = parent.position.x + parentPadding;
-              minY = parent.position.y + offsetY;
-              maxX = parent.position.x + parent.size.width - parentPadding - widget.size.width;
-              maxY = parent.position.y + parent.size.height - parentPadding - widget.size.height;
+              const bounds = getParentContentBounds(widgetsRef.current, parent.id, canvasSettingsRef.current);
+              minX = bounds.left;
+              minY = bounds.top;
+              maxX = bounds.left + Math.max(0, bounds.width - widget.size.width);
+              maxY = bounds.top + Math.max(0, bounds.height - widget.size.height);
+              const overflowPolicy = getContainerOverflowPolicy(parent);
+              allowOverflowX = overflowPolicy.allowOverflowX;
+              allowOverflowY = overflowPolicy.allowOverflowY;
             }
           }
 
@@ -652,13 +763,13 @@ export const Canvas: React.FC = () => {
               newY = Math.max(minY, widget.position.y - step);
               break;
             case 'ArrowDown':
-              newY = Math.min(maxY, widget.position.y + step);
+              newY = allowOverflowY ? widget.position.y + step : Math.min(maxY, widget.position.y + step);
               break;
             case 'ArrowLeft':
               newX = Math.max(minX, widget.position.x - step);
               break;
             case 'ArrowRight':
-              newX = Math.min(maxX, widget.position.x + step);
+              newX = allowOverflowX ? widget.position.x + step : Math.min(maxX, widget.position.x + step);
               break;
           }
 
@@ -730,41 +841,82 @@ export const Canvas: React.FC = () => {
   const defaultBg = '#ffffff';
   const bgColor = canvasSettings.backgroundColor || defaultBg;
   const backgroundImageSource = canvasSettings.background_image_data || canvasSettings.background_image;
+  const effectiveScale = previewMode === 'preview' && previewScale !== null
+    ? previewScale
+    : (canvasSettings.scaling || 1);
+  const scaledCanvasWidth = canvasSettings.width * effectiveScale;
+  const scaledCanvasHeight = canvasSettings.height * effectiveScale;
+  const viewportWidth = containerSize?.width ?? 0;
+  const viewportHeight = containerSize?.height ?? 0;
+  const horizontalGutter = Math.max(220, viewportWidth * 0.5);
+  const stageWidth = Math.max(viewportWidth, scaledCanvasWidth + horizontalGutter * 2);
+  const stageHeight = Math.max(viewportHeight, scaledCanvasHeight + 8);
+  const canvasOffsetX = Math.max(0, (stageWidth - scaledCanvasWidth) / 2);
+  const canvasOffsetY = 0;
+  const canShowPanCursor = previewMode !== 'preview' && (canvasSettings.scaling || 1) > 1 && isSpacePressed && !isPanningCanvas;
+  const commitZoomInput = () => {
+    const val = Number.parseInt(zoomInputValue, 10);
+    if (!Number.isNaN(val) && val >= 10 && val <= 300) {
+      updateCanvasSettings({ scaling: val / 100 });
+    }
+    setIsEditingZoom(false);
+  };
+
+  // Recentrer horizontalement quand l'espace dispo change (ex: sidebar ouverte/fermée)
+  useEffect(() => {
+    if (!containerRef.current || viewportWidth <= 0 || stageWidth <= 0) return;
+    if (isPanningCanvas) return;
+    const targetScrollLeft = Math.max(0, (stageWidth - viewportWidth) / 2);
+    containerRef.current.scrollLeft = targetScrollLeft;
+  }, [viewportWidth, stageWidth, isPanningCanvas]);
+
   return (
     <div className="relative flex flex-1 flex-col overflow-hidden">
     <div
       ref={containerRef}
-      className="relative flex flex-1 items-center justify-center overflow-auto pb-28 pt-6 scrollbar-thin scrollbar-thumb-border/40 scrollbar-track-transparent"
+      className={`relative flex-1 overflow-auto pb-28 pt-3 scrollbar-thin scrollbar-thumb-border/40 scrollbar-track-transparent ${isPanningCanvas ? 'cursor-grabbing' : canShowPanCursor ? 'cursor-grab' : ''}`}
+      onMouseDownCapture={handleViewportPanStart}
     >
-      <motion.div
-        className={`relative z-10 border border-border bg-card shadow-[0_30px_72px_rgba(15,52,96,0.12)] ring-1 ring-black/[0.03] ${previewMode === 'preview' ? 'rounded-xl' : 'rounded-2xl'}`}
+      <div
+        className="relative mx-auto shrink-0"
         style={{
-          width: canvasSettings.width,
-          height: canvasSettings.height,
+          width: stageWidth,
+          height: stageHeight,
         }}
-        animate={{ scale: previewMode === 'preview' && previewScale !== null ? previewScale : canvasSettings.scaling }}
-        transition={{ duration: 0.3, ease: "easeInOut" }}
       >
-        <CanvasHeader />
-        <div
-          ref={attachCanvasRef}
-          className={`relative h-[calc(100%-2.5rem)] w-full overflow-hidden text-foreground ${previewMode === 'preview' ? 'rounded-b-xl' : 'rounded-b-2xl'}`}
+        <motion.div
+          className={`relative z-10 border border-border bg-card shadow-[0_30px_72px_rgba(15,52,96,0.12)] ring-1 ring-black/[0.03] ${previewMode === 'preview' ? 'rounded-xl' : 'rounded-2xl'}`}
           style={{
-            backgroundColor: bgColor,
-            backgroundImage: backgroundImageSource
-              ? `url(${backgroundImageSource})`
-              : undefined,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat',
+            position: 'absolute',
+            left: canvasOffsetX,
+            top: canvasOffsetY,
+            width: canvasSettings.width,
+            height: canvasSettings.height,
+            transformOrigin: 'top left',
           }}
-          onClick={handleCanvasClick}
-          onContextMenu={(e) => handleContextMenu(e, null)}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+          animate={{ scale: effectiveScale }}
+          transition={{ duration: 0.3, ease: "easeInOut" }}
         >
+          <CanvasHeader />
+          <div
+            ref={attachCanvasRef}
+            className={`relative h-[calc(100%-2.5rem)] w-full overflow-hidden text-foreground ${previewMode === 'preview' ? 'rounded-b-xl' : 'rounded-b-2xl'}`}
+            style={{
+              backgroundColor: bgColor,
+              backgroundImage: backgroundImageSource
+                ? `url(${backgroundImageSource})`
+                : undefined,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+            }}
+            onClick={handleCanvasClick}
+            onContextMenu={(e) => handleContextMenu(e, null)}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+          >
           {canvasSettings.gridVisible && previewMode !== 'preview' && <CanvasGrid width={canvasSettings.width} height={canvasSettings.height - 40} scale={canvasSettings.scaling} />}
 
           {/* Smart Guides - Guides d'alignement intelligents */}
@@ -951,97 +1103,97 @@ export const Canvas: React.FC = () => {
             </div>
           )}
 
-          {/* Context Menu */}
-          {contextMenu && (
-            <div
-              className="absolute z-[100] min-w-[190px] rounded-xl border border-border bg-card py-1.5 shadow-2xl"
-              style={{
-                left: `${contextMenu.x}px`,
-                top: `${contextMenu.y}px`,
-                boxShadow: '0 18px 42px rgba(15, 52, 96, 0.15)',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {selectedWidgets.length > 0 && (
-                <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
-                  {selectedWidgets.length} widget{selectedWidgets.length > 1 ? 's' : ''} sélectionné{selectedWidgets.length > 1 ? 's' : ''}
-                </div>
-              )}
-              {(contextMenu.widgetId || selectedWidgets.length > 0) && (
-                <>
-                  <button
-                    className="w-full px-4 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-accent-foreground flex items-center gap-2 transition-colors"
-                    onClick={() => handleMenuAction('copy')}
-                  >
-                    <Copy className="h-4 w-4" />
-                    <span className="font-medium">Copier</span>
-                  </button>
-                  <button
-                    className="w-full px-4 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-accent-foreground flex items-center gap-2 transition-colors"
-                    onClick={() => handleMenuAction('cut')}
-                  >
-                    <Scissors className="h-4 w-4" />
-                    <span className="font-medium">Couper</span>
-                  </button>
-                </>
-              )}
-              <button
-                className="w-full px-4 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-accent-foreground flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={() => handleMenuAction('paste')}
-                disabled={!clipboard}
+            {/* Context Menu */}
+            {contextMenu && (
+              <div
+                className="absolute z-[100] min-w-[190px] rounded-xl border border-border bg-card py-1.5 shadow-2xl"
+                style={{
+                  left: `${contextMenu.x}px`,
+                  top: `${contextMenu.y}px`,
+                  boxShadow: '0 18px 42px rgba(15, 52, 96, 0.15)',
+                }}
+                onClick={(e) => e.stopPropagation()}
               >
-                <Clipboard className="h-4 w-4" />
-                <span className="font-medium">Coller</span>
-              </button>
-              {(contextMenu.widgetId || selectedWidgets.length > 0) && (
-                <>
-                  <div className="my-1 h-px bg-border" />
-                  <button
-                    className="w-full px-4 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-accent-foreground flex items-center gap-2 transition-colors"
-                    onClick={() => handleMenuAction('lock')}
-                  >
-                    {widgets.find(w => w.id === contextMenu.widgetId)?.locked ? (
-                      <>
-                        <Unlock className="h-4 w-4" />
-                        <span className="font-medium">Déverrouiller</span>
-                      </>
-                    ) : (
-                      <>
-                        <Lock className="h-4 w-4" />
-                        <span className="font-medium">Verrouiller{selectedWidgets.length > 1 ? ' tout' : ''}</span>
-                      </>
-                    )}
-                  </button>
-                  <div className="my-1 h-px bg-border" />
-                  <button
-                    className="w-full px-4 py-2 text-left text-sm text-destructive hover:bg-destructive hover:text-destructive-foreground flex items-center gap-2 transition-colors font-medium"
-                    onClick={() => handleMenuAction('delete')}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    <span className="font-medium">Supprimer{selectedWidgets.length > 1 ? ' tout' : ''}</span>
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      </motion.div>
+                {selectedWidgets.length > 0 && (
+                  <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+                    {selectedWidgets.length} widget{selectedWidgets.length > 1 ? 's' : ''} sélectionné{selectedWidgets.length > 1 ? 's' : ''}
+                  </div>
+                )}
+                {(contextMenu.widgetId || selectedWidgets.length > 0) && (
+                  <>
+                    <button
+                      className="w-full px-4 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-accent-foreground flex items-center gap-2 transition-colors"
+                      onClick={() => handleMenuAction('copy')}
+                    >
+                      <Copy className="h-4 w-4" />
+                      <span className="font-medium">Copier</span>
+                    </button>
+                    <button
+                      className="w-full px-4 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-accent-foreground flex items-center gap-2 transition-colors"
+                      onClick={() => handleMenuAction('cut')}
+                    >
+                      <Scissors className="h-4 w-4" />
+                      <span className="font-medium">Couper</span>
+                    </button>
+                  </>
+                )}
+                <button
+                  className="w-full px-4 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-accent-foreground flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => handleMenuAction('paste')}
+                  disabled={!clipboard}
+                >
+                  <Clipboard className="h-4 w-4" />
+                  <span className="font-medium">Coller</span>
+                </button>
+                {(contextMenu.widgetId || selectedWidgets.length > 0) && (
+                  <>
+                    <div className="my-1 h-px bg-border" />
+                    <button
+                      className="w-full px-4 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-accent-foreground flex items-center gap-2 transition-colors"
+                      onClick={() => handleMenuAction('lock')}
+                    >
+                      {widgets.find(w => w.id === contextMenu.widgetId)?.locked ? (
+                        <>
+                          <Unlock className="h-4 w-4" />
+                          <span className="font-medium">Déverrouiller</span>
+                        </>
+                      ) : (
+                        <>
+                          <Lock className="h-4 w-4" />
+                          <span className="font-medium">Verrouiller{selectedWidgets.length > 1 ? ' tout' : ''}</span>
+                        </>
+                      )}
+                    </button>
+                    <div className="my-1 h-px bg-border" />
+                    <button
+                      className="w-full px-4 py-2 text-left text-sm text-destructive hover:bg-destructive hover:text-destructive-foreground flex items-center gap-2 transition-colors font-medium"
+                      onClick={() => handleMenuAction('delete')}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span className="font-medium">Supprimer{selectedWidgets.length > 1 ? ' tout' : ''}</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </motion.div>
+      </div>
     </div>
 
       {/* Zoom Controls Dock — always visible in design mode */}
       {previewMode !== 'preview' && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-2 z-[220] flex justify-center">
+        <div className="pointer-events-none absolute inset-x-0 bottom-4 z-[300] flex justify-center">
           <div
-            className="pointer-events-auto flex min-w-[214px] items-center gap-0.5 rounded-xl border border-border bg-card/95 px-1.5 py-1 shadow-lg backdrop-blur-md"
+            className="pointer-events-auto flex min-w-[242px] items-center gap-1 rounded-2xl border border-border/80 bg-background/95 px-2 py-1.5 shadow-[0_16px_36px_rgba(15,52,96,0.22)] backdrop-blur-md"
             onClick={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
             onMouseDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
             onPointerDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
           >
             <button
               onClick={handleZoomOut}
-              disabled={!hasPyFiles}
               className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-bold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-              title={hasPyFiles ? "Zoom arrière (Ctrl -)" : "Créez un fichier .py pour activer le zoom"}
+              title="Zoom arrière (Ctrl -)"
             >
               −
             </button>
@@ -1049,15 +1201,7 @@ export const Canvas: React.FC = () => {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  const val = parseInt(zoomInputValue, 10);
-                  if (!hasPyFiles) {
-                    setIsEditingZoom(false);
-                    return;
-                  }
-                  if (!isNaN(val) && val >= 10 && val <= 300) {
-                    updateCanvasSettings({ scaling: val / 100 });
-                  }
-                  setIsEditingZoom(false);
+                  commitZoomInput();
                 }}
                 className="flex items-center"
               >
@@ -1071,29 +1215,16 @@ export const Canvas: React.FC = () => {
                   onChange={(e) => setZoomInputValue(e.target.value.replace(/[^0-9]/g, ''))}
                   onBlur={() => {
                     setTimeout(() => {
-                      setIsEditingZoom((prev) => {
-                        if (!prev || !hasPyFiles) return false;
-                        const val = parseInt(zoomInputValue, 10);
-                        if (!isNaN(val) && val >= 10 && val <= 300) {
-                          updateCanvasSettings({ scaling: val / 100 });
-                        }
-                        return false;
-                      });
+                      if (document.activeElement !== zoomInputRef.current) {
+                        commitZoomInput();
+                      }
                     }, 150);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Escape') setIsEditingZoom(false);
                     if (e.key === 'Enter') {
                       e.preventDefault();
-                      if (!hasPyFiles) {
-                        setIsEditingZoom(false);
-                        return;
-                      }
-                      const val = parseInt(zoomInputValue, 10);
-                      if (!isNaN(val) && val >= 10 && val <= 300) {
-                        updateCanvasSettings({ scaling: val / 100 });
-                      }
-                      setIsEditingZoom(false);
+                      commitZoomInput();
                     }
                   }}
                   className="h-7 w-14 rounded-lg border border-primary/30 bg-background px-1 text-center text-[11px] font-semibold text-foreground outline-none focus:border-primary/60"
@@ -1106,42 +1237,38 @@ export const Canvas: React.FC = () => {
                 onClick={(e) => {
                   e.stopPropagation();
                   e.nativeEvent.stopImmediatePropagation();
-                  if (!hasPyFiles) return;
                   setZoomInputValue(String(Math.round((canvasSettings.scaling || 1) * 100)));
                   setIsEditingZoom(true);
                   setTimeout(() => zoomInputRef.current?.select(), 10);
                 }}
                 onMouseDown={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
                 className="flex h-7 min-w-[3rem] items-center justify-center rounded-lg px-1.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
-                title={hasPyFiles ? "Cliquer pour saisir un pourcentage" : "Créez un fichier .py pour activer le zoom"}
-                disabled={!hasPyFiles}
+                title="Cliquer pour saisir un pourcentage"
               >
                 {Math.round((canvasSettings.scaling || 1) * 100)}%
               </button>
             )}
             <button
               onClick={handleZoomIn}
-              disabled={!hasPyFiles}
               className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-bold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-              title={hasPyFiles ? "Zoom avant (Ctrl +)" : "Créez un fichier .py pour activer le zoom"}
+              title="Zoom avant (Ctrl +)"
             >
               +
             </button>
             <div className="mx-0.5 h-4 w-px bg-border/50" />
             <button
               onClick={handleZoomFit}
-              disabled={!hasPyFiles}
-              className="flex h-7 items-center justify-center rounded-lg px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-              title={hasPyFiles ? "Ajuster à l'écran" : "Créez un fichier .py pour activer le zoom"}
+              className="flex h-7 items-center justify-center rounded-lg px-2.5 text-xs font-semibold text-foreground/90 transition-colors hover:bg-accent hover:text-foreground"
+              title="Ajuster à l'écran"
             >
-              Fit
+              Ajuster
             </button>
           </div>
         </div>
       )}
 
       {/* Zoom Indicator (floating, on zoom change) */}
-      {showZoomIndicator && hasPyFiles && (
+      {showZoomIndicator && (
         <div className="pointer-events-none absolute left-1/2 top-6 z-40 -translate-x-1/2 animate-in fade-in zoom-in-95 duration-200">
           <div className="rounded-lg bg-foreground/80 px-3 py-1.5 text-xs font-semibold text-background shadow-lg backdrop-blur-sm">
             {Math.round((canvasSettings.scaling || 1) * 100)}%

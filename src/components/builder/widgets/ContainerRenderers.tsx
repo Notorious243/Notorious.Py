@@ -34,26 +34,92 @@ export const FrameRenderer: React.FC<{ ctx: WidgetRenderContext }> = React.memo(
 
 // ========== CTkScrollableFrame ==========
 export const ScrollableFrameRenderer: React.FC<{ ctx: WidgetRenderContext }> = React.memo(({ ctx }) => {
-  const { widget, isDark, colors, baseStyle, cornerRadius, effectiveBorderWidth, effectiveBorderColor, isPreviewMode, contentRef, childElements, containerMetrics, isDraggingChild } = ctx;
+  const { widget, isDark, colors, baseStyle, cornerRadius, effectiveBorderWidth, effectiveBorderColor, isPreviewMode, contentRef, childElements, childWidgets, containerMetrics, isDraggingChild } = ctx;
   const properties = widget.properties || {};
   const style = widget.style || {};
 
   const scrollFrameBgColor = style.backgroundColor || properties.fg_color || colors.fg;
   const scrollFrameTextColor = style.textColor || properties.text_color || colors.text;
+  const labelTextColor = properties.label_text_color || scrollFrameTextColor;
+  const labelBackgroundColor = properties.label_fg_color || 'transparent';
   const paddingValue = typeof style.padding === 'number' ? style.padding : 0;
   const labelText = properties.label_text || '';
+  const orientation = properties.orientation === 'horizontal' ? 'horizontal' : 'vertical';
   const innerHeight = containerMetrics ? Math.max(containerMetrics.innerHeight, 0) : undefined;
+  const innerWidth = containerMetrics ? Math.max(containerMetrics.innerWidth, 0) : undefined;
+  const viewportWidth = innerWidth ?? widget.size.width;
+  const viewportHeight = innerHeight ?? widget.size.height;
+  const originX = widget.position.x + (containerMetrics?.offsetX ?? 0);
+  const originY = widget.position.y + (containerMetrics?.offsetY ?? 0);
+  const contentExtent = useMemo(() => {
+    let maxRight = viewportWidth;
+    let maxBottom = viewportHeight;
+
+    (childWidgets ?? []).forEach((child) => {
+      const localX = child.position.x - originX;
+      const localY = child.position.y - originY;
+      maxRight = Math.max(maxRight, localX + child.size.width);
+      maxBottom = Math.max(maxBottom, localY + child.size.height);
+    });
+
+    return {
+      width: Math.max(1, Math.ceil(maxRight)),
+      height: Math.max(1, Math.ceil(maxBottom)),
+    };
+  }, [childWidgets, originX, originY, viewportWidth, viewportHeight]);
+
+  const scrollbarTrackColor = properties.scrollbar_fg_color || 'transparent';
+  const scrollbarThumbColor = properties.scrollbar_button_color || (isDark ? '#4A4D50' : '#CCCCCC');
+  const scrollbarThumbHoverColor = properties.scrollbar_button_hover_color || (isDark ? '#636363' : '#A5A5A5');
+  const useScrollableViewport = !isDraggingChild || isPreviewMode;
+
+  const scrollViewportStyle: React.CSSProperties = {
+    flex: 1,
+    position: 'relative',
+    width: '100%',
+    height: '100%',
+    overflowX: useScrollableViewport ? (orientation === 'horizontal' ? 'auto' : 'hidden') : 'visible',
+    overflowY: useScrollableViewport ? (orientation === 'vertical' ? 'auto' : 'hidden') : 'visible',
+    borderRadius: `${Math.max(cornerRadius - 4, 4)}px`,
+    backgroundColor: scrollFrameBgColor,
+    border: 'none',
+    scrollbarWidth: useScrollableViewport ? 'thin' : undefined,
+    scrollbarColor: useScrollableViewport ? `${scrollbarThumbColor} ${scrollbarTrackColor}` : undefined,
+  };
+  const cssVars = scrollViewportStyle as React.CSSProperties & Record<string, string>;
+  cssVars['--ctk-scroll-track-color'] = scrollbarTrackColor;
+  cssVars['--ctk-scroll-thumb-color'] = scrollbarThumbColor;
+  cssVars['--ctk-scroll-thumb-hover-color'] = scrollbarThumbHoverColor;
 
   return (
     <div style={{ ...baseStyle, pointerEvents: 'auto', backgroundColor: scrollFrameBgColor, border: `${effectiveBorderWidth}px solid ${effectiveBorderColor}`, borderRadius: `${cornerRadius}px`, padding: `${paddingValue}px`, position: 'relative', display: 'flex', flexDirection: 'column', gap: labelText ? '12px' : '8px', overflow: isDraggingChild ? 'visible' : 'hidden' }}>
       {labelText && (
-        <div style={{ color: scrollFrameTextColor, fontWeight: 600, fontSize: '14px', letterSpacing: '0.01em', pointerEvents: 'none' }}>{labelText}</div>
+        <div
+          style={{
+            color: labelTextColor,
+            backgroundColor: labelBackgroundColor,
+            fontWeight: 600,
+            fontSize: '14px',
+            letterSpacing: '0.01em',
+            pointerEvents: 'none',
+          }}
+        >
+          {labelText}
+        </div>
       )}
       <div
         className={isPreviewMode ? 'ctk-scrollable-content' : ''}
-        style={{ flex: 1, position: 'relative', width: '100%', height: '100%', overflow: isPreviewMode ? 'auto' : 'visible', borderRadius: `${Math.max(cornerRadius - 4, 4)}px`, backgroundColor: isPreviewMode ? 'transparent' : (isDark ? '#1F1F1F' : '#F6F8FB'), border: isPreviewMode ? 'none' : `1px dashed ${isDark ? 'rgba(71, 85, 105, 0.45)' : 'rgba(148, 163, 184, 0.4)'}`, padding: '4px' }}
+        style={scrollViewportStyle}
       >
-        <div ref={contentRef ?? undefined} style={{ position: 'relative', minHeight: innerHeight ? `${innerHeight}px` : '100%', pointerEvents: 'auto' }}>
+        <div
+          ref={contentRef ?? undefined}
+          style={{
+            position: 'relative',
+            width: orientation === 'horizontal' ? `${contentExtent.width}px` : '100%',
+            minHeight: orientation === 'vertical' ? `${contentExtent.height}px` : '100%',
+            pointerEvents: 'auto',
+          }}
+        >
           {!isPreviewMode && containerMetrics && isDraggingChild && (
             <FrameInternalGrid width={containerMetrics.innerWidth} height={Math.max(containerMetrics.innerHeight, innerHeight || 0)} gridSize={10} show={true} />
           )}

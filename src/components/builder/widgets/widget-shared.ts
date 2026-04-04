@@ -22,6 +22,7 @@ export interface WidgetRenderContext {
   // Container-specific
   contentRef?: React.RefObject<HTMLDivElement | null>;
   childElements?: React.ReactNode;
+  childWidgets?: WidgetData[];
   containerMetrics?: ContainerMetrics;
   activeTab?: string;
   onTabChange?: (tab: string) => void;

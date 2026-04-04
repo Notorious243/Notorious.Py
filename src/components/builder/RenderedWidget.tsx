@@ -12,6 +12,7 @@ import {
   getDefaultTabSlot,
   getActiveTabSlot,
   ACTIVE_TAB_STATE_KEY,
+  getContainerOverflowPolicy,
 } from '@/lib/widgetLayout';
 import { hasAutoLayout } from '@/lib/autoLayoutEngine';
 import { createSnapEngine, SnapGuide, DistanceMeasure, ResizeSnapResult } from '@/lib/SnapEngine';
@@ -123,6 +124,8 @@ export const RenderedWidget: React.FC<RenderedWidgetProps> = ({
   const dragStartPosRef = useRef({ x: 0, y: 0 });
   const lastSnappedPosRef = useRef({ x: 0, y: 0 });
   const isEscapingRef = useRef(false); // Tracks when child is dragged outside parent frame
+  const snapLockRef = useRef<{ x: number | null; y: number | null }>({ x: null, y: null });
+  const lastRootGuidesUpdateRef = useRef(0);
 
   // SnapEngine: keep a stable ref during drag so dragStartPos isn't lost on re-render
   const snapEngineRef = useRef<ReturnType<typeof createSnapEngine>>(createSnapEngine(widget, widgets, canvasSettings));
@@ -137,6 +140,14 @@ export const RenderedWidget: React.FC<RenderedWidgetProps> = ({
   const parentBounds = useMemo(
     () => getParentContentBounds(widgets, widget.parentId, canvasSettings),
     [widgets, widget.parentId, canvasSettings]
+  );
+  const parentWidget = useMemo(
+    () => (widget.parentId ? widgets.find((w) => w.id === widget.parentId) ?? null : null),
+    [widgets, widget.parentId]
+  );
+  const parentOverflowPolicy = useMemo(
+    () => getContainerOverflowPolicy(parentWidget),
+    [parentWidget]
   );
 
 
@@ -194,6 +205,8 @@ export const RenderedWidget: React.FC<RenderedWidgetProps> = ({
 
   const handleDragStart = () => {
     isDraggingRef.current = true;
+    snapLockRef.current = { x: null, y: null };
+    lastRootGuidesUpdateRef.current = 0;
 
     // Démarrer le snap engine
     snapEngine.startDrag({
@@ -216,6 +229,40 @@ export const RenderedWidget: React.FC<RenderedWidgetProps> = ({
   };
 
   const handleDrag = () => {
+    const stabilizeSnapAxis = (
+      axis: 'x' | 'y',
+      rawValue: number,
+      snappedValue: number,
+      isSnapped: boolean
+    ) => {
+      const ENTER_THRESHOLD = 5;
+      const RELEASE_THRESHOLD = 9;
+      const SWITCH_MARGIN = 1;
+      const currentLock = snapLockRef.current[axis];
+
+      if (currentLock !== null) {
+        const distanceToLock = Math.abs(rawValue - currentLock);
+        if (distanceToLock <= RELEASE_THRESHOLD) {
+          if (isSnapped) {
+            const distanceToCandidate = Math.abs(rawValue - snappedValue);
+            if (distanceToCandidate + SWITCH_MARGIN < distanceToLock) {
+              snapLockRef.current[axis] = snappedValue;
+              return snappedValue;
+            }
+          }
+          return currentLock;
+        }
+        snapLockRef.current[axis] = null;
+      }
+
+      if (isSnapped && Math.abs(rawValue - snappedValue) <= ENTER_THRESHOLD) {
+        snapLockRef.current[axis] = snappedValue;
+        return snappedValue;
+      }
+
+      return rawValue;
+    };
+
     const currentX = x.get();
     const currentY = y.get();
     let rawAbsX = currentX + parentOriginX;
@@ -232,8 +279,13 @@ export const RenderedWidget: React.FC<RenderedWidgetProps> = ({
     if (widget.parentId) {
       const centerX = rawAbsX + widget.size.width / 2;
       const centerY = rawAbsY + widget.size.height / 2;
-      const isEscaping = centerX < parentOriginX || centerX > parentOriginX + parentMaxWidth ||
-                          centerY < parentOriginY || centerY > parentOriginY + parentMaxHeight;
+      const escapesX =
+        !parentOverflowPolicy.allowOverflowX &&
+        (centerX < parentOriginX || centerX > parentOriginX + parentMaxWidth);
+      const escapesY =
+        !parentOverflowPolicy.allowOverflowY &&
+        (centerY < parentOriginY || centerY > parentOriginY + parentMaxHeight);
+      const isEscaping = escapesX || escapesY;
       isEscapingRef.current = isEscaping;
 
       if (isEscaping) {
@@ -256,14 +308,21 @@ export const RenderedWidget: React.FC<RenderedWidgetProps> = ({
     }
 
     // Constrain within bounds (normal behavior when NOT escaping)
-    rawAbsX = Math.min(Math.max(rawAbsX, minAbsX), Math.max(minAbsX, maxAbsX));
-    rawAbsY = Math.min(Math.max(rawAbsY, minAbsY), Math.max(minAbsY, maxAbsY));
+    rawAbsX = parentOverflowPolicy.allowOverflowX
+      ? Math.max(rawAbsX, minAbsX)
+      : Math.min(Math.max(rawAbsX, minAbsX), Math.max(minAbsX, maxAbsX));
+    rawAbsY = parentOverflowPolicy.allowOverflowY
+      ? Math.max(rawAbsY, minAbsY)
+      : Math.min(Math.max(rawAbsY, minAbsY), Math.max(minAbsY, maxAbsY));
 
     if (widget.parentId) {
       const snapResult = snapEngine.calculateSnap({ x: rawAbsX, y: rawAbsY });
-
-      const finalX = Math.round(snapResult.x);
-      const finalY = Math.round(snapResult.y);
+      const snappedX = Math.abs(snapResult.x - rawAbsX) > 0.01;
+      const snappedY = Math.abs(snapResult.y - rawAbsY) > 0.01;
+      const stabilizedX = stabilizeSnapAxis('x', rawAbsX, snapResult.x, snappedX);
+      const stabilizedY = stabilizeSnapAxis('y', rawAbsY, snapResult.y, snappedY);
+      const finalX = Math.round(stabilizedX);
+      const finalY = Math.round(stabilizedY);
 
       // Compute Figma-style frame smart guides (lines with extents + distances)
       if (now - lastGuideUpdateRef.current > 32) {
@@ -301,16 +360,21 @@ export const RenderedWidget: React.FC<RenderedWidgetProps> = ({
 
       const canvasContentH = canvasSettings.height - 40;
       const snap = calculateFigmaSnap(rawAbsX, rawAbsY, widget.size.width, widget.size.height, otherRoots, canvasSettings.width, canvasContentH);
-
-      const finalX = Math.round(snap.x);
-      const finalY = Math.round(snap.y);
+      const stabilizedX = stabilizeSnapAxis('x', rawAbsX, snap.x, snap.xSnapped);
+      const stabilizedY = stabilizeSnapAxis('y', rawAbsY, snap.y, snap.ySnapped);
+      const finalX = Math.round(stabilizedX);
+      const finalY = Math.round(stabilizedY);
       // Apply snap directly to motion values (no more snapOffset CSS transform)
       x.set(finalX - parentOriginX);
       y.set(finalY - parentOriginY);
 
       lastSnappedPosRef.current = { x: finalX, y: finalY };
 
-      onDragUpdate?.({ ...widget, position: { x: finalX, y: finalY } });
+      // Throttle root SmartGuides updates to reduce heavy recalculations and visual jitter.
+      if (now - lastRootGuidesUpdateRef.current > 16) {
+        lastRootGuidesUpdateRef.current = now;
+        onDragUpdate?.({ ...widget, position: { x: finalX, y: finalY } });
+      }
 
       if (now - lastDragUpdate.current > 32) {
         moveWidget(widget.id, { x: finalX, y: finalY }, false);
@@ -359,6 +423,7 @@ export const RenderedWidget: React.FC<RenderedWidgetProps> = ({
 
   const handleDragEnd = () => {
     isDraggingRef.current = false;
+    snapLockRef.current = { x: null, y: null };
     const wasEscaping = isEscapingRef.current;
     isEscapingRef.current = false;
 
@@ -395,17 +460,21 @@ export const RenderedWidget: React.FC<RenderedWidgetProps> = ({
       finalAbsY = snapResult.y;
 
       // Fallback if snap returned out of bounds (e.g. engine had no dragStart)
-      if (finalAbsX < parentOriginX || finalAbsX > parentOriginX + parentMaxWidth) {
+      if (!parentOverflowPolicy.allowOverflowX && (finalAbsX < parentOriginX || finalAbsX > parentOriginX + parentMaxWidth)) {
         finalAbsX = rawEndAbsX;
       }
-      if (finalAbsY < parentOriginY || finalAbsY > parentOriginY + parentMaxHeight) {
+      if (!parentOverflowPolicy.allowOverflowY && (finalAbsY < parentOriginY || finalAbsY > parentOriginY + parentMaxHeight)) {
         finalAbsY = rawEndAbsY;
       }
 
       const maxAbsX = parentOriginX + Math.max(0, parentMaxWidth - widget.size.width);
       const maxAbsY = parentOriginY + Math.max(0, parentMaxHeight - widget.size.height);
-      const clampedAbsX = Math.min(Math.max(finalAbsX, parentOriginX), Math.max(parentOriginX, maxAbsX));
-      const clampedAbsY = Math.min(Math.max(finalAbsY, parentOriginY), Math.max(parentOriginY, maxAbsY));
+      const clampedAbsX = parentOverflowPolicy.allowOverflowX
+        ? Math.max(finalAbsX, parentOriginX)
+        : Math.min(Math.max(finalAbsX, parentOriginX), Math.max(parentOriginX, maxAbsX));
+      const clampedAbsY = parentOverflowPolicy.allowOverflowY
+        ? Math.max(finalAbsY, parentOriginY)
+        : Math.min(Math.max(finalAbsY, parentOriginY), Math.max(parentOriginY, maxAbsY));
 
       moveWidget(widget.id, { x: Math.round(clampedAbsX), y: Math.round(clampedAbsY) }, false);
       x.set(Math.round(clampedAbsX) - parentOriginX);
@@ -516,8 +585,12 @@ export const RenderedWidget: React.FC<RenderedWidgetProps> = ({
         newWidth = startWidth + (startPosX - newX);
       } else if (movesRight) {
         const targetWidth = startWidth + dx;
-        const maxWidth = (parentOriginX + parentMaxWidth) - startPosX;
-        newWidth = Math.max(20, Math.min(targetWidth, maxWidth));
+        if (parentOverflowPolicy.allowOverflowX) {
+          newWidth = Math.max(20, targetWidth);
+        } else {
+          const maxWidth = (parentOriginX + parentMaxWidth) - startPosX;
+          newWidth = Math.max(20, Math.min(targetWidth, maxWidth));
+        }
       }
 
       // Vertical resize
@@ -529,8 +602,12 @@ export const RenderedWidget: React.FC<RenderedWidgetProps> = ({
         newHeight = startHeight + (startPosY - newY);
       } else if (movesBottom) {
         const targetHeight = startHeight + dy;
-        const maxHeight = (parentOriginY + parentMaxHeight) - startPosY;
-        newHeight = Math.max(20, Math.min(targetHeight, maxHeight));
+        if (parentOverflowPolicy.allowOverflowY) {
+          newHeight = Math.max(20, targetHeight);
+        } else {
+          const maxHeight = (parentOriginY + parentMaxHeight) - startPosY;
+          newHeight = Math.max(20, Math.min(targetHeight, maxHeight));
+        }
       }
 
       // ── Resize Snap: Figma-style real-time edge alignment ──
@@ -752,6 +829,7 @@ export const RenderedWidget: React.FC<RenderedWidgetProps> = ({
           isPreviewMode={isPreviewMode}
           contentRef={contentRef}
           childElements={childElements}
+          childWidgets={renderedChildren}
           hasChildren={hasVisibleChildren}
           containerMetrics={containerMetrics}
           activeTab={activeTab}

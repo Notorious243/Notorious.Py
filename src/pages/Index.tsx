@@ -82,6 +82,8 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
   const shouldStartPhase1 = shouldTrackOnboarding && isFirstTime && !phase1Done && isNoProject;
   // Phase 2 : dans le builder, après la création du premier fichier .py
   const shouldStartPhase2 = shouldTrackOnboarding && isFirstTime && phase1Done && !isNoProject && hasFiles;
+  const manualGuidePhase: 1 | 2 = isNoProject ? 1 : 2;
+  const shouldRenderManualGuide = !shouldStartPhase1 && !shouldStartPhase2;
 
   // Détecter si c'est la toute première visite (jamais vu le onboarding)
   // NB: shouldStartPhase1/shouldStartPhase2 sont VOLONTAIREMENT absents des deps :
@@ -400,6 +402,18 @@ const AppLayout: React.FC<{ isNoProject?: boolean }> = ({ isNoProject }) => {
       <Suspense fallback={null}>
         {shouldStartPhase2 && (
           <OnboardingTour key="phase2" isFirstTime={true} phase={2} onComplete={handleOnboardingComplete} />
+        )}
+      </Suspense>
+
+      {/* Onboarding Tour — mode manuel (toujours disponible via bouton Guide) */}
+      <Suspense fallback={null}>
+        {shouldRenderManualGuide && (
+          <OnboardingTour
+            key={`manual-phase-${manualGuidePhase}`}
+            isFirstTime={false}
+            phase={manualGuidePhase}
+            onComplete={() => { /* no-op: mode manuel */ }}
+          />
         )}
       </Suspense>
     </div>

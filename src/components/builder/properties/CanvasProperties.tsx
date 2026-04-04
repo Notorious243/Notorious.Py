@@ -6,7 +6,7 @@ import { Toggle } from '@/components/ui/toggle';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { useWidgets } from '@/contexts/useWidgets';
-import { Square, Bold, Trash2, Upload, Link, MapPin, Target, Smartphone, Image as ImageIcon, ChevronRight, Ruler, Palette, Settings2 } from 'lucide-react';
+import { Square, Bold, Trash2, Upload, Link, MapPin, Target, Smartphone, Image as ImageIcon, ChevronRight, Ruler, Palette, Settings2, ZoomIn, ZoomOut, Move } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ColorPicker } from './ColorPicker';
 import { LazyInput } from './ui/LazyInput';
@@ -29,10 +29,15 @@ export const CanvasProperties: React.FC = () => {
   const { canvasSettings, updateCanvasSettings } = useWidgets();
   const bgImageInputRef = React.useRef<HTMLInputElement>(null);
   const iconInputRef = React.useRef<HTMLInputElement>(null);
+  const [zoomInputValue, setZoomInputValue] = React.useState(String(Math.round((canvasSettings.scaling || 1) * 100)));
   const presetSelection = React.useMemo(() => {
     const target = `${canvasSettings.width},${canvasSettings.height}`;
     return PRESET_SIZES.find((size) => size.value === target)?.value;
   }, [canvasSettings.width, canvasSettings.height]);
+
+  React.useEffect(() => {
+    setZoomInputValue(String(Math.round((canvasSettings.scaling || 1) * 100)));
+  }, [canvasSettings.scaling]);
 
   const handlePresetChange = (value: string) => {
     if (!value) return;
@@ -89,6 +94,23 @@ export const CanvasProperties: React.FC = () => {
 
   const clearIcon = () => {
     updateCanvasSettings({ icon_data: '', icon_path: '' });
+  };
+
+  const applyZoomPercent = (raw: string | number) => {
+    const numeric = typeof raw === 'number'
+      ? raw
+      : Number.parseInt(String(raw).replace(/[^0-9]/g, ''), 10);
+    if (!Number.isFinite(numeric)) {
+      setZoomInputValue(String(Math.round((canvasSettings.scaling || 1) * 100)));
+      return;
+    }
+    const clamped = Math.max(10, Math.min(300, Math.round(numeric)));
+    updateCanvasSettings({ scaling: clamped / 100 });
+    setZoomInputValue(String(clamped));
+  };
+
+  const handleZoomFit = () => {
+    window.dispatchEvent(new CustomEvent('canvas-zoom-fit-request'));
   };
 
   const backgroundPreview = canvasSettings.background_image_data || canvasSettings.background_image;
@@ -202,6 +224,67 @@ export const CanvasProperties: React.FC = () => {
                   checked={canvasSettings.gridVisible}
                   onCheckedChange={checked => updateCanvasSettings({ gridVisible: checked })}
                 />
+              </div>
+            </div>
+
+            <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Zoom & Navigation</Label>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-8 px-0"
+                  onClick={() => applyZoomPercent(Math.round((canvasSettings.scaling || 1) * 100) - 1)}
+                  title="Zoom arrière"
+                >
+                  <ZoomOut className="h-3.5 w-3.5" />
+                </Button>
+                <Input
+                  value={zoomInputValue}
+                  onChange={(event) => setZoomInputValue(event.target.value.replace(/[^0-9]/g, ''))}
+                  onBlur={() => applyZoomPercent(zoomInputValue)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      applyZoomPercent(zoomInputValue);
+                    }
+                    if (event.key === 'Escape') {
+                      setZoomInputValue(String(Math.round((canvasSettings.scaling || 1) * 100)));
+                      event.currentTarget.blur();
+                    }
+                  }}
+                  inputMode="numeric"
+                  className="h-8 text-xs text-center"
+                  placeholder="100"
+                />
+                <span className="text-xs font-semibold text-muted-foreground">%</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-8 px-0"
+                  onClick={() => applyZoomPercent(Math.round((canvasSettings.scaling || 1) * 100) + 1)}
+                  title="Zoom avant"
+                >
+                  <ZoomIn className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-2 text-[10px] font-semibold"
+                  onClick={handleZoomFit}
+                  title="Ajuster à l'écran"
+                >
+                  Ajuster
+                </Button>
+              </div>
+              <div className="rounded-md border border-border/40 bg-background/70 px-2 py-1.5 text-[10px] text-muted-foreground">
+                <div className="flex items-center gap-1.5">
+                  <Move className="h-3 w-3 text-primary/80" />
+                  Navigation: Espace + glisser, bouton milieu, Shift + molette.
+                </div>
               </div>
             </div>
           </CollapsibleContent>

@@ -242,6 +242,15 @@ export const Canvas: React.FC = () => {
     updateCanvasSettings({ scaling: Math.round(fitScale * 100) / 100 });
   }, [canvasSettings.width, canvasSettings.height, updateCanvasSettings]);
 
+  useEffect(() => {
+    const handleZoomFitRequest = () => {
+      if (previewMode === 'preview') return;
+      handleZoomFit();
+    };
+    window.addEventListener('canvas-zoom-fit-request', handleZoomFitRequest);
+    return () => window.removeEventListener('canvas-zoom-fit-request', handleZoomFitRequest);
+  }, [handleZoomFit, previewMode]);
+
   // Get recent 4 projects sorted by most recently worked
   const recentProjects = [...projects].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 4);
 
@@ -849,8 +858,9 @@ export const Canvas: React.FC = () => {
   const viewportWidth = containerSize?.width ?? 0;
   const viewportHeight = containerSize?.height ?? 0;
   const horizontalGutter = Math.max(220, viewportWidth * 0.5);
+  const bottomGutter = effectiveScale > 1 ? Math.max(140, viewportHeight * 0.4) : 8;
   const stageWidth = Math.max(viewportWidth, scaledCanvasWidth + horizontalGutter * 2);
-  const stageHeight = Math.max(viewportHeight, scaledCanvasHeight + 8);
+  const stageHeight = Math.max(viewportHeight, scaledCanvasHeight + bottomGutter);
   const canvasOffsetX = Math.max(0, (stageWidth - scaledCanvasWidth) / 2);
   const canvasOffsetY = 0;
   const canShowPanCursor = previewMode !== 'preview' && (canvasSettings.scaling || 1) > 1 && isSpacePressed && !isPanningCanvas;

@@ -29,6 +29,59 @@ type SaveNowOptions = {
     force?: boolean;
 };
 
+type LocalProjectSnapshot = {
+    fileTree: unknown[];
+    canvasSettings?: unknown;
+    updatedAt: number;
+};
+
+const PROJECT_SNAPSHOT_PREFIX = 'ctk-project-snapshot-v1:';
+
+const canUseStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+const getProjectSnapshotKey = (projectId: string) => `${PROJECT_SNAPSHOT_PREFIX}${projectId}`;
+
+const normalizeCanvasSettings = (value: unknown): CanvasSettings | undefined => {
+    if (!value || typeof value !== 'object') return undefined;
+    return value as CanvasSettings;
+};
+
+const persistProjectSnapshot = (
+    projectId: string,
+    payload: { fileTree: unknown[]; canvasSettings?: unknown },
+) => {
+    if (!projectId || !canUseStorage()) return;
+    try {
+        const snapshot: LocalProjectSnapshot = {
+            fileTree: payload.fileTree,
+            canvasSettings: payload.canvasSettings,
+            updatedAt: Date.now(),
+        };
+        window.localStorage.setItem(getProjectSnapshotKey(projectId), JSON.stringify(snapshot));
+    } catch (error) {
+        devWarn('[FileSystem] Failed to persist local project snapshot:', error);
+    }
+};
+
+const readProjectSnapshot = (projectId: string): LocalProjectSnapshot | null => {
+    if (!projectId || !canUseStorage()) return null;
+    try {
+        const raw = window.localStorage.getItem(getProjectSnapshotKey(projectId));
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as unknown;
+        if (!parsed || typeof parsed !== 'object') return null;
+        const candidate = parsed as Partial<LocalProjectSnapshot>;
+        if (!Array.isArray(candidate.fileTree)) return null;
+        return {
+            fileTree: candidate.fileTree,
+            canvasSettings: candidate.canvasSettings,
+            updatedAt: typeof candidate.updatedAt === 'number' ? candidate.updatedAt : Date.now(),
+        };
+    } catch (error) {
+        devWarn('[FileSystem] Failed to read local project snapshot:', error);
+        return null;
+    }
+};
+
 const dedupeTree = (nodes: FileSystemItem[]): FileSystemItem[] => {
     const seen = new Set<string>();
     return nodes.filter(n => {
@@ -103,6 +156,13 @@ const useFileSystemLogic = (projectId: string | null) => {
 
         const { allowEmpty = false, immediate = false, debounceMs = 450, canvasSettings, force = false } = options;
 
+        if (tree.length > 0 || allowEmpty) {
+            persistProjectSnapshot(pid, {
+                fileTree: tree,
+                canvasSettings: canvasSettings ?? null,
+            });
+        }
+
         // SAFETY: NEVER overwrite file_tree with [] unless explicitly allowed (only explicit delete flow)
         if (tree.length === 0 && !allowEmpty) {
             devWarn('[FileSystem] Blocked saving empty file_tree. pid=', pid);
@@ -145,18 +205,32 @@ const useFileSystemLogic = (projectId: string | null) => {
 
             const { data: row, error } = await supabase
                 .from('projects')
-                .select('file_tree')
+                .select('file_tree, canvas_settings')
                 .eq('id', projectId)
                 .single();
 
             if (cancelled) return;
 
-            if (!error && row && Array.isArray(row.file_tree)) {
-                const loaded = dedupeTree(row.file_tree as FileSystemItem[]);
+            if (!error && row && Array.isArray((row as { file_tree?: unknown[] }).file_tree)) {
+                const projectRow = row as { file_tree?: unknown[]; canvas_settings?: unknown };
+                const loaded = dedupeTree((projectRow.file_tree ?? []) as FileSystemItem[]);
                 setData(loaded);
                 dataRef.current = loaded;
+                persistProjectSnapshot(projectId, {
+                    fileTree: loaded,
+                    canvasSettings: normalizeCanvasSettings(projectRow.canvas_settings) ?? null,
+                });
             } else {
-                setData([]);
+                const localSnapshot = readProjectSnapshot(projectId);
+                if (localSnapshot && Array.isArray(localSnapshot.fileTree)) {
+                    const loaded = dedupeTree(localSnapshot.fileTree as FileSystemItem[]);
+                    setData(loaded);
+                    dataRef.current = loaded;
+                    devWarn('[FileSystem] Restored project tree from local snapshot:', projectId);
+                } else {
+                    setData([]);
+                    dataRef.current = [];
+                }
             }
             isInitialLoad.current = false;
         })();
@@ -398,7 +472,6 @@ const useFileSystemLogic = (projectId: string | null) => {
         // Use dataRef so this function keeps a stable reference across auto-saves
         traverse(dataRef.current, false);
         return files;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const saveNow = useCallback((overrideData?: FileSystemItem[], options: SaveNowOptions = {}) => {

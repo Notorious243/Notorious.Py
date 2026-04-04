@@ -32,7 +32,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Command,
@@ -42,15 +42,19 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import { Field, FieldLabel } from '@/components/ui/field';
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/useAuth';
+import { useProjects } from '@/contexts/useProjects';
 import { BackgroundPathsLayer } from '@/components/ui/background-paths';
 import { formatBytes, useFileUpload } from '@/hooks/use-file-upload';
+import { useFileSystem } from '@/hooks/useFileSystemContext';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { fetchApiKeysFromSupabase, saveApiKeysToSupabase } from '@/lib/supabaseService';
@@ -131,6 +135,21 @@ const AI_FIELDS: {
   { key: 'anthropic', provider: 'anthropic', label: 'Anthropic', placeholder: 'sk-ant-...' },
   { key: 'deepseek', provider: 'deepseek', label: 'DeepSeek', placeholder: 'sk-...' },
   { key: 'huggingface', provider: 'huggingface', label: 'Hugging Face', placeholder: 'hf_...', free: true },
+];
+
+const LANGUAGE_OPTIONS = [
+  { value: 'fr-FR', label: 'Francais' },
+  { value: 'en-US', label: 'Anglais (US)' },
+  { value: 'en-GB', label: 'Anglais (UK)' },
+  { value: 'pt-BR', label: 'Portugais (BR)' },
+];
+
+const TIMEZONE_OPTIONS = [
+  { value: 'Africa/Kinshasa', label: 'Africa/Kinshasa' },
+  { value: 'Europe/Paris', label: 'Europe/Paris' },
+  { value: 'Europe/London', label: 'Europe/London' },
+  { value: 'America/New_York', label: 'America/New_York' },
+  { value: 'America/Los_Angeles', label: 'America/Los_Angeles' },
 ];
 
 const sectionItems: {
@@ -239,8 +258,13 @@ function ProfileCombobox({
 
 export function SettingsHub({ onClose, initialSection }: SettingsHubProps) {
   const { user } = useAuth();
+  const { projects, activeProjectId, renameProject, deleteProject } = useProjects();
+  const { canvasSyncState, canvasSyncReason, pendingWritesCount, retrySyncNow, flushPendingWrites } = useFileSystem();
   const [activeSection, setActiveSection] = useState<SettingsSection>(initialSection);
   const [settings, setSettings] = useState<LocalSettingsV1>(DEFAULT_LOCAL_SETTINGS);
+  const [generalTab, setGeneralTab] = useState<'project' | 'usage' | 'integrations'>('project');
+  const [projectNameDraft, setProjectNameDraft] = useState('');
+  const [deleteProjectConfirmation, setDeleteProjectConfirmation] = useState('');
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -260,6 +284,12 @@ export function SettingsHub({ onClose, initialSection }: SettingsHubProps) {
     'all' | NotificationCategory
   >('all');
 
+  const activeProject = useMemo(
+    () => projects.find((project) => project.id === activeProjectId) ?? null,
+    [projects, activeProjectId]
+  );
+  const hasActiveProject = Boolean(activeProjectId && activeProject);
+
   const convertFileToDataUrl = useCallback((file: File) => {
     return new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -274,6 +304,26 @@ export function SettingsHub({ onClose, initialSection }: SettingsHubProps) {
       reader.readAsDataURL(file);
     });
   }, []);
+
+  const handleAvatarFilesChange = useCallback(
+    (files: Array<{ file: File }>) => {
+      const selectedFile = files[0];
+      if (!selectedFile) {
+        setPendingAvatarDataUrl(null);
+        return;
+      }
+      void convertFileToDataUrl(selectedFile.file)
+        .then((dataUrl) => {
+          setPendingAvatarDataUrl(dataUrl);
+          toast.success('Photo prete. Cliquez sur "Enregistrer le profil".');
+        })
+        .catch(() => {
+          setPendingAvatarDataUrl(null);
+          toast.error("Impossible de charger l'image.");
+        });
+    },
+    [convertFileToDataUrl]
+  );
 
   const [
     { files: avatarFiles, isDragging: isAvatarDragging, errors: avatarUploadErrors },
@@ -293,22 +343,7 @@ export function SettingsHub({ onClose, initialSection }: SettingsHubProps) {
     maxSize: PROFILE_IMAGE_MAX_BYTES,
     accept: 'image/*',
     multiple: false,
-    onFilesChange: (files) => {
-      const selectedFile = files[0];
-      if (!selectedFile) {
-        setPendingAvatarDataUrl(null);
-        return;
-      }
-      void convertFileToDataUrl(selectedFile.file)
-        .then((dataUrl) => {
-          setPendingAvatarDataUrl(dataUrl);
-          toast.success('Photo prete. Cliquez sur "Enregistrer le profil".');
-        })
-        .catch(() => {
-          setPendingAvatarDataUrl(null);
-          toast.error("Impossible de charger l'image.");
-        });
-    },
+    onFilesChange: handleAvatarFilesChange,
   });
 
   const activeAvatarFile = avatarFiles[0] ?? null;
@@ -323,6 +358,11 @@ export function SettingsHub({ onClose, initialSection }: SettingsHubProps) {
   useEffect(() => {
     setActiveSection(initialSection);
   }, [initialSection]);
+
+  useEffect(() => {
+    setProjectNameDraft(activeProject?.name ?? '');
+    setDeleteProjectConfirmation('');
+  }, [activeProject?.id, activeProject?.name]);
 
   useEffect(() => {
     setFirstName(getFormattedFirstName(user));
@@ -543,50 +583,512 @@ export function SettingsHub({ onClose, initialSection }: SettingsHubProps) {
     }
   };
 
-  const renderGeneralSection = () => (
-    <section className="space-y-4">
-      <div className="rounded-2xl border border-border/70 bg-white/80 p-5 shadow-sm">
-        <h3 className="text-base font-semibold text-slate-900">Vue d'ensemble</h3>
-        <p className="mt-1 text-sm text-slate-600">
-          Cette page centralise toutes les configurations principales de Notorious.PY.
-        </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-xl border border-[#0F3460]/20 bg-[#0F3460]/5 p-3">
-            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Type de compte</p>
-            <p className="mt-1 text-sm font-semibold text-[#0F3460]">Premium</p>
-          </div>
-          <div className="rounded-xl border border-border bg-white p-3">
-            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Profil actif</p>
-            <p className="mt-1 text-sm font-semibold text-slate-900">{displayName}</p>
-          </div>
-          <div className="rounded-xl border border-border bg-white p-3">
-            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Notifications</p>
-            <p className="mt-1 text-sm font-semibold text-slate-900">
-              {settings.notifications.alerts ? 'Alertes activees' : 'Alertes desactivees'}
-            </p>
-          </div>
-        </div>
-      </div>
+  const handleSaveProjectName = () => {
+    if (!activeProjectId || !activeProject) {
+      toast.error('Aucun projet actif a renommer.');
+      return;
+    }
+    const trimmedName = projectNameDraft.trim();
+    if (!trimmedName) {
+      toast.error('Le nom du projet ne peut pas etre vide.');
+      return;
+    }
+    if (trimmedName === activeProject.name) {
+      toast.message('Aucune modification detectee.');
+      return;
+    }
+    renameProject(activeProjectId, trimmedName);
+    toast.success('Nom du projet mis a jour.');
+  };
 
-      <div className="rounded-2xl border border-border/70 bg-white/80 p-5 shadow-sm">
-        <h3 className="text-base font-semibold text-slate-900">Acces rapide</h3>
-        <p className="mt-1 text-sm text-slate-600">
-          Accedez directement aux sections les plus utilisees.
-        </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setActiveSection('profile')}>
-            Modifier mon profil
-          </Button>
-          <Button variant="outline" onClick={() => setActiveSection('notifications')}>
-            Gerer les notifications
-          </Button>
-          <Button variant="outline" onClick={() => setActiveSection('ai')}>
-            Configurer les cles API
-          </Button>
-        </div>
-      </div>
-    </section>
-  );
+  const handleCopyProjectToken = async () => {
+    if (!activeProjectId) {
+      toast.error('Aucun identifiant de projet a copier.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(activeProjectId);
+      toast.success('Identifiant du projet copie.');
+    } catch {
+      toast.error('Impossible de copier l identifiant du projet.');
+    }
+  };
+
+  const handleDeleteActiveProject = () => {
+    if (!activeProjectId || !activeProject) {
+      toast.error('Aucun projet actif a supprimer.');
+      return;
+    }
+    if (deleteProjectConfirmation.trim() !== activeProject.name) {
+      toast.error('Saisissez le nom exact du projet pour confirmer.');
+      return;
+    }
+    deleteProject(activeProjectId);
+    toast.success('Projet supprime.');
+    setDeleteProjectConfirmation('');
+    onClose();
+  };
+
+  const renderGeneralSection = () => {
+    const syncLabelByState: Record<typeof canvasSyncState, string> = {
+      ok: 'Synchronise',
+      syncing: 'Synchronisation...',
+      degraded: 'Mode degrade',
+      error: 'Erreur',
+    };
+    const syncBadgeVariant =
+      canvasSyncState === 'ok' ? 'secondary' : canvasSyncState === 'syncing' ? 'outline' : 'destructive';
+    const nowLabel = new Date().toLocaleTimeString('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    return (
+      <section className="flex flex-col gap-5">
+        <Card className="overflow-hidden border-border/70 bg-background/95 shadow-[0_16px_36px_rgba(15,52,96,0.08)]">
+          <CardHeader className="relative flex flex-col gap-4 border-b border-border/70 p-4">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_14%_18%,rgba(15,52,96,0.08),transparent_36%),radial-gradient(circle_at_88%_84%,rgba(31,90,160,0.08),transparent_34%)]" />
+            <div className="relative flex items-start justify-between gap-3">
+              <div className="flex flex-col gap-1">
+                <CardTitle className="text-xl">Parametres generaux</CardTitle>
+                <CardDescription>
+                  Notorious.PY • heure locale {nowLabel}
+                </CardDescription>
+              </div>
+              <div className="rounded-full border border-border/60 bg-card/90 p-1 shadow-sm">
+                <Avatar className="size-9 border border-background">
+                  <AvatarImage src={displayedAvatarUrl || undefined} alt={displayName} className="object-cover" />
+                  <AvatarFallback className="bg-primary text-sm font-semibold text-primary-foreground">
+                    {profileInitial}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-4">
+            <Tabs
+              value={generalTab}
+              onValueChange={(value) => setGeneralTab(value as 'project' | 'usage' | 'integrations')}
+              className="flex flex-col gap-4"
+            >
+              <TabsList className="grid w-full grid-cols-3 rounded-full bg-muted/70 p-1">
+                <TabsTrigger value="project" className="rounded-full">
+                  Projet
+                </TabsTrigger>
+                <TabsTrigger value="usage" className="rounded-full">
+                  Usage et synchro
+                </TabsTrigger>
+                <TabsTrigger value="integrations" className="rounded-full">
+                  Compte
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="project" className="mt-0">
+                <div className="flex flex-col gap-4">
+                  <Card className="border-border bg-background">
+                    <CardHeader className="p-4">
+                      <CardTitle className="text-sm tracking-wide">PROJET</CardTitle>
+                      <CardDescription>Configuration du projet actif Notorious.PY.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="grid gap-3 border-t border-border px-4 py-3 sm:grid-cols-[210px_minmax(0,1fr)] sm:items-center">
+                        <div className="flex flex-col gap-1">
+                          <FieldLabel>Nom</FieldLabel>
+                          <FieldDescription>Nom visible dans le dashboard projet.</FieldDescription>
+                        </div>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <Input
+                            value={projectNameDraft}
+                            onChange={(event) => setProjectNameDraft(event.target.value)}
+                            placeholder="Nom du projet"
+                            disabled={!hasActiveProject}
+                          />
+                          <Button variant="outline" onClick={handleSaveProjectName} disabled={!hasActiveProject}>
+                            Enregistrer
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 border-t border-border px-4 py-3 sm:grid-cols-[210px_minmax(0,1fr)] sm:items-center">
+                        <div className="flex flex-col gap-1">
+                          <FieldLabel>Token projet</FieldLabel>
+                          <FieldDescription>ID interne utile pour partage et debug.</FieldDescription>
+                        </div>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <Input
+                            value={activeProjectId ?? 'Aucun projet actif'}
+                            readOnly
+                            disabled={!hasActiveProject}
+                          />
+                          <Button variant="outline" onClick={() => void handleCopyProjectToken()} disabled={!hasActiveProject}>
+                            Copier
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 border-t border-border px-4 py-3 sm:grid-cols-[210px_minmax(0,1fr)] sm:items-center">
+                        <div className="flex flex-col gap-1">
+                          <FieldLabel>Timezone</FieldLabel>
+                          <FieldDescription>Appliquee a l agenda, export et logs UI.</FieldDescription>
+                        </div>
+                        <Select
+                          value={settings.profile.timezone || 'Africa/Kinshasa'}
+                          onValueChange={(value) =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              profile: { ...prev.profile, timezone: value },
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Choisir un fuseau horaire" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              {TIMEZONE_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="grid gap-3 border-t border-border px-4 py-3 sm:grid-cols-[210px_minmax(0,1fr)] sm:items-center">
+                        <div className="flex flex-col gap-1">
+                          <FieldLabel>Langue</FieldLabel>
+                          <FieldDescription>Langue principale de l interface.</FieldDescription>
+                        </div>
+                        <Select
+                          value={settings.profile.language || 'fr-FR'}
+                          onValueChange={(value) =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              profile: { ...prev.profile, language: value },
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Choisir une langue" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              {LANGUAGE_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="grid gap-3 border-t border-border px-4 py-3 sm:grid-cols-[210px_minmax(0,1fr)] sm:items-center">
+                        <div className="flex flex-col gap-1">
+                          <FieldLabel>Synchronisation</FieldLabel>
+                          <FieldDescription>Etat de sauvegarde canvas + file tree.</FieldDescription>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={syncBadgeVariant}>{syncLabelByState[canvasSyncState]}</Badge>
+                          <Badge variant="outline">{pendingWritesCount} en attente</Badge>
+                          <Button variant="outline" onClick={() => void retrySyncNow()} disabled={!hasActiveProject}>
+                            Relancer
+                          </Button>
+                          <Button variant="outline" onClick={() => void flushPendingWrites()} disabled={!hasActiveProject}>
+                            Forcer la synchro
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 border-t border-border px-4 py-3 sm:grid-cols-[210px_minmax(0,1fr)] sm:items-center">
+                        <div className="flex flex-col gap-1">
+                          <FieldLabel>Supprimer projet</FieldLabel>
+                          <FieldDescription>Saisissez le nom exact pour confirmer.</FieldDescription>
+                        </div>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <Input
+                            value={deleteProjectConfirmation}
+                            onChange={(event) => setDeleteProjectConfirmation(event.target.value)}
+                            placeholder={activeProject?.name || 'Nom du projet'}
+                            disabled={!hasActiveProject}
+                          />
+                          <Button
+                            variant="destructive"
+                            onClick={handleDeleteActiveProject}
+                            disabled={!hasActiveProject}
+                          >
+                            Supprimer
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-border bg-background">
+                    <CardHeader className="p-4">
+                      <CardTitle className="text-sm tracking-wide">UTILISATEUR</CardTitle>
+                      <CardDescription>Parametres personnels relies au compte.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="grid gap-3 border-t border-border px-4 py-3 sm:grid-cols-[210px_minmax(0,1fr)] sm:items-center">
+                        <div className="flex flex-col gap-1">
+                          <FieldLabel>Email</FieldLabel>
+                          <FieldDescription>Adresse principale de connexion.</FieldDescription>
+                        </div>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <Input value={email} disabled />
+                          <Button variant="outline" onClick={() => setActiveSection('profile')}>
+                            Modifier profil
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 border-t border-border px-4 py-3 sm:grid-cols-[210px_minmax(0,1fr)] sm:items-center">
+                        <div className="flex flex-col gap-1">
+                          <FieldLabel>Profil public</FieldLabel>
+                          <FieldDescription>Autoriser l affichage de votre profil dans la galerie.</FieldDescription>
+                        </div>
+                        <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                          <span className="text-sm text-muted-foreground">
+                            {settings.profile.publicProfile ? 'Public' : 'Prive'}
+                          </span>
+                          <Switch
+                            checked={settings.profile.publicProfile}
+                            onCheckedChange={(checked) =>
+                              setSettings((prev) => ({
+                                ...prev,
+                                profile: { ...prev.profile, publicProfile: checked },
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 border-t border-border px-4 py-3 sm:grid-cols-[210px_minmax(0,1fr)] sm:items-center">
+                        <div className="flex flex-col gap-1">
+                          <FieldLabel>Conseils produit</FieldLabel>
+                          <FieldDescription>Afficher les tips contextuels pendant la creation.</FieldDescription>
+                        </div>
+                        <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                          <span className="text-sm text-muted-foreground">
+                            {settings.profile.productTips ? 'Actif' : 'Desactive'}
+                          </span>
+                          <Switch
+                            checked={settings.profile.productTips}
+                            onCheckedChange={(checked) =>
+                              setSettings((prev) => ({
+                                ...prev,
+                                profile: { ...prev.profile, productTips: checked },
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 border-t border-border px-4 py-3 sm:grid-cols-[210px_minmax(0,1fr)] sm:items-center">
+                        <div className="flex flex-col gap-1">
+                          <FieldLabel>Fournisseurs IA</FieldLabel>
+                          <FieldDescription>Configuration des cles API et providers.</FieldDescription>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="secondary">{configuredProvidersCount}/{AI_FIELDS.length} configures</Badge>
+                          <Button variant="outline" onClick={() => setActiveSection('ai')}>
+                            Ouvrir IA
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="usage" className="mt-0">
+                <Card className="border-border bg-background">
+                  <CardHeader className="p-4">
+                    <CardTitle className="text-sm tracking-wide">USAGE ET SYNCHRO</CardTitle>
+                    <CardDescription>Confort de travail et etat de synchronisation.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="grid gap-3 border-t border-border px-4 py-3 sm:grid-cols-[210px_minmax(0,1fr)] sm:items-center">
+                      <div className="flex flex-col gap-1">
+                        <FieldLabel>Densite interface</FieldLabel>
+                        <FieldDescription>Controle l espacement des panneaux et composants.</FieldDescription>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant={settings.appearance.density === 'comfortable' ? 'secondary' : 'outline'}
+                          onClick={() =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              appearance: { ...prev.appearance, density: 'comfortable' },
+                            }))
+                          }
+                        >
+                          Confort
+                        </Button>
+                        <Button
+                          variant={settings.appearance.density === 'compact' ? 'secondary' : 'outline'}
+                          onClick={() =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              appearance: { ...prev.appearance, density: 'compact' },
+                            }))
+                          }
+                        >
+                          Compact
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 border-t border-border px-4 py-3 sm:grid-cols-[210px_minmax(0,1fr)] sm:items-center">
+                      <div className="flex flex-col gap-1">
+                        <FieldLabel>Animations reduites</FieldLabel>
+                        <FieldDescription>Diminue les transitions et effets visuels.</FieldDescription>
+                      </div>
+                        <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                          <span className="text-sm text-muted-foreground">
+                            {settings.appearance.reduceMotion ? 'Active' : 'Inactive'}
+                          </span>
+                          <Switch
+                            checked={settings.appearance.reduceMotion}
+                          onCheckedChange={(checked) =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              appearance: { ...prev.appearance, reduceMotion: checked },
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 border-t border-border px-4 py-3 sm:grid-cols-[210px_minmax(0,1fr)] sm:items-center">
+                      <div className="flex flex-col gap-1">
+                        <FieldLabel>Accent visuel</FieldLabel>
+                        <FieldDescription>Palette dominante du workspace.</FieldDescription>
+                      </div>
+                      <Select
+                        value={settings.appearance.accent}
+                        onValueChange={(value) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            appearance: {
+                              ...prev.appearance,
+                              accent: value as LocalSettingsV1['appearance']['accent'],
+                            },
+                          }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choisir un accent" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectItem value="notorious-blue">Bleu Notorious</SelectItem>
+                            <SelectItem value="steel">Acier</SelectItem>
+                            <SelectItem value="emerald">Emeraude</SelectItem>
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="integrations" className="mt-0">
+                <Card className="border-border bg-background">
+                  <CardHeader className="p-4">
+                    <CardTitle className="text-sm tracking-wide">COMPTE ET INTEGRATIONS</CardTitle>
+                    <CardDescription>Coordonnees utilisateur et acces rapides.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="grid gap-3 border-t border-border px-4 py-3 sm:grid-cols-[210px_minmax(0,1fr)] sm:items-center">
+                      <div className="flex flex-col gap-1">
+                        <FieldLabel>Telephone</FieldLabel>
+                        <FieldDescription>Contact principal du compte.</FieldDescription>
+                      </div>
+                      <Input
+                        value={settings.profile.phone}
+                        onChange={(event) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            profile: { ...prev.profile, phone: event.target.value },
+                          }))
+                        }
+                        placeholder="+243 ..."
+                      />
+                    </div>
+
+                    <div className="grid gap-3 border-t border-border px-4 py-3 sm:grid-cols-[210px_minmax(0,1fr)] sm:items-center">
+                      <div className="flex flex-col gap-1">
+                        <FieldLabel>Role dans l equipe</FieldLabel>
+                        <FieldDescription>Votre role principal dans l equipe.</FieldDescription>
+                      </div>
+                      <Input
+                        value={settings.profile.role}
+                        onChange={(event) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            profile: { ...prev.profile, role: event.target.value },
+                          }))
+                        }
+                        placeholder="Designer, Developpeur, Product manager..."
+                      />
+                    </div>
+
+                    <div className="grid gap-3 border-t border-border px-4 py-3 sm:grid-cols-[210px_minmax(0,1fr)] sm:items-center">
+                      <div className="flex flex-col gap-1">
+                        <FieldLabel>Entreprise</FieldLabel>
+                        <FieldDescription>Organisation rattachee a votre compte.</FieldDescription>
+                      </div>
+                      <Input
+                        value={settings.profile.company}
+                        onChange={(event) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            profile: { ...prev.profile, company: event.target.value },
+                          }))
+                        }
+                        placeholder="Nom de l entreprise"
+                      />
+                    </div>
+
+                    <div className="grid gap-3 border-t border-border px-4 py-3 sm:grid-cols-[210px_minmax(0,1fr)] sm:items-center">
+                      <div className="flex flex-col gap-1">
+                        <FieldLabel>Actions rapides</FieldLabel>
+                        <FieldDescription>Acces direct aux ecrans complets de configuration.</FieldDescription>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button variant="outline" onClick={() => setActiveSection('profile')}>
+                          Profil complet
+                        </Button>
+                        <Button variant="outline" onClick={() => setActiveSection('notifications')}>
+                          Notifications
+                        </Button>
+                        {isGuest ? (
+                          <Button onClick={() => window.dispatchEvent(new CustomEvent('open-auth-page'))}>
+                            Se connecter
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+
+        {canvasSyncReason ? (
+          <Alert>
+            <AlertTitle>Etat synchronisation</AlertTitle>
+            <AlertDescription>{canvasSyncReason}</AlertDescription>
+          </Alert>
+        ) : null}
+      </section>
+    );
+  };
 
   const renderProfileSection = () => {
     const profileMotifs: Array<{
@@ -1386,9 +1888,9 @@ export function SettingsHub({ onClose, initialSection }: SettingsHubProps) {
                 </Button>
               ) : (
                 <div className="flex items-center gap-3 rounded-xl border border-border bg-white p-3">
-                  <Avatar className="h-10 w-10 rounded-full border border-[#0F3460]/15 bg-[#0F3460]/8">
+                  <Avatar className="size-10 border border-background shadow-sm">
                     <AvatarImage src={displayedAvatarUrl || undefined} alt={displayName} className="object-cover" />
-                    <AvatarFallback className="rounded-full bg-[#0F3460] font-semibold text-white">
+                    <AvatarFallback className="bg-primary text-sm font-semibold text-primary-foreground">
                       {profileInitial}
                     </AvatarFallback>
                   </Avatar>

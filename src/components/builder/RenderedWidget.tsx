@@ -391,6 +391,8 @@ export const RenderedWidget: React.FC<RenderedWidgetProps> = ({
         right: absoluteX + width,
         bottom: absoluteY + height,
       };
+      const centerX = rect.left + width / 2;
+      const centerY = rect.top + height / 2;
 
       const candidates = widgets.filter(candidate => {
         if (candidate.id === widget.id) return false;
@@ -399,24 +401,39 @@ export const RenderedWidget: React.FC<RenderedWidgetProps> = ({
         return true;
       });
 
-      const containing = candidates.filter(candidate => {
+      const pickDeepest = (matches: WidgetData[]): WidgetData | null => {
+        if (matches.length === 0) return null;
+        return matches.reduce((best, candidate) => {
+          if (!best) return candidate;
+          const bestDepth = getWidgetDepth(widgets, best.id);
+          const candidateDepth = getWidgetDepth(widgets, candidate.id);
+          return candidateDepth >= bestDepth ? candidate : best;
+        }, matches[0] as WidgetData | null);
+      };
+
+      // Preferred path: full containment, relaxed in overflow direction for scrollable containers.
+      const fullyContaining = candidates.filter(candidate => {
+        const bounds = getParentContentBounds(widgets, candidate.id, canvasSettings);
+        const overflow = getContainerOverflowPolicy(candidate);
+        const fitsX = rect.left >= bounds.left && (overflow.allowOverflowX || rect.right <= bounds.left + bounds.width);
+        const fitsY = rect.top >= bounds.top && (overflow.allowOverflowY || rect.bottom <= bounds.top + bounds.height);
+        return fitsX && fitsY;
+      });
+      const fullMatch = pickDeepest(fullyContaining);
+      if (fullMatch) return fullMatch;
+
+      // Fallback: center point containment avoids accidental drop-to-root
+      // when the dragged widget is slightly larger than the target content.
+      const centerContaining = candidates.filter(candidate => {
         const bounds = getParentContentBounds(widgets, candidate.id, canvasSettings);
         return (
-          rect.left >= bounds.left &&
-          rect.top >= bounds.top &&
-          rect.right <= bounds.left + bounds.width &&
-          rect.bottom <= bounds.top + bounds.height
+          centerX >= bounds.left &&
+          centerX <= bounds.left + bounds.width &&
+          centerY >= bounds.top &&
+          centerY <= bounds.top + bounds.height
         );
       });
-
-      if (containing.length === 0) return null;
-
-      return containing.reduce((best, candidate) => {
-        if (!best) return candidate;
-        const bestDepth = getWidgetDepth(widgets, best.id);
-        const candidateDepth = getWidgetDepth(widgets, candidate.id);
-        return candidateDepth >= bestDepth ? candidate : best;
-      }, containing[0] as WidgetData | null);
+      return pickDeepest(centerContaining);
     },
     [widgets, widget.id, canvasSettings]
   );
@@ -437,18 +454,58 @@ export const RenderedWidget: React.FC<RenderedWidgetProps> = ({
 
       // Find if it landed inside a different container, or becomes a root widget
       const targetContainer = findDropTarget(finalAbsX, finalAbsY, widget.size.width, widget.size.height);
-      const newParentId = targetContainer ? targetContainer.id : null;
+      if (targetContainer) {
+        let targetSlot: string | undefined;
+        if (targetContainer.type === 'tabview') {
+          targetSlot = getActiveTabSlot(targetContainer) || getDefaultTabSlot(targetContainer);
+        }
 
-      let targetSlot: string | undefined;
-      if (targetContainer?.type === 'tabview') {
-        targetSlot = getActiveTabSlot(targetContainer) || getDefaultTabSlot(targetContainer);
+        // Reparent to the resolved container.
+        reparentWidget(widget.id, targetContainer.id, { x: finalAbsX, y: finalAbsY }, targetSlot);
+      } else {
+        const droppedRect = {
+          left: finalAbsX,
+          top: finalAbsY,
+          right: finalAbsX + widget.size.width,
+          bottom: finalAbsY + widget.size.height,
+        };
+        const parentRect = {
+          left: parentOriginX,
+          top: parentOriginY,
+          right: parentOriginX + parentMaxWidth,
+          bottom: parentOriginY + parentMaxHeight,
+        };
+        const overlapsParent =
+          droppedRect.right > parentRect.left &&
+          droppedRect.left < parentRect.right &&
+          droppedRect.bottom > parentRect.top &&
+          droppedRect.top < parentRect.bottom;
+
+        if (overlapsParent) {
+          // Keep the widget in its current parent to avoid accidental "disappear"
+          // when the drag only slightly crosses parent bounds.
+          const maxAbsX = parentOriginX + Math.max(0, parentMaxWidth - widget.size.width);
+          const maxAbsY = parentOriginY + Math.max(0, parentMaxHeight - widget.size.height);
+          const clampedAbsX = parentOverflowPolicy.allowOverflowX
+            ? Math.max(finalAbsX, parentOriginX)
+            : Math.min(Math.max(finalAbsX, parentOriginX), Math.max(parentOriginX, maxAbsX));
+          const clampedAbsY = parentOverflowPolicy.allowOverflowY
+            ? Math.max(finalAbsY, parentOriginY)
+            : Math.min(Math.max(finalAbsY, parentOriginY), Math.max(parentOriginY, maxAbsY));
+
+          moveWidget(widget.id, { x: Math.round(clampedAbsX), y: Math.round(clampedAbsY) }, true);
+          x.set(Math.round(clampedAbsX) - parentOriginX);
+          y.set(Math.round(clampedAbsY) - parentOriginY);
+        } else {
+          // Real escape outside parent: allow detach to canvas root.
+          reparentWidget(widget.id, null, { x: finalAbsX, y: finalAbsY });
+        }
       }
-
-      // Reparent to new container (or null = canvas root)
-      reparentWidget(widget.id, newParentId, { x: finalAbsX, y: finalAbsY }, targetSlot);
 
     } else if (widget.parentId) {
       // ── Normal child drag end (within parent bounds) ──
+      // Widget stays in its current parent — no reparenting.
+      // Reparenting only happens via the "escape" path above.
       const currentX = x.get();
       const currentY = y.get();
       const rawEndAbsX = currentX + parentOriginX;
@@ -476,25 +533,9 @@ export const RenderedWidget: React.FC<RenderedWidgetProps> = ({
         ? Math.max(finalAbsY, parentOriginY)
         : Math.min(Math.max(finalAbsY, parentOriginY), Math.max(parentOriginY, maxAbsY));
 
-      moveWidget(widget.id, { x: Math.round(clampedAbsX), y: Math.round(clampedAbsY) }, false);
+      moveWidget(widget.id, { x: Math.round(clampedAbsX), y: Math.round(clampedAbsY) }, true);
       x.set(Math.round(clampedAbsX) - parentOriginX);
       y.set(Math.round(clampedAbsY) - parentOriginY);
-
-      const targetContainer = findDropTarget(clampedAbsX, clampedAbsY, widget.size.width, widget.size.height);
-      const targetParentId = targetContainer && targetContainer.id !== widget.parentId
-        ? targetContainer.id
-        : (widget.parentId || null);
-
-      let targetSlot: string | undefined;
-      if (targetContainer && targetContainer.id !== widget.parentId && targetContainer.type === 'tabview') {
-        targetSlot = getActiveTabSlot(targetContainer) || getDefaultTabSlot(targetContainer);
-      } else if (widget.parentId && !targetContainer) {
-        targetSlot = widget.parentSlot || undefined;
-      }
-
-      if (targetParentId !== widget.parentId || targetSlot !== widget.parentSlot) {
-        reparentWidget(widget.id, targetParentId, { x: Math.round(clampedAbsX), y: Math.round(clampedAbsY) }, targetSlot);
-      }
 
     } else {
       // ── Root widget drag end ──

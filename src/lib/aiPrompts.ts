@@ -36,10 +36,10 @@ CONTAINERS (can have children via parentId):
   frame — Panel container.
     style: {backgroundColor, borderRadius, borderColor, borderWidth, padding}
     default size: 300x200
-  scrollableframe — Scrollable container.
-    style: {backgroundColor, borderRadius}
-    properties: {label_text:"optional header"}
-    default size: 300x400
+  scrollableframe — Scrollable container (CTkScrollableFrame).
+    style: {backgroundColor, borderRadius, borderColor, borderWidth, padding}
+    properties: {orientation:"vertical"|"horizontal", label_text:""}
+    default size: 300x220
   tabview — Tabbed container. Children need parentSlot matching a tab name.
     style: {backgroundColor, borderRadius}
     properties: {tabs:["Tab 1","Tab 2"]}

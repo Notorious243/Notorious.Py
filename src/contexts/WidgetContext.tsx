@@ -135,11 +135,10 @@ export const WidgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const bounds = computeParentBounds(list, targetParentId);
       const minSize = 20;
 
-      const availableWidth = bounds.width > 0 ? bounds.width : widget.size.width;
-      const availableHeight = bounds.height > 0 ? bounds.height : widget.size.height;
-
-      const width = Math.max(minSize, Math.min(widget.size.width, Math.max(minSize, availableWidth)));
-      const height = Math.max(minSize, Math.min(widget.size.height, Math.max(minSize, availableHeight)));
+      // Keep the widget's original size — don't silently shrink it to fit inside a container.
+      // Only enforce a minimum size of 20px. The user can manually resize if needed.
+      const width = Math.max(minSize, widget.size.width);
+      const height = Math.max(minSize, widget.size.height);
       const parentWidget = targetParentId ? list.find((w) => w.id === targetParentId) : null;
       const overflowPolicy = getContainerOverflowPolicy(parentWidget);
       const clampedPosition = clampPositionToBounds(

@@ -59,7 +59,7 @@ export const useCanvasDrop = ({ onDrop, onHover, canvasRef }: UseCanvasDropOptio
   return { isOver, attach };
 };
 
-// Hook pour les zones de drop des conteneurs (Frame, ScrollableFrame, TabView)
+// Hook pour les zones de drop des conteneurs (Frame, TabView)
 interface UseContainerDropOptions {
   containerId: string;
   onDrop: (item: WidgetTypeDragItem, monitor: DropTargetMonitor) => void;

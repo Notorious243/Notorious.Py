@@ -3,6 +3,14 @@ import { CanvasSettings, Position, Size, WidgetData } from '@/types/widget';
 export const CONTAINER_TYPES = ['frame', 'scrollableframe', 'tabview'] as const;
 export const ACTIVE_TAB_STATE_KEY = '__builder_active_tab';
 
+// Shared tabview layout constants — used by both getContainerMetrics() and TabviewRenderer CSS.
+// Change these values in ONE place to keep metrics and rendering in sync.
+export const TABVIEW_HEADER_MIN_HEIGHT = 40;  // minHeight of the tab bar (px)
+export const TABVIEW_GAP = 12;                // flex gap between tab bar and content area (px)
+export const TABVIEW_CONTENT_BORDER = 1;      // dashed border around the content area (px)
+export const TABVIEW_TAB_BAR_PADDING = 4;     // inner padding of the tab bar (px)
+export const SCROLLABLEFRAME_LABEL_HEIGHT = 28;
+
 export const isContainerWidget = (widget: WidgetData) => CONTAINER_TYPES.includes(widget.type as typeof CONTAINER_TYPES[number]);
 
 export interface ContainerMetrics {
@@ -29,20 +37,19 @@ export const getContainerMetrics = (widget: WidgetData): ContainerMetrics => {
   let innerWidth = Math.max(0, widget.size.width - (padding + borderWidth) * 2);
   let innerHeight = Math.max(0, widget.size.height - (padding + borderWidth) * 2);
 
-  if (widget.type === 'scrollableframe') {
-    const labelHeight = widget.properties?.label_text ? 28 : 0;
-    offsetY += labelHeight;
-    innerHeight = Math.max(0, innerHeight - labelHeight);
-  }
-
   if (widget.type === 'tabview') {
-    const tabHeaderHeight = 40;
-    const tabGap = 12; // Gap in flex column
-    const tabInnerBorder = 1; // 1px dashed
-    offsetY += tabHeaderHeight + tabGap + tabInnerBorder;
-    innerHeight = Math.max(0, innerHeight - (tabHeaderHeight + tabGap + tabInnerBorder * 2));
-    offsetX += tabInnerBorder;
-    innerWidth = Math.max(0, innerWidth - tabInnerBorder * 2);
+    offsetY += TABVIEW_HEADER_MIN_HEIGHT + TABVIEW_GAP + TABVIEW_CONTENT_BORDER;
+    innerHeight = Math.max(0, innerHeight - (TABVIEW_HEADER_MIN_HEIGHT + TABVIEW_GAP + TABVIEW_CONTENT_BORDER * 2));
+    offsetX += TABVIEW_CONTENT_BORDER;
+    innerWidth = Math.max(0, innerWidth - TABVIEW_CONTENT_BORDER * 2);
+  } else if (widget.type === 'scrollableframe') {
+    const labelText = typeof widget.properties?.label_text === 'string' ? widget.properties.label_text.trim() : '';
+    const hasLabel = labelText.length > 0;
+
+    if (hasLabel) {
+      offsetY += SCROLLABLEFRAME_LABEL_HEIGHT;
+      innerHeight = Math.max(0, innerHeight - SCROLLABLEFRAME_LABEL_HEIGHT);
+    }
   }
 
   return { offsetX, offsetY, innerWidth, innerHeight };

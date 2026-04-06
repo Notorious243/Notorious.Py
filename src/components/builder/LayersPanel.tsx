@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import {
   Eye, EyeOff, Trash2, Type, MousePointerClick, TextCursor, FileText, Gauge,
   ImageIcon, CheckSquare, Circle, ToggleRight, ListFilter, ChevronDown,
-  Menu, SlidersHorizontal, Box, ScrollText, FolderOpen, BarChart3,
+  Menu, SlidersHorizontal, Box, FolderOpen, BarChart3,
   Table, LayoutDashboard, Calendar, ShoppingCart, CircleUser, HelpCircle,
 } from 'lucide-react';
 import { useWidgets } from '@/contexts/useWidgets';
@@ -27,7 +27,7 @@ const WIDGET_ICON_MAP: Record<string, React.ElementType> = {
   segmentedbutton: Menu,
   slider: SlidersHorizontal,
   frame: Box,
-  scrollableframe: ScrollText,
+  scrollableframe: Box,
   tabview: FolderOpen,
   statCard: BarChart3,
   table: Table,

@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { WidgetRenderContext } from './widget-shared';
 import { FrameInternalGrid } from '../FrameInternalGrid';
+import {
+  TABVIEW_HEADER_MIN_HEIGHT,
+  TABVIEW_GAP,
+  TABVIEW_CONTENT_BORDER,
+  TABVIEW_TAB_BAR_PADDING,
+  SCROLLABLEFRAME_LABEL_HEIGHT,
+} from '@/lib/widgetLayout';
+
 
 // ========== CTkFrame ==========
 export const FrameRenderer: React.FC<{ ctx: WidgetRenderContext }> = React.memo(({ ctx }) => {
@@ -34,23 +42,27 @@ export const FrameRenderer: React.FC<{ ctx: WidgetRenderContext }> = React.memo(
 
 // ========== CTkScrollableFrame ==========
 export const ScrollableFrameRenderer: React.FC<{ ctx: WidgetRenderContext }> = React.memo(({ ctx }) => {
-  const { widget, isDark, colors, baseStyle, cornerRadius, effectiveBorderWidth, effectiveBorderColor, isPreviewMode, contentRef, childElements, childWidgets, containerMetrics, isDraggingChild } = ctx;
+  const { widget, baseStyle, cornerRadius, effectiveBorderWidth, effectiveBorderColor, isPreviewMode, contentRef, childElements, childWidgets, containerMetrics, isDraggingChild, colors, textColor, style, isDark } = ctx;
   const properties = widget.properties || {};
-  const style = widget.style || {};
 
   const scrollFrameBgColor = style.backgroundColor || properties.fg_color || colors.fg;
-  const scrollFrameTextColor = style.textColor || properties.text_color || colors.text;
-  const labelTextColor = properties.label_text_color || scrollFrameTextColor;
-  const labelBackgroundColor = properties.label_fg_color || 'transparent';
   const paddingValue = typeof style.padding === 'number' ? style.padding : 0;
-  const labelText = properties.label_text || '';
   const orientation = properties.orientation === 'horizontal' ? 'horizontal' : 'vertical';
+  const labelText = typeof properties.label_text === 'string' ? properties.label_text : '';
+  const hasLabel = labelText.trim().length > 0;
+  const labelFgColor = properties.label_fg_color || 'transparent';
+  const labelTextColor = properties.label_text_color || textColor;
+  const labelAnchor = properties.label_anchor || 'center';
+  const labelJustifyContent = labelAnchor === 'w' ? 'flex-start' : labelAnchor === 'e' ? 'flex-end' : 'center';
   const innerHeight = containerMetrics ? Math.max(containerMetrics.innerHeight, 0) : undefined;
   const innerWidth = containerMetrics ? Math.max(containerMetrics.innerWidth, 0) : undefined;
   const viewportWidth = innerWidth ?? widget.size.width;
   const viewportHeight = innerHeight ?? widget.size.height;
   const originX = widget.position.x + (containerMetrics?.offsetX ?? 0);
   const originY = widget.position.y + (containerMetrics?.offsetY ?? 0);
+  const trackColor = properties.scrollbar_fg_color || (isDark ? '#2A2D32' : '#E5E7EB');
+  const thumbColor = properties.scrollbar_button_color || colors.scrollbar;
+
   const contentExtent = useMemo(() => {
     let maxRight = viewportWidth;
     let maxBottom = viewportHeight;
@@ -68,60 +80,62 @@ export const ScrollableFrameRenderer: React.FC<{ ctx: WidgetRenderContext }> = R
     };
   }, [childWidgets, originX, originY, viewportWidth, viewportHeight]);
 
-  const scrollbarTrackColor = properties.scrollbar_fg_color || 'transparent';
-  const scrollbarThumbColor = properties.scrollbar_button_color || (isDark ? '#4A4D50' : '#CCCCCC');
-  const scrollbarThumbHoverColor = properties.scrollbar_button_hover_color || (isDark ? '#636363' : '#A5A5A5');
   const useScrollableViewport = !isDraggingChild || isPreviewMode;
-
-  const scrollViewportStyle: React.CSSProperties = {
+  const viewportStyle: React.CSSProperties = {
     flex: 1,
     position: 'relative',
+    minHeight: 0,
+    minWidth: 0,
     width: '100%',
     height: '100%',
-    overflowX: useScrollableViewport ? (orientation === 'horizontal' ? 'auto' : 'hidden') : 'visible',
-    overflowY: useScrollableViewport ? (orientation === 'vertical' ? 'auto' : 'hidden') : 'visible',
+    overflowX: useScrollableViewport ? (orientation === 'horizontal' ? 'scroll' : 'hidden') : 'visible',
+    overflowY: useScrollableViewport ? (orientation === 'vertical' ? 'scroll' : 'hidden') : 'visible',
     borderRadius: `${Math.max(cornerRadius - 4, 4)}px`,
-    backgroundColor: scrollFrameBgColor,
-    border: 'none',
-    scrollbarWidth: useScrollableViewport ? 'thin' : undefined,
-    scrollbarColor: useScrollableViewport ? `${scrollbarThumbColor} ${scrollbarTrackColor}` : undefined,
+    scrollbarColor: `${thumbColor} ${trackColor}`,
+    scrollbarWidth: 'thin',
   };
-  const cssVars = scrollViewportStyle as React.CSSProperties & Record<string, string>;
-  cssVars['--ctk-scroll-track-color'] = scrollbarTrackColor;
-  cssVars['--ctk-scroll-thumb-color'] = scrollbarThumbColor;
-  cssVars['--ctk-scroll-thumb-hover-color'] = scrollbarThumbHoverColor;
+  const viewportCssVars = viewportStyle as React.CSSProperties & Record<string, string>;
+  viewportCssVars['--ctk-scroll-track'] = trackColor;
+  viewportCssVars['--ctk-scroll-thumb'] = thumbColor;
+  viewportCssVars['--ctk-scroll-thumb-hover'] = properties.scrollbar_button_hover_color || colors.buttonHover;
 
   return (
-    <div style={{ ...baseStyle, pointerEvents: 'auto', backgroundColor: scrollFrameBgColor, border: `${effectiveBorderWidth}px solid ${effectiveBorderColor}`, borderRadius: `${cornerRadius}px`, padding: `${paddingValue}px`, position: 'relative', display: 'flex', flexDirection: 'column', gap: labelText ? '12px' : '8px', overflow: isDraggingChild ? 'visible' : 'hidden' }}>
-      {labelText && (
+    <div style={{ ...baseStyle, pointerEvents: 'auto', backgroundColor: scrollFrameBgColor, border: `${effectiveBorderWidth}px solid ${effectiveBorderColor}`, borderRadius: `${cornerRadius}px`, padding: `${paddingValue}px`, display: 'flex', flexDirection: 'column', position: 'relative', overflow: isDraggingChild ? 'visible' : 'hidden' }}>
+      {hasLabel && (
         <div
           style={{
+            height: `${SCROLLABLEFRAME_LABEL_HEIGHT}px`,
+            minHeight: `${SCROLLABLEFRAME_LABEL_HEIGHT}px`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: labelJustifyContent,
+            marginBottom: '2px',
+            padding: '0 8px',
+            borderRadius: `${Math.max(cornerRadius - 4, 4)}px`,
+            backgroundColor: labelFgColor,
             color: labelTextColor,
-            backgroundColor: labelBackgroundColor,
-            fontWeight: 600,
-            fontSize: '14px',
-            letterSpacing: '0.01em',
-            pointerEvents: 'none',
+            fontSize: `${style.fontSize ?? 13}px`,
+            fontFamily: style.fontFamily || 'Roboto',
+            fontWeight: style.fontWeight || 'normal',
           }}
         >
           {labelText}
         </div>
       )}
-      <div
-        className={isPreviewMode ? 'ctk-scrollable-content' : ''}
-        style={scrollViewportStyle}
-      >
+      <div className="ctk-scrollable-content" style={viewportStyle}>
         <div
           ref={contentRef ?? undefined}
           style={{
             position: 'relative',
-            width: orientation === 'horizontal' ? `${contentExtent.width}px` : '100%',
-            minHeight: orientation === 'vertical' ? `${contentExtent.height}px` : '100%',
             pointerEvents: 'auto',
+            width: orientation === 'horizontal' ? `${contentExtent.width}px` : '100%',
+            minWidth: orientation === 'horizontal' ? `${contentExtent.width}px` : `${viewportWidth}px`,
+            height: orientation === 'vertical' ? `${contentExtent.height}px` : '100%',
+            minHeight: orientation === 'vertical' ? `${contentExtent.height}px` : `${viewportHeight}px`,
           }}
         >
           {!isPreviewMode && containerMetrics && isDraggingChild && (
-            <FrameInternalGrid width={containerMetrics.innerWidth} height={Math.max(containerMetrics.innerHeight, innerHeight || 0)} gridSize={10} show={true} />
+            <FrameInternalGrid width={containerMetrics.innerWidth} height={containerMetrics.innerHeight} gridSize={10} show={true} />
           )}
           {childElements}
         </div>
@@ -188,7 +202,7 @@ export const TabviewRenderer: React.FC<{ ctx: WidgetRenderContext }> = React.mem
   const isBottomOrRight = tabAnchor === 's' || tabAnchor === 'e';
 
   const tabBarEl = (
-    <div style={{ display: 'flex', flexDirection: isSideAnchor ? 'column' : 'row', gap: '6px', backgroundColor: isDark ? '#1F1F1F' : '#E5E9F3', borderRadius: `${Math.max(cornerRadius - 6, 6)}px`, padding: '4px', ...(isSideAnchor ? { minWidth: '40px' } : { minHeight: '40px' }), alignItems: 'center', pointerEvents: 'auto', flexShrink: 0 }}>
+    <div style={{ display: 'flex', flexDirection: isSideAnchor ? 'column' : 'row', gap: '6px', backgroundColor: isDark ? '#1F1F1F' : '#E5E9F3', borderRadius: `${Math.max(cornerRadius - 6, 6)}px`, padding: `${TABVIEW_TAB_BAR_PADDING}px`, ...(isSideAnchor ? { minWidth: `${TABVIEW_HEADER_MIN_HEIGHT}px` } : { minHeight: `${TABVIEW_HEADER_MIN_HEIGHT}px` }), alignItems: 'center', pointerEvents: 'auto', flexShrink: 0 }}>
       {tabs.map((tab: string, tabIndex: number) => {
         const isActive = tab === resolvedActive;
         return (
@@ -207,7 +221,7 @@ export const TabviewRenderer: React.FC<{ ctx: WidgetRenderContext }> = React.mem
   );
 
   const contentEl = (
-    <div style={{ flex: 1, position: 'relative', borderRadius: `${Math.max(cornerRadius - 6, 6)}px`, backgroundColor: isDark ? '#14161C' : '#FFFFFF', border: `1px dashed ${isDark ? 'rgba(148, 163, 184, 0.35)' : 'rgba(148, 163, 184, 0.45)'}`, overflow: isPreviewMode ? 'hidden' : 'visible' }}>
+    <div style={{ flex: 1, position: 'relative', borderRadius: `${Math.max(cornerRadius - 6, 6)}px`, backgroundColor: isDark ? '#14161C' : '#FFFFFF', border: `${TABVIEW_CONTENT_BORDER}px dashed ${isDark ? 'rgba(148, 163, 184, 0.35)' : 'rgba(148, 163, 184, 0.45)'}`, overflow: isPreviewMode ? 'hidden' : 'visible' }}>
       <div ref={contentRef ?? undefined} style={{ position: 'relative', width: '100%', height: '100%', minHeight: innerHeight ? `${innerHeight}px` : undefined, pointerEvents: 'auto' }}>
         {!isPreviewMode && containerMetrics && isDraggingChild && (
           <FrameInternalGrid width={containerMetrics.innerWidth} height={containerMetrics.innerHeight} gridSize={10} show={true} />
@@ -218,7 +232,7 @@ export const TabviewRenderer: React.FC<{ ctx: WidgetRenderContext }> = React.mem
   );
 
   return (
-    <div style={{ ...baseStyle, pointerEvents: 'auto', backgroundColor: tabViewBgColor, border: `${effectiveBorderWidth}px solid ${effectiveBorderColor}`, borderRadius: `${cornerRadius}px`, padding: `${paddingValue}px`, display: 'flex', flexDirection: isSideAnchor ? 'row' : 'column', gap: '12px', position: 'relative', overflow: isDraggingChild ? 'visible' : 'hidden' }}>
+    <div style={{ ...baseStyle, pointerEvents: 'auto', backgroundColor: tabViewBgColor, border: `${effectiveBorderWidth}px solid ${effectiveBorderColor}`, borderRadius: `${cornerRadius}px`, padding: `${paddingValue}px`, display: 'flex', flexDirection: isSideAnchor ? 'row' : 'column', gap: `${TABVIEW_GAP}px`, position: 'relative', overflow: isDraggingChild ? 'visible' : 'hidden' }}>
       {isBottomOrRight ? <>{contentEl}{tabBarEl}</> : <>{tabBarEl}{contentEl}</>}
     </div>
   );

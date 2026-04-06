@@ -330,12 +330,11 @@ export const Canvas: React.FC = () => {
     const candidates = widgets.filter(candidate => isContainerWidget(candidate));
     const containing = candidates.filter(candidate => {
       const bounds = getParentContentBounds(widgets, candidate.id, canvasSettings);
-      return (
-        rect.left >= bounds.left &&
-        rect.right <= bounds.left + bounds.width &&
-        rect.top >= bounds.top &&
-        rect.bottom <= bounds.top + bounds.height
-      );
+      const overflow = getContainerOverflowPolicy(candidate);
+      // For scrollable containers: relax the check in the overflow direction
+      const fitsX = rect.left >= bounds.left && (overflow.allowOverflowX || rect.right <= bounds.left + bounds.width);
+      const fitsY = rect.top >= bounds.top && (overflow.allowOverflowY || rect.bottom <= bounds.top + bounds.height);
+      return fitsX && fitsY;
     });
 
     if (containing.length === 0) return null;
@@ -479,6 +478,7 @@ export const Canvas: React.FC = () => {
           borderColor: String(widgetDef.defaultProperties?.border_color || '#000000'),
           borderWidth: Number(widgetDef.defaultProperties?.border_width ?? 0),
           borderRadius: Number(widgetDef.defaultProperties?.corner_radius ?? 0),
+          ...(['frame', 'scrollableframe', 'tabview'].includes(widgetDef.type) ? { padding: 12 } : {}),
         },
         properties: widgetDef.defaultProperties ? { ...widgetDef.defaultProperties } : {},
         parentId: targetParentId,

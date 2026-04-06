@@ -414,6 +414,83 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
           </div>
         )}
 
+        {selectedWidget.type === 'scrollableframe' && (
+          <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
+            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Scrollable Frame</Label>
+            <div>
+              <Label className="text-[10px] text-muted-foreground">Label</Label>
+              <Input
+                value={properties.label_text || ''}
+                onChange={e => handlePropertyChange('label_text', e.target.value)}
+                placeholder="Titre optionnel..."
+                className="h-8 text-xs bg-background/50"
+              />
+            </div>
+            <div>
+              <Label className="text-[10px] text-muted-foreground">Alignement label</Label>
+              <Select
+                value={properties.label_anchor || 'center'}
+                onValueChange={v => handlePropertyChange('label_anchor', v)}
+              >
+                <SelectTrigger className="h-8 text-xs bg-background/50"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="w">Gauche</SelectItem>
+                  <SelectItem value="center">Centre</SelectItem>
+                  <SelectItem value="e">Droite</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-[10px] text-muted-foreground">Orientation</Label>
+              <Select
+                value={properties.orientation || 'vertical'}
+                onValueChange={v => handlePropertyChange('orientation', v)}
+              >
+                <SelectTrigger className="h-8 text-xs bg-background/50"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="vertical">Verticale</SelectItem>
+                  <SelectItem value="horizontal">Horizontale</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">Fond du label</Label>
+              <ColorPicker
+                color={properties.label_fg_color || 'transparent'}
+                onChange={color => handlePropertyChange('label_fg_color', color)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">Texte du label</Label>
+              <ColorPicker
+                color={properties.label_text_color || '#DCE4EE'}
+                onChange={color => handlePropertyChange('label_text_color', color)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">Fond scrollbar</Label>
+              <ColorPicker
+                color={properties.scrollbar_fg_color || '#2A2D32'}
+                onChange={color => handlePropertyChange('scrollbar_fg_color', color)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">Bouton scrollbar</Label>
+              <ColorPicker
+                color={properties.scrollbar_button_color || '#4A4D50'}
+                onChange={color => handlePropertyChange('scrollbar_button_color', color)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">Survol scrollbar</Label>
+              <ColorPicker
+                color={properties.scrollbar_button_hover_color || '#1F5AA0'}
+                onChange={color => handlePropertyChange('scrollbar_button_hover_color', color)}
+              />
+            </div>
+          </div>
+        )}
+
         {/* PasswordEntry Properties */}
         {selectedWidget.type === 'passwordentry' && (
           <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-1.5">
@@ -425,70 +502,6 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
                 onChange={e => handlePropertyChange('placeholder_text', e.target.value)}
                 placeholder="Mot de passe..."
                 className="h-8 text-xs bg-background/50"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* ScrollableFrame: label_text */}
-        {selectedWidget.type === 'scrollableframe' && (
-          <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-1.5">
-            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Cadre défilant</Label>
-            <div>
-              <Label className="text-[10px] text-muted-foreground">Titre du cadre</Label>
-              <Input
-                value={properties.label_text || ''}
-                onChange={e => handlePropertyChange('label_text', e.target.value)}
-                placeholder="Titre du cadre défilant..."
-                className="h-8 text-xs bg-background/50"
-              />
-            </div>
-            <div>
-              <Label className="text-[10px] text-muted-foreground">Orientation</Label>
-              <Select
-                value={properties.orientation || 'vertical'}
-                onValueChange={v => handlePropertyChange('orientation', v)}
-              >
-                <SelectTrigger className="h-8 text-xs bg-background/50"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="vertical">Vertical</SelectItem>
-                  <SelectItem value="horizontal">Horizontal</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] text-muted-foreground">Couleur piste scrollbar</Label>
-              <ColorPicker
-                color={properties.scrollbar_fg_color || '#CCCCCC'}
-                onChange={color => handlePropertyChange('scrollbar_fg_color', color)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] text-muted-foreground">Couleur bouton scrollbar</Label>
-              <ColorPicker
-                color={properties.scrollbar_button_color || '#4A4D50'}
-                onChange={color => handlePropertyChange('scrollbar_button_color', color)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] text-muted-foreground">Couleur hover scrollbar</Label>
-              <ColorPicker
-                color={properties.scrollbar_button_hover_color || '#636363'}
-                onChange={color => handlePropertyChange('scrollbar_button_hover_color', color)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] text-muted-foreground">Fond du label</Label>
-              <ColorPicker
-                color={properties.label_fg_color || '#FFFFFF'}
-                onChange={color => handlePropertyChange('label_fg_color', color)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] text-muted-foreground">Couleur texte label</Label>
-              <ColorPicker
-                color={properties.label_text_color || '#000000'}
-                onChange={color => handlePropertyChange('label_text_color', color)}
               />
             </div>
           </div>
@@ -1327,7 +1340,7 @@ export const WidgetProperties: React.FC<WidgetPropertiesProps> = ({ selectedWidg
           <CollapsibleContent className="space-y-2 pt-2">
 
             {/* Typographie */}
-            {!['slider', 'progressbar', 'scrollbar', 'frame', 'scrollableframe', 'image', 'table'].includes(selectedWidget.type) && (
+            {!['slider', 'progressbar', 'scrollbar', 'frame', 'image', 'table'].includes(selectedWidget.type) && (
               <div className="p-2.5 border border-border/30 rounded-lg bg-muted/20 space-y-2">
                 <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Typographie</Label>
                 <div>

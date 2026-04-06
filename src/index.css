@@ -164,30 +164,6 @@
   background: rgba(31, 79, 143, 0.75);
 }
 
-/* CTk-style scrollbar for ScrollableFrame in preview mode */
-.ctk-scrollable-content::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-.ctk-scrollable-content::-webkit-scrollbar-track {
-  background: var(--ctk-scroll-track-color, transparent);
-  border-radius: 4px;
-}
-.ctk-scrollable-content::-webkit-scrollbar-thumb {
-  background: var(--ctk-scroll-thumb-color, #4A4D50);
-  border-radius: 4px;
-  min-height: 20px;
-}
-.ctk-scrollable-content::-webkit-scrollbar-thumb:hover {
-  background: var(--ctk-scroll-thumb-hover-color, #636363);
-}
-.light .ctk-scrollable-content::-webkit-scrollbar-thumb {
-  background: var(--ctk-scroll-thumb-color, #CCCCCC);
-}
-.light .ctk-scrollable-content::-webkit-scrollbar-thumb:hover {
-  background: var(--ctk-scroll-thumb-hover-color, #A5A5A5);
-}
-
 .dayanna-theme-dark .prose-ai {
   color: hsl(var(--foreground) / 0.92);
 }
@@ -368,4 +344,24 @@
   .python-loader-card {
     animation: none !important;
   }
+}
+
+/* ScrollableFrame preview scrollbar styling */
+.ctk-scrollable-content::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.ctk-scrollable-content::-webkit-scrollbar-track {
+  background: var(--ctk-scroll-track, transparent);
+  border-radius: 999px;
+}
+
+.ctk-scrollable-content::-webkit-scrollbar-thumb {
+  background: var(--ctk-scroll-thumb, #9ca3af);
+  border-radius: 999px;
+}
+
+.ctk-scrollable-content::-webkit-scrollbar-thumb:hover {
+  background: var(--ctk-scroll-thumb-hover, #6b7280);
 }

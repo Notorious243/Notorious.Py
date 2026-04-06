@@ -870,31 +870,93 @@ export const useExportPython = () => {
 
       case 'frame': {
         const frameCorner = style.borderRadius ?? 0;
-        code += `        self.${widgetName} = ctk.CTkFrame(\n`;
-        code += `            ${parent},\n`;
-        code += `            width=${size.width},\n`;
-        code += `            height=${size.height},\n`;
-        code += `            corner_radius=${frameCorner}${getStyleParams(false, new Set(['corner_radius']))}\n`;
-        code += `        )\n`;
+        const frameExclude = new Set<string>(['corner_radius']);
+        const frameParams: string[] = [
+          `${parent}`,
+          `width=${size.width}`,
+          `height=${size.height}`,
+          `corner_radius=${frameCorner}`,
+        ];
+        // Export fg_color from properties OR style (canvas uses both)
+        const frameFgColor = style.backgroundColor || properties.fg_color;
+        if (frameFgColor && frameFgColor !== 'transparent') {
+          frameParams.push(`fg_color="${frameFgColor}"`);
+          frameExclude.add('fg_color');
+        }
+        if (propColor('border_color')) {
+          frameParams.push(`border_color="${properties.border_color}"`);
+          frameExclude.add('border_color');
+        }
+        if (properties.border_width > 0) {
+          frameParams.push(`border_width=${properties.border_width}`);
+          frameExclude.add('border_width');
+        }
+        code += `        self.${widgetName} = ctk.CTkFrame(\n            ${frameParams.join(',\n            ')}${getStyleParams(false, frameExclude)}\n        )\n`;
         code += `        self.${widgetName}.pack_propagate(False)\n`;
         break;
       }
 
       case 'scrollableframe': {
-        const sfParams: string[] = [
+        const scrollFrameCorner = style.borderRadius ?? 0;
+        const scrollFrameExclude = new Set<string>(['corner_radius']);
+        const scrollFrameParams: string[] = [
           `${parent}`,
           `width=${size.width}`,
           `height=${size.height}`,
+          `corner_radius=${scrollFrameCorner}`,
         ];
-        if (properties.label_text) { sfParams.push(`label_text="${sanitize(properties.label_text)}"`); }
-        if (properties.orientation === 'horizontal') { sfParams.push(`orientation="horizontal"`); }
-        if (propColor('scrollbar_fg_color')) { sfParams.push(`scrollbar_fg_color="${properties.scrollbar_fg_color}"`); }
-        if (propColor('scrollbar_button_color')) { sfParams.push(`scrollbar_button_color="${properties.scrollbar_button_color}"`); }
-        if (propColor('scrollbar_button_hover_color')) { sfParams.push(`scrollbar_button_hover_color="${properties.scrollbar_button_hover_color}"`); }
-        if (propColor('label_fg_color')) { sfParams.push(`label_fg_color="${properties.label_fg_color}"`); }
-        if (propColor('label_text_color')) { sfParams.push(`label_text_color="${properties.label_text_color}"`); }
-        if (propColor('fg_color')) { sfParams.push(`fg_color="${properties.fg_color}"`); }
-        code += `        self.${widgetName} = ctk.CTkScrollableFrame(\n            ${sfParams.join(',\n            ')}${getStyleParams(false, new Set(['fg_color']))}\n        )\n`;
+
+        const scrollFrameFg = style.backgroundColor || properties.fg_color;
+        if (scrollFrameFg && scrollFrameFg !== 'transparent') {
+          scrollFrameParams.push(`fg_color="${scrollFrameFg}"`);
+          scrollFrameExclude.add('fg_color');
+        }
+        if (propColor('border_color')) {
+          scrollFrameParams.push(`border_color="${properties.border_color}"`);
+          scrollFrameExclude.add('border_color');
+        }
+        if (properties.border_width > 0) {
+          scrollFrameParams.push(`border_width=${properties.border_width}`);
+          scrollFrameExclude.add('border_width');
+        }
+        if (propColor('scrollbar_fg_color')) {
+          scrollFrameParams.push(`scrollbar_fg_color="${properties.scrollbar_fg_color}"`);
+        }
+        if (propColor('scrollbar_button_color')) {
+          scrollFrameParams.push(`scrollbar_button_color="${properties.scrollbar_button_color}"`);
+        }
+        if (propColor('scrollbar_button_hover_color')) {
+          scrollFrameParams.push(`scrollbar_button_hover_color="${properties.scrollbar_button_hover_color}"`);
+        }
+        if (typeof properties.label_text === 'string' && properties.label_text.trim().length > 0) {
+          scrollFrameParams.push(`label_text="${sanitize(properties.label_text)}"`);
+        }
+        if (propColor('label_fg_color')) {
+          scrollFrameParams.push(`label_fg_color="${properties.label_fg_color}"`);
+        }
+        if (propColor('label_text_color')) {
+          scrollFrameParams.push(`label_text_color="${properties.label_text_color}"`);
+        }
+        if (properties.label_anchor && properties.label_anchor !== 'center') {
+          scrollFrameParams.push(`label_anchor="${properties.label_anchor}"`);
+        }
+        const hasStyleLabelFont = typeof style.fontFamily === 'string' || typeof style.fontSize === 'number' || style.fontWeight === 'bold';
+        if (hasStyleLabelFont) {
+          const labelFontFamily = sanitize(style.fontFamily || 'Roboto');
+          const labelFontSize = safeInt(style.fontSize, 13);
+          const labelFontWeight = style.fontWeight === 'bold' ? ', "bold"' : '';
+          scrollFrameParams.push(`label_font=("${labelFontFamily}", ${labelFontSize}${labelFontWeight})`);
+        } else if (Array.isArray(properties.label_font) && properties.label_font.length >= 2) {
+          const labelFontFamily = sanitize(properties.label_font[0] || 'Roboto');
+          const labelFontSize = safeInt(properties.label_font[1], 13);
+          const labelFontWeight = properties.label_font[2] === 'bold' ? ', "bold"' : '';
+          scrollFrameParams.push(`label_font=("${labelFontFamily}", ${labelFontSize}${labelFontWeight})`);
+        }
+        if (properties.orientation === 'horizontal') {
+          scrollFrameParams.push(`orientation="horizontal"`);
+        }
+
+        code += `        self.${widgetName} = ctk.CTkScrollableFrame(\n            ${scrollFrameParams.join(',\n            ')}${getStyleParams(false, scrollFrameExclude)}\n        )\n`;
         break;
       }
 
@@ -1824,7 +1886,7 @@ export const useExportPython = () => {
 
     // ── 3. Navigation sidebar (menuItems) ──
     const menuItems = allWidgets.filter(w => w.type === 'menuItem');
-    const frames = allWidgets.filter(w => w.type === 'frame' && !w.parentId);
+    const frames = allWidgets.filter(w => (w.type === 'frame' || w.type === 'scrollableframe') && !w.parentId);
 
     if (menuItems.length >= 2 && frames.length >= 2) {
       logic += `\n    # ── Navigation entre les vues ──\n\n`;

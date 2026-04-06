@@ -3,7 +3,7 @@ import { AccordionContent, AccordionItem, AccordionTrigger } from '@/components/
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useWidgets } from '@/contexts/useWidgets';
-import { Layers, Trash2, Type, MousePointerClick, TextCursor, FileText, Gauge, CheckSquare, Circle, ToggleRight, ListFilter, ChevronDown, Menu, SlidersHorizontal, GripVertical, Box, ScrollText, FolderOpen, Image as ImageIcon, BarChart3, Table2, LayoutDashboard, ShoppingCart, CircleUser, Calendar } from 'lucide-react';
+import { Layers, Trash2, Type, MousePointerClick, TextCursor, FileText, Gauge, CheckSquare, Circle, ToggleRight, ListFilter, ChevronDown, Menu, SlidersHorizontal, GripVertical, Box, FolderOpen, Image as ImageIcon, BarChart3, Table2, LayoutDashboard, ShoppingCart, CircleUser, Calendar } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { WidgetData } from '@/types/widget';
 
@@ -24,7 +24,7 @@ const WIDGET_TYPE_ICONS: Record<string, React.ElementType> = {
   slider: SlidersHorizontal,
   scrollbar: GripVertical,
   frame: Box,
-  scrollableframe: ScrollText,
+  scrollableframe: Box,
   tabview: FolderOpen,
   statCard: BarChart3,
   table: Table2,
@@ -53,7 +53,7 @@ const WIDGET_TYPE_NAMES: Record<string, string> = {
   slider: 'Curseur',
   scrollbar: 'Défilement',
   frame: 'Conteneur',
-  scrollableframe: 'Conteneur défilant',
+  scrollableframe: 'Conteneur défilable',
   tabview: 'Onglets',
   statCard: 'Carte stat',
   table: 'Tableau',

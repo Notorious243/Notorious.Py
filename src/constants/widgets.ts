@@ -11,7 +11,6 @@ import {
   ListFilter,
   Menu,
   MousePointerClick,
-  ScrollText,
   SlidersHorizontal,
   GripVertical,
   TextCursor,
@@ -396,24 +395,24 @@ export const WIDGET_DEFINITIONS: WidgetType[] = [
 
   {
     type: 'scrollableframe',
-    name: 'Conteneur défilant',
-    description: 'Cadre avec barre de défilement',
-    icon: ScrollText,
-    defaultSize: { width: 300, height: 400 },
+    name: 'Conteneur défilable',
+    description: 'Cadre avec zone de défilement interne',
+    icon: Box,
+    defaultSize: { width: 300, height: 220 },
     defaultProperties: {
       fg_color: '#DAEBFF',
       border_color: null,
       border_width: 0,
       corner_radius: 0,
-      scrollbar_fg_color: null, // Auto (theme)
-      scrollbar_button_color: null, // Auto (theme)
-      scrollbar_button_hover_color: null, // Auto (theme)
-      label_fg_color: null, // Couleur du label (si label_text défini)
-      label_text_color: null, // Auto (theme)
-      label_text: '', // Texte du label en haut
+      label_text: '',
+      label_fg_color: 'transparent',
+      label_text_color: null,
       label_font: ['Roboto', 13],
       label_anchor: 'center',
-      orientation: 'vertical', // 'vertical' ou 'horizontal'
+      scrollbar_fg_color: null,
+      scrollbar_button_color: null,
+      scrollbar_button_hover_color: null,
+      orientation: 'vertical' // 'vertical' ou 'horizontal'
     },
     category: 'Conteneurs'
   },
